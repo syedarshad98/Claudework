@@ -2,7 +2,7 @@ const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
 
-const db = new Database(path.join(__dirname, 'manufacturing.db'));
+const db = new Database(path.join(__dirname, '..', 'manufacturing.db'));
 db.pragma('journal_mode = WAL');
 
 // Apply schema
