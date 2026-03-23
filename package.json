@@ -1,0 +1,11 @@
+{
+  "name": "opscommand-manufacturing",
+  "version": "1.0.0",
+  "scripts": {
+    "postinstall": "npm install --prefix backend",
+    "start": "node backend/db/seed.js && node backend/server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
