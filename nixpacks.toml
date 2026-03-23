@@ -1,0 +1,8 @@
+# Tells Railway's Nixpacks builder exactly how to install and start
+# from the repo root — no manual "Root Directory" setting required.
+
+[phases.install]
+cmds = ["npm install --prefix backend"]
+
+[start]
+cmd = "node backend/db/seed.js && node backend/server.js"
