@@ -1,0 +1,13 @@
+{
+  "phases": {
+    "setup": {
+      "nixPkgs": ["nodejs_20"]
+    },
+    "install": {
+      "cmds": ["npm install --prefix cleartrace/backend"]
+    }
+  },
+  "deploy": {
+    "startCmd": "node cleartrace/backend/db/seed.js && node cleartrace/backend/server.js"
+  }
+}

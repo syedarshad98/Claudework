@@ -1,8 +1,10 @@
-# Tells Railway's Nixpacks builder exactly how to install and start
-# from the repo root — no manual "Root Directory" setting required.
+# ClearTrace — Nixpacks / Railpack build config (repo root)
+
+[phases.setup]
+nixPkgs = ["nodejs_20"]
 
 [phases.install]
-cmds = ["npm install --prefix backend"]
+cmds = ["npm install --prefix cleartrace/backend"]
 
 [start]
-cmd = "node backend/db/seed.js && node backend/server.js"
+cmd = "node cleartrace/backend/db/seed.js && node cleartrace/backend/server.js"
