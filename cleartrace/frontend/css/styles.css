@@ -571,6 +571,27 @@ textarea.form-input {
 .form-feedback.success { display: block; background: var(--accent-light); color: var(--accent); }
 .form-feedback.error   { display: block; background: var(--danger-light); color: var(--danger); }
 
+/* DEFRA emission factor badge — shown in place of manual EF input */
+.defra-ef-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  background: var(--accent-light);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--accent);
+  line-height: 1.4;
+}
+.defra-ef-badge .defra-source {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 /* Upload zone */
 .upload-zone {
   border: 2px dashed var(--border);

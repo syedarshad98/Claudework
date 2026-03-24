@@ -244,20 +244,31 @@
                   <option value="">Select…</option>
                   <optgroup label="Scope 1 — Direct">
                     <option value="Natural Gas">Natural Gas</option>
-                    <option value="Diesel Generator">Diesel Generator</option>
-                    <option value="Company Vehicles">Company Vehicles</option>
-                    <option value="Refrigerants">Refrigerants</option>
-                    <option value="Other Scope 1">Other Scope 1</option>
+                    <option value="Diesel (Stationary)">Diesel (Stationary)</option>
+                    <option value="Petrol (Stationary)">Petrol (Stationary)</option>
+                    <option value="LPG">LPG</option>
+                    <option value="Company Car (Diesel)">Company Car (Diesel)</option>
+                    <option value="Company Car (Petrol)">Company Car (Petrol)</option>
+                    <option value="Company Car (Average)">Company Car (Average)</option>
+                    <option value="Refrigerants (R-134a)">Refrigerants (R-134a)</option>
+                    <option value="Refrigerants (R-410A)">Refrigerants (R-410A)</option>
                   </optgroup>
                   <optgroup label="Scope 2 — Energy">
-                    <option value="Grid Electricity">Grid Electricity</option>
+                    <option value="Grid Electricity (UK)">Grid Electricity (UK)</option>
                     <option value="District Heating">District Heating</option>
                   </optgroup>
                   <optgroup label="Scope 3 — Value Chain">
-                    <option value="Business Travel">Business Travel</option>
-                    <option value="Employee Commuting">Employee Commuting</option>
-                    <option value="Waste">Waste</option>
-                    <option value="Water Usage">Water Usage</option>
+                    <option value="Business Travel (Car)">Business Travel (Car)</option>
+                    <option value="Business Travel (Rail)">Business Travel (Rail)</option>
+                    <option value="Business Travel (Short-haul Flight)">Business Travel (Short-haul Flight)</option>
+                    <option value="Business Travel (Long-haul Flight)">Business Travel (Long-haul Flight)</option>
+                    <option value="Employee Commuting (Car)">Employee Commuting (Car)</option>
+                    <option value="Employee Commuting (Rail)">Employee Commuting (Rail)</option>
+                    <option value="Waste (Landfill)">Waste (Landfill)</option>
+                    <option value="Waste (Recycled)">Waste (Recycled)</option>
+                    <option value="Waste (Composted)">Waste (Composted)</option>
+                    <option value="Water Supply">Water Supply</option>
+                    <option value="Water Treatment">Water Treatment</option>
                     <option value="Purchased Goods">Purchased Goods</option>
                     <option value="Upstream Transport">Upstream Transport</option>
                     <option value="Other Scope 3">Other Scope 3</option>
@@ -297,7 +308,13 @@
                 <label class="form-label">Period</label>
                 <input type="month" class="form-input" id="f-period" required>
               </div>
-              <div class="form-group">
+              <!-- DEFRA badge (shown for standard categories) -->
+              <div class="form-group" id="defra-ef-group" style="display:none">
+                <label class="form-label">Emission Factor</label>
+                <div class="defra-ef-badge" id="defra-ef-badge"></div>
+              </div>
+              <!-- Manual EF input (shown only for custom categories) -->
+              <div class="form-group" id="custom-ef-group">
                 <label class="form-label">Emission Factor (kg CO₂e / unit)</label>
                 <input type="number" class="form-input" id="f-ef" placeholder="e.g. 0.233" min="0" step="any" value="1.0">
               </div>
@@ -325,6 +342,7 @@
           <div style="font-size:11px;color:var(--muted);font-family:var(--font-mono)">
             Required columns: category, scope, amount, unit, period<br>
             Optional: emission_factor, notes &nbsp;·&nbsp; Period format: YYYY-MM<br>
+            DEFRA 2023 factors applied automatically when emission_factor is omitted.<br>
             <span style="color:var(--accent);cursor:pointer;text-decoration:underline" id="download-template">Download template ↓</span>
           </div>
         </div>

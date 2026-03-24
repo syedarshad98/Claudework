@@ -15,6 +15,10 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 // Public routes — no auth required
 app.use('/api/auth', require('./routes/auth'));
 
+// DEFRA emission factors — public so the frontend can fetch them without auth
+const { DEFRA_FACTORS } = require('./db/emission_factors');
+app.get('/api/emission-factors', (_req, res) => res.json(DEFRA_FACTORS));
+
 // Protected routes — JWT required
 const auth = require('./middleware/auth');
 app.use('/api/emissions',  auth, require('./routes/emissions'));

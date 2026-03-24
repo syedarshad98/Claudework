@@ -4,6 +4,7 @@ const multer  = require('multer');
 const XLSX    = require('xlsx');
 const { parse } = require('csv-parse/sync');
 const db      = require('../db/database');
+const { lookupFactor } = require('../db/emission_factors');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -63,8 +64,18 @@ router.post('/', upload.single('file'), async (req, res) => {
     const amountRaw      = String(r.amount          || '').trim();
     const unit           = String(r.unit            || '').trim();
     const period         = String(r.period          || '').trim();
-    const efRaw          = String(r.emission_factor || '1').trim();
     const notes          = String(r.notes           || '').trim() || null;
+
+    // Resolve emission factor: if the spreadsheet provides one, use it.
+    // Otherwise auto-apply the DEFRA factor for the category (if known).
+    const efProvided = r.emission_factor != null && String(r.emission_factor).trim() !== '';
+    let ef;
+    if (efProvided) {
+      ef = parseFloat(String(r.emission_factor).trim()) || 1.0;
+    } else {
+      const defra = lookupFactor(category);
+      ef = (defra && !defra.custom && defra.factor != null) ? defra.factor : 1.0;
+    }
 
     if (!category || !scopeRaw || !amountRaw || !unit || !period) {
       errors.push(`Row ${rowNum}: missing required field (category, scope, amount, unit, period)`);
@@ -73,7 +84,6 @@ router.post('/', upload.single('file'), async (req, res) => {
 
     const scope  = parseInt(scopeRaw);
     const amount = parseFloat(amountRaw);
-    const ef     = parseFloat(efRaw) || 1.0;
 
     if (![1, 2, 3].includes(scope)) {
       errors.push(`Row ${rowNum}: scope must be 1, 2 or 3`);

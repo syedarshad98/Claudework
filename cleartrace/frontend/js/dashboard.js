@@ -364,17 +364,78 @@ const now = new Date();
 document.getElementById('f-period').value =
   `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-// Auto-select scope from category
-const CAT_SCOPE = {
-  'Natural Gas': 1, 'Diesel Generator': 1, 'Company Vehicles': 1,
-  'Refrigerants': 1, 'Other Scope 1': 1,
-  'Grid Electricity': 2, 'District Heating': 2,
-  'Business Travel': 3, 'Employee Commuting': 3, 'Waste': 3,
-  'Water Usage': 3, 'Purchased Goods': 3, 'Upstream Transport': 3, 'Other Scope 3': 3
+// ── DEFRA 2023 emission factors ────────────────────────────────────────────
+// Mirrors cleartrace/backend/db/emission_factors.js — keep in sync.
+// factor = kg CO₂e per unit. custom:true means no standard factor — user supplies.
+const DEFRA_FACTORS = {
+  // Scope 1
+  'Natural Gas':                         { factor: 2.02263, unit: 'm³',    scope: 1 },
+  'Diesel (Stationary)':                 { factor: 2.51920, unit: 'litres',scope: 1 },
+  'Petrol (Stationary)':                 { factor: 2.16280, unit: 'litres',scope: 1 },
+  'LPG':                                 { factor: 1.55400, unit: 'litres',scope: 1 },
+  'Company Car (Diesel)':                { factor: 0.17123, unit: 'km',    scope: 1 },
+  'Company Car (Petrol)':                { factor: 0.18110, unit: 'km',    scope: 1 },
+  'Company Car (Average)':               { factor: 0.17068, unit: 'km',    scope: 1 },
+  'Refrigerants (R-134a)':               { factor: 1430.00, unit: 'kg',    scope: 1 },
+  'Refrigerants (R-410A)':              { factor: 2088.00, unit: 'kg',    scope: 1 },
+  // Scope 2
+  'Grid Electricity (UK)':               { factor: 0.20493, unit: 'kWh',   scope: 2 },
+  'District Heating':                    { factor: 0.18400, unit: 'kWh',   scope: 2 },
+  // Scope 3
+  'Business Travel (Car)':               { factor: 0.17068, unit: 'km',    scope: 3 },
+  'Business Travel (Rail)':              { factor: 0.00604, unit: 'km',    scope: 3 },
+  'Business Travel (Short-haul Flight)': { factor: 0.15477, unit: 'km',    scope: 3 },
+  'Business Travel (Long-haul Flight)':  { factor: 0.19304, unit: 'km',    scope: 3 },
+  'Employee Commuting (Car)':            { factor: 0.17068, unit: 'km',    scope: 3 },
+  'Employee Commuting (Rail)':           { factor: 0.00604, unit: 'km',    scope: 3 },
+  'Waste (Landfill)':                    { factor: 0.58700, unit: 'kg',    scope: 3 },
+  'Waste (Recycled)':                    { factor: 0.02100, unit: 'kg',    scope: 3 },
+  'Waste (Composted)':                   { factor: 0.01100, unit: 'kg',    scope: 3 },
+  'Water Supply':                        { factor: 0.14900, unit: 'm³',    scope: 3 },
+  'Water Treatment':                     { factor: 0.27200, unit: 'm³',    scope: 3 },
+  'Purchased Goods':                     { factor: null,    unit: 'kg',    scope: 3, custom: true },
+  'Upstream Transport':                  { factor: null,    unit: 'km',    scope: 3, custom: true },
+  'Other Scope 3':                       { factor: null,    unit: 'kg',    scope: 3, custom: true },
 };
+
+function applyDefraFactor(category) {
+  const entry = DEFRA_FACTORS[category];
+  const defraGroup  = document.getElementById('defra-ef-group');
+  const customGroup = document.getElementById('custom-ef-group');
+  const badge       = document.getElementById('defra-ef-badge');
+
+  if (!entry) {
+    // Unknown category — show manual EF input
+    defraGroup.style.display  = 'none';
+    customGroup.style.display = '';
+    return;
+  }
+
+  // Auto-set scope
+  document.getElementById('f-scope').value = String(entry.scope);
+
+  // Auto-set unit (select the matching option)
+  const unitSel = document.getElementById('f-unit');
+  for (const opt of unitSel.options) {
+    if (opt.value === entry.unit) { unitSel.value = entry.unit; break; }
+  }
+
+  if (entry.custom) {
+    // Custom category — show manual EF input with unit hint
+    defraGroup.style.display  = 'none';
+    customGroup.style.display = '';
+  } else {
+    // Standard DEFRA category — show badge, hide manual input
+    badge.innerHTML =
+      `<span>&#x2705; <strong>${entry.factor}</strong> kg CO₂e / ${entry.unit}</span>` +
+      `<span class="defra-source">DEFRA 2023</span>`;
+    defraGroup.style.display  = '';
+    customGroup.style.display = 'none';
+  }
+}
+
 document.getElementById('f-category').addEventListener('change', (e) => {
-  const s = CAT_SCOPE[e.target.value];
-  if (s) document.getElementById('f-scope').value = String(s);
+  applyDefraFactor(e.target.value);
 });
 
 document.getElementById('entry-form').addEventListener('submit', async (e) => {
@@ -387,17 +448,27 @@ document.getElementById('entry-form').addEventListener('submit', async (e) => {
   btn.disabled    = true;
 
   try {
+    const category = document.getElementById('f-category').value;
+    const defra    = DEFRA_FACTORS[category];
+    // For custom categories, use the manual EF input; for DEFRA categories,
+    // omit the field so the backend applies the authoritative DEFRA factor.
+    const efValue  = (defra && !defra.custom)
+      ? undefined
+      : (parseFloat(document.getElementById('f-ef').value) || 1.0);
+
+    const payload = {
+      category,
+      scope:  parseInt(document.getElementById('f-scope').value),
+      amount: parseFloat(document.getElementById('f-amount').value),
+      unit:   document.getElementById('f-unit').value,
+      period: document.getElementById('f-period').value,
+    };
+    if (efValue !== undefined) payload.emission_factor = efValue;
+
     const res  = await api('/api/emissions', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        category:        document.getElementById('f-category').value,
-        scope:           parseInt(document.getElementById('f-scope').value),
-        amount:          parseFloat(document.getElementById('f-amount').value),
-        unit:            document.getElementById('f-unit').value,
-        period:          document.getElementById('f-period').value,
-        emission_factor: parseFloat(document.getElementById('f-ef').value) || 1.0
-      })
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
 
@@ -405,12 +476,19 @@ document.getElementById('entry-form').addEventListener('submit', async (e) => {
       fb.textContent = data.error || 'Failed to save';
       fb.className   = 'form-feedback error';
     } else {
-      fb.textContent = `✓ Entry saved — ${fmt(parseFloat(data.co2e_tonnes), 4)} tCO₂e calculated.`;
+      const defraEntry = DEFRA_FACTORS[category];
+      const efLabel = (defraEntry && !defraEntry.custom)
+        ? `DEFRA 2023 · ${defraEntry.factor} kg CO₂e/${defraEntry.unit}`
+        : `EF ${(payload.emission_factor || 1.0)} kg CO₂e/unit`;
+      fb.textContent = `✓ Entry saved — ${fmt(parseFloat(data.co2e_tonnes), 4)} tCO₂e  [${efLabel}]`;
       fb.className   = 'form-feedback success';
       e.target.reset();
       document.getElementById('f-period').value =
         `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       document.getElementById('f-ef').value = '1.0';
+      // Reset EF display to custom input (no category selected after reset)
+      document.getElementById('defra-ef-group').style.display  = 'none';
+      document.getElementById('custom-ef-group').style.display = '';
       setTimeout(() => { fb.className = 'form-feedback'; }, 5000);
       refreshAll();
     }

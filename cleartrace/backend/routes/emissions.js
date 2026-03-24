@@ -1,6 +1,7 @@
 const express = require('express');
 const router  = express.Router();
 const db      = require('../db/database');
+const { lookupFactor } = require('../db/emission_factors');
 
 // GET /api/emissions?page=1&limit=50&scope=1&period=2026-01
 router.get('/', async (req, res) => {
@@ -54,6 +55,16 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'period must be YYYY-MM format' });
   }
 
+  // Resolve emission factor: prefer DEFRA lookup for known categories,
+  // fall back to any client-supplied value, then 1.0 as last resort.
+  const defra = lookupFactor(category);
+  let ef;
+  if (defra && !defra.custom && defra.factor != null) {
+    ef = defra.factor;
+  } else {
+    ef = parseFloat(emission_factor) || 1.0;
+  }
+
   try {
     const result = await db.query(
       `INSERT INTO emissions_entries
@@ -68,7 +79,7 @@ router.post('/', async (req, res) => {
         parseFloat(amount),
         unit,
         period,
-        parseFloat(emission_factor) || 1.0,
+        ef,
         notes || null
       ]
     );
