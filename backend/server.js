@@ -19,6 +19,12 @@ app.use('/api/workorders', require('./routes/workorders'));
 app.use('/api/inventory',  require('./routes/inventory'));
 app.use('/api/quality',    require('./routes/quality'));
 app.use('/api/alerts',     require('./routes/alerts'));
+app.use('/api/admin',      require('./routes/admin'));
+
+// Admin page
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/admin.html'));
+});
 
 // Fallback — serve index.html for any unmatched route
 app.get('*', (req, res) => {
