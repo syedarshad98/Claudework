@@ -586,6 +586,33 @@ document.getElementById('download-template').addEventListener('click', downloadT
 document.getElementById('download-template-2').addEventListener('click', downloadTemplate);
 
 // ══════════════════════════════════════════════════════════════════════════════
+//  PDF EXPORT
+// ══════════════════════════════════════════════════════════════════════════════
+document.getElementById('export-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('export-btn');
+  const orig = btn.textContent;
+  btn.textContent = '⏳ Generating…';
+  btn.disabled = true;
+  try {
+    const res = await api('/api/report');
+    if (!res || !res.ok) throw new Error('Server error');
+    const blob = await res.blob();
+    const year = new Date().getFullYear();
+    const a = Object.assign(document.createElement('a'), {
+      href:     URL.createObjectURL(blob),
+      download: `ClearTrace-ESG-Report-${year}.pdf`,
+    });
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch {
+    alert('Could not generate report — please try again.');
+  } finally {
+    btn.textContent = orig;
+    btn.disabled = false;
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════════════════════════════════════════
 async function refreshAll() {
