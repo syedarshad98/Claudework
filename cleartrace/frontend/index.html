@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClearTrace — ESG Dashboard</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="shell">
+
+  <!-- ── HEADER ──────────────────────────────────────────────────────────── -->
+  <header>
+    <div class="logo">
+      <div class="logo-mark">
+        <svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M9 2C5.13 2 2 5.13 2 9s3.13 7 7 7 7-3.13 7-7-3.13-7-7-7zm0 2.5a4.5 4.5 0 0 1 0 9 4.5 4.5 0 0 1 0-9z" fill="#0a0c10" opacity=".3"/>
+          <path d="M9 5.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm-1.2 5.2 3.4-3.4.8.8-4.2 4.2-2-2 .8-.8 1.2 1.2z" fill="#0a0c10"/>
+        </svg>
+      </div>
+      <div class="logo-text">Clear<span>Trace</span></div>
+    </div>
+    <div class="header-center" id="header-company">—</div>
+    <div class="header-right">
+      <div class="user-info">
+        <div class="user-company" id="user-company-name">—</div>
+        <div class="user-email" id="user-email">—</div>
+      </div>
+      <button class="logout-btn" id="logout-btn">Sign Out</button>
+    </div>
+  </header>
+
+  <!-- ── ESG SCORE BANNER ─────────────────────────────────────────────────── -->
+  <div class="score-banner">
+    <div class="score-number-wrap">
+      <div class="score-value" id="score-value">—</div>
+      <div class="score-max">/100</div>
+    </div>
+    <div class="score-rating" id="score-rating">—</div>
+    <div class="score-info">
+      <div class="score-title">ESG Performance Score</div>
+      <div class="score-label" id="score-label">Loading…</div>
+      <div class="score-meta" id="score-meta">&nbsp;</div>
+    </div>
+  </div>
+
+  <!-- ── KPI STRIP ────────────────────────────────────────────────────────── -->
+  <div class="kpi-strip">
+    <div class="kpi green">
+      <div class="kpi-icon">⚡</div>
+      <div class="kpi-label">Energy Consumption</div>
+      <div class="kpi-value" id="kpi-energy">—</div>
+      <div class="kpi-unit">kWh · current month</div>
+      <div class="kpi-delta null" id="kpi-energy-delta">&nbsp;</div>
+    </div>
+    <div class="kpi blue">
+      <div class="kpi-icon">🔥</div>
+      <div class="kpi-label">Fuel Usage</div>
+      <div class="kpi-value" id="kpi-fuel">—</div>
+      <div class="kpi-unit">litres · current month</div>
+      <div class="kpi-delta null" id="kpi-fuel-delta">&nbsp;</div>
+    </div>
+    <div class="kpi amber">
+      <div class="kpi-icon">💧</div>
+      <div class="kpi-label">Water Usage</div>
+      <div class="kpi-value" id="kpi-water">—</div>
+      <div class="kpi-unit">m³ · current month</div>
+      <div class="kpi-delta null" id="kpi-water-delta">&nbsp;</div>
+    </div>
+    <div class="kpi purple">
+      <div class="kpi-icon">🗑</div>
+      <div class="kpi-label">Waste Generated</div>
+      <div class="kpi-value" id="kpi-waste">—</div>
+      <div class="kpi-unit">kg · current month</div>
+      <div class="kpi-delta null" id="kpi-waste-delta">&nbsp;</div>
+    </div>
+  </div>
+
+  <!-- ── CHARTS ROW ───────────────────────────────────────────────────────── -->
+  <div class="charts-grid">
+
+    <!-- Emissions Trend -->
+    <div class="card">
+      <div class="card-title">
+        Emissions Trend
+        <span class="tag tag-blue">12-month rolling</span>
+      </div>
+      <div class="card-sub">Monthly CO₂e by scope &nbsp;·&nbsp; tonnes</div>
+      <div class="chart-container">
+        <div class="chart-wrap" id="trend-chart-wrap">
+          <div style="height:220px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px">Loading…</div>
+        </div>
+        <div class="trend-tooltip" id="trend-tooltip"></div>
+      </div>
+      <div class="chart-legend">
+        <div class="chart-legend-item"><div class="legend-line" style="background:#f59e0b"></div>Scope 1 — Direct</div>
+        <div class="chart-legend-item"><div class="legend-line" style="background:#38bdf8"></div>Scope 2 — Electricity</div>
+        <div class="chart-legend-item"><div class="legend-line" style="background:#a78bfa"></div>Scope 3 — Value Chain</div>
+      </div>
+    </div>
+
+    <!-- Donut Breakdown -->
+    <div class="card">
+      <div class="card-title">Emissions Breakdown</div>
+      <div class="card-sub">Total CO₂e by scope &nbsp;·&nbsp; all time</div>
+      <div class="donut-wrap">
+        <div class="donut-svg-wrap">
+          <svg id="donut-svg" viewBox="0 0 180 180"></svg>
+          <div class="donut-center">
+            <div class="donut-center-value" id="donut-total">—</div>
+            <div class="donut-center-label">tCO₂e</div>
+          </div>
+        </div>
+        <div class="donut-legend" id="donut-legend">
+          <div class="donut-legend-item">
+            <span class="donut-legend-label"><span class="donut-dot" style="background:#f59e0b"></span>Scope 1</span>
+            <span class="donut-legend-value" id="leg-s1">—</span>
+          </div>
+          <div class="donut-legend-item">
+            <span class="donut-legend-label"><span class="donut-dot" style="background:#38bdf8"></span>Scope 2</span>
+            <span class="donut-legend-value" id="leg-s2">—</span>
+          </div>
+          <div class="donut-legend-item">
+            <span class="donut-legend-label"><span class="donut-dot" style="background:#a78bfa"></span>Scope 3</span>
+            <span class="donut-legend-value" id="leg-s3">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── DATA ENTRY + UPLOAD ──────────────────────────────────────────────── -->
+  <div class="entry-grid">
+
+    <!-- Manual Entry Form -->
+    <div class="card">
+      <div class="card-title">Log Emissions Entry</div>
+      <div class="card-sub">Add a single data point manually</div>
+
+      <div class="form-success" id="entry-success">Entry saved successfully.</div>
+      <div class="form-error"   id="entry-error"></div>
+
+      <form id="entry-form">
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="f-category">Category</label>
+            <select id="f-category" required>
+              <option value="">Select category…</option>
+              <optgroup label="Scope 1 — Direct">
+                <option value="Natural Gas">Natural Gas</option>
+                <option value="Diesel Generator">Diesel Generator</option>
+                <option value="Company Vehicles">Company Vehicles</option>
+                <option value="Refrigerants">Refrigerants</option>
+                <option value="Other Scope 1">Other Scope 1</option>
+              </optgroup>
+              <optgroup label="Scope 2 — Electricity">
+                <option value="Grid Electricity">Grid Electricity</option>
+                <option value="District Heating">District Heating</option>
+              </optgroup>
+              <optgroup label="Scope 3 — Value Chain">
+                <option value="Business Travel">Business Travel</option>
+                <option value="Employee Commuting">Employee Commuting</option>
+                <option value="Waste">Waste</option>
+                <option value="Water Usage">Water Usage</option>
+                <option value="Purchased Goods">Purchased Goods</option>
+                <option value="Upstream Transport">Upstream Transport</option>
+                <option value="Other Scope 3">Other Scope 3</option>
+              </optgroup>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="f-scope">Scope</label>
+            <select id="f-scope" required>
+              <option value="">Select scope…</option>
+              <option value="1">Scope 1 — Direct emissions</option>
+              <option value="2">Scope 2 — Purchased energy</option>
+              <option value="3">Scope 3 — Value chain</option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="f-amount">Amount</label>
+            <input type="number" id="f-amount" placeholder="e.g. 45000" min="0" step="any" required>
+          </div>
+
+          <div class="form-field">
+            <label for="f-unit">Unit</label>
+            <select id="f-unit">
+              <option value="kWh">kWh</option>
+              <option value="litres">litres</option>
+              <option value="m³">m³</option>
+              <option value="kg">kg</option>
+              <option value="tonnes">tonnes</option>
+              <option value="km">km</option>
+              <option value="GJ">GJ</option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="f-period">Period (YYYY-MM)</label>
+            <input type="month" id="f-period" required>
+          </div>
+
+          <div class="form-field">
+            <label for="f-ef">Emission Factor (kg CO₂e / unit)</label>
+            <input type="number" id="f-ef" placeholder="e.g. 0.233" min="0" step="any" value="1.0">
+          </div>
+
+          <div class="form-field full">
+            <label for="f-notes">Notes (optional)</label>
+            <textarea id="f-notes" placeholder="Source, meter ID, assumptions…"></textarea>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn-primary" id="entry-submit-btn">Save Entry</button>
+            <button type="reset"  class="btn-ghost">Clear</button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Spreadsheet Upload -->
+    <div class="card">
+      <div class="card-title">Bulk Import</div>
+      <div class="card-sub">Upload a spreadsheet to import multiple entries at once</div>
+
+      <div class="upload-zone" id="upload-zone">
+        <div class="upload-icon">📂</div>
+        <div class="upload-title">Drop your file here</div>
+        <div class="upload-sub">or click to browse</div>
+        <div class="upload-hint">.xlsx &nbsp;·&nbsp; .xls &nbsp;·&nbsp; .csv &nbsp;·&nbsp; max 10 MB</div>
+        <input type="file" id="upload-input" class="upload-input" accept=".xlsx,.xls,.csv">
+      </div>
+
+      <div class="upload-result" id="upload-result"></div>
+
+      <div class="upload-hint" style="margin-top:12px">
+        Required columns: <strong>category, scope, amount, unit, period</strong><br>
+        Optional: <em>emission_factor, notes</em> &nbsp;·&nbsp; Period format: YYYY-MM
+        <span class="upload-template-link" id="download-template">Download template ↓</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── RECENT ENTRIES TABLE ─────────────────────────────────────────────── -->
+  <div class="card recent-section">
+    <div class="card-title">
+      Recent Entries
+      <span class="tag tag-blue" id="entries-count-tag">—</span>
+    </div>
+    <div class="card-sub">Latest emissions data logged for your company</div>
+    <div class="entries-table-wrap">
+      <table class="entries-table" id="entries-table">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Scope</th>
+            <th>Amount</th>
+            <th>Unit</th>
+            <th>CO₂e (t)</th>
+            <th>Period</th>
+            <th>Source</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="entries-tbody">
+          <tr><td colspan="8" class="empty-state">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── FRAMEWORK ALIGNMENT ──────────────────────────────────────────────── -->
+  <div class="card" style="margin-bottom:24px">
+    <div class="card-title">Framework Alignment</div>
+    <div class="card-sub">Reporting standard compliance status for your organisation</div>
+    <div class="frameworks-grid" style="margin-top:8px" id="frameworks-grid">
+      <!-- Populated by dashboard.js -->
+    </div>
+  </div>
+
+</div><!-- /shell -->
+
+<script src="js/dashboard.js"></script>
+</body>
+</html>

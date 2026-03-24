@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClearTrace — ESG Data Management</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="auth-shell">
+  <div class="auth-card">
+
+    <!-- Logo -->
+    <div class="auth-logo">
+      <div class="auth-logo-mark">
+        <svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M9 2C5.13 2 2 5.13 2 9s3.13 7 7 7 7-3.13 7-7-3.13-7-7-7zm0 2.5a4.5 4.5 0 0 1 0 9 4.5 4.5 0 0 1 0-9z" fill="#0a0c10" opacity=".3"/>
+          <path d="M9 5.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm-1.2 5.2 3.4-3.4.8.8-4.2 4.2-2-2 .8-.8 1.2 1.2z" fill="#0a0c10"/>
+        </svg>
+      </div>
+      <div class="auth-logo-text">Clear<span>Trace</span></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="auth-tabs">
+      <button class="auth-tab active" data-tab="login">Sign In</button>
+      <button class="auth-tab" data-tab="register">Register Company</button>
+    </div>
+
+    <!-- Error message -->
+    <div class="auth-error" id="auth-error"></div>
+
+    <!-- Login form -->
+    <form class="auth-form" id="login-form" autocomplete="on">
+      <div class="auth-field">
+        <label for="login-email">Email</label>
+        <input type="email" id="login-email" name="email" placeholder="you@company.com" required autocomplete="email">
+      </div>
+      <div class="auth-field">
+        <label for="login-password">Password</label>
+        <input type="password" id="login-password" name="password" placeholder="••••••••" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="auth-btn" id="login-btn">Sign In</button>
+    </form>
+
+    <!-- Register form -->
+    <form class="auth-form" id="register-form" style="display:none" autocomplete="off">
+      <div class="auth-field">
+        <label for="reg-company">Company Name</label>
+        <input type="text" id="reg-company" placeholder="Acme Corp Ltd" required>
+      </div>
+      <div class="auth-field">
+        <label for="reg-industry">Industry</label>
+        <select id="reg-industry">
+          <option value="">Select industry (optional)</option>
+          <option>Manufacturing</option>
+          <option>Retail &amp; Consumer Goods</option>
+          <option>Technology</option>
+          <option>Finance &amp; Insurance</option>
+          <option>Healthcare</option>
+          <option>Construction &amp; Real Estate</option>
+          <option>Transport &amp; Logistics</option>
+          <option>Agriculture &amp; Food</option>
+          <option>Energy &amp; Utilities</option>
+          <option>Professional Services</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="auth-field">
+        <label for="reg-country">Country</label>
+        <input type="text" id="reg-country" placeholder="United Kingdom (optional)">
+      </div>
+      <div class="auth-field">
+        <label for="reg-email">Work Email</label>
+        <input type="email" id="reg-email" placeholder="you@company.com" required autocomplete="off">
+      </div>
+      <div class="auth-field">
+        <label for="reg-password">Password</label>
+        <input type="password" id="reg-password" placeholder="Minimum 8 characters" required autocomplete="new-password">
+      </div>
+      <button type="submit" class="auth-btn" id="register-btn">Create Account</button>
+    </form>
+
+    <!-- Demo credentials hint -->
+    <div class="auth-demo">
+      Demo account &nbsp;·&nbsp;
+      <strong>demo@cleartrace.io</strong> / <strong>demo1234</strong>
+    </div>
+
+  </div>
+</div>
+<script src="js/auth.js"></script>
+</body>
+</html>

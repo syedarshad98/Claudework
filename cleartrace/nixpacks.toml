@@ -1,0 +1,8 @@
+# ClearTrace — Railway deployment config
+# Set Root Directory to "cleartrace" in Railway, or deploy from this path.
+
+[phases.install]
+cmds = ["npm install --prefix backend"]
+
+[start]
+cmd = "node backend/db/seed.js && node backend/server.js"

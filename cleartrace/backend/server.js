@@ -1,0 +1,33 @@
+require('dotenv').config();
+const express = require('express');
+const cors    = require('cors');
+const path    = require('path');
+
+const app  = express();
+const PORT = process.env.PORT || 3001;
+
+app.use(cors());
+app.use(express.json());
+
+// Serve the ClearTrace frontend as static files
+app.use(express.static(path.join(__dirname, '../frontend')));
+
+// Public routes — no auth required
+app.use('/api/auth', require('./routes/auth'));
+
+// Protected routes — JWT required
+const auth = require('./middleware/auth');
+app.use('/api/emissions',  auth, require('./routes/emissions'));
+app.use('/api/kpi',        auth, require('./routes/kpi'));
+app.use('/api/charts',     auth, require('./routes/charts'));
+app.use('/api/frameworks', auth, require('./routes/frameworks'));
+app.use('/api/upload',     auth, require('./routes/upload'));
+
+// SPA fallback — serve index.html for any unmatched route
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/index.html'));
+});
+
+app.listen(PORT, () => {
+  console.log(`ClearTrace server running → http://localhost:${PORT}`);
+});
