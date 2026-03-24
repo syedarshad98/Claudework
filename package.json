@@ -1,0 +1,12 @@
+{
+  "name": "cleartrace",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node cleartrace/backend/db/seed.js && node cleartrace/backend/server.js",
+    "postinstall": "npm install --prefix cleartrace/backend"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
