@@ -52,7 +52,13 @@ router.post('/register', async (req, res) => {
     await client.query('COMMIT');
 
     const token = makeToken(user.id, companyId, user.role);
-    res.status(201).json({ token, companyName, email: email.toLowerCase().trim(), role: user.role });
+    res.status(201).json({
+      token,
+      companyName,
+      email: email.toLowerCase().trim(),
+      role: user.role,
+      onboardingComplete: false,
+    });
   } catch (err) {
     await client.query('ROLLBACK');
     if (err.code === '23505') {
@@ -75,7 +81,9 @@ router.post('/login', async (req, res) => {
 
   try {
     const result = await db.query(
-      `SELECT u.id, u.password_hash, u.role, u.company_id, c.name AS company_name
+      `SELECT u.id, u.password_hash, u.role, u.company_id,
+              c.name AS company_name,
+              COALESCE(c.onboarding_complete, FALSE) AS onboarding_complete
          FROM users u
          JOIN companies c ON c.id = u.company_id
         WHERE u.email = $1`,
@@ -95,9 +103,10 @@ router.post('/login', async (req, res) => {
     const token = makeToken(user.id, user.company_id, user.role);
     res.json({
       token,
-      companyName: user.company_name,
-      email: email.toLowerCase().trim(),
-      role: user.role
+      companyName:        user.company_name,
+      email:              email.toLowerCase().trim(),
+      role:               user.role,
+      onboardingComplete: user.onboarding_complete,
     });
   } catch (err) {
     console.error('Login error:', err.message);

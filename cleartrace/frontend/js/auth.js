@@ -43,6 +43,7 @@ function storeSession(data) {
   localStorage.setItem('ct_company',     data.companyName);
   localStorage.setItem('ct_email',       data.email);
   localStorage.setItem('ct_role',        data.role);
+  localStorage.setItem('ct_onboarding',  data.onboardingComplete ? 'complete' : 'pending');
 }
 
 // ── Login ─────────────────────────────────────────────────────────────────────
@@ -71,7 +72,8 @@ loginForm.addEventListener('submit', async (e) => {
     }
 
     storeSession(data);
-    window.location.replace('/');
+    const dest = data.onboardingComplete ? '/' : '/onboarding.html';
+    window.location.replace(dest);
   } catch {
     showError('Network error — please try again');
   } finally {
@@ -114,7 +116,7 @@ regForm.addEventListener('submit', async (e) => {
     }
 
     storeSession(data);
-    window.location.replace('/');
+    window.location.replace('/onboarding.html');
   } catch {
     showError('Network error — please try again');
   } finally {

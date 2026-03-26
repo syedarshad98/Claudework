@@ -25,8 +25,9 @@ app.use('/api/emissions',  auth, require('./routes/emissions'));
 app.use('/api/kpi',        auth, require('./routes/kpi'));
 app.use('/api/charts',     auth, require('./routes/charts'));
 app.use('/api/frameworks', auth, require('./routes/frameworks'));
-app.use('/api/upload',     auth, require('./routes/upload'));
-app.use('/api/report',     auth, require('./routes/report'));
+app.use('/api/upload',      auth, require('./routes/upload'));
+app.use('/api/report',      auth, require('./routes/report'));
+app.use('/api/onboarding',  auth, require('./routes/onboarding'));
 
 // SPA fallback — serve index.html for any unmatched route
 app.get('*', (req, res) => {

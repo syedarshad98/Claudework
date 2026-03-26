@@ -1,0 +1,244 @@
+const express = require('express');
+const router  = express.Router();
+const fs      = require('fs');
+const path    = require('path');
+const db      = require('../db/database');
+
+// Run onboarding migration lazily on first use
+let migrated = false;
+async function ensureMigrated() {
+  if (migrated) return;
+  const sql = fs.readFileSync(
+    path.join(__dirname, '../db/onboarding_migration.sql'), 'utf8'
+  );
+  await db.query(sql);
+  migrated = true;
+}
+
+// GET /api/onboarding/status
+// Returns whether onboarding is complete + current saved data
+router.get('/status', async (req, res) => {
+  await ensureMigrated();
+  try {
+    const result = await db.query(
+      `SELECT name, industry, country, employee_count,
+              financial_year_start, reduction_target_pct,
+              target_year, alignment_standard, onboarding_complete
+         FROM companies WHERE id = $1`,
+      [req.companyId]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Company not found' });
+
+    const company = result.rows[0];
+
+    const [baselineRes, inviteRes, frameworkRes] = await Promise.all([
+      db.query('SELECT scope, co2e_tonnes, year FROM baseline_emissions WHERE company_id = $1 ORDER BY scope', [req.companyId]),
+      db.query('SELECT email, role FROM pending_invites WHERE company_id = $1 ORDER BY id',                    [req.companyId]),
+      db.query('SELECT framework, status FROM framework_status WHERE company_id = $1 ORDER BY framework',      [req.companyId]),
+    ]);
+
+    res.json({
+      onboardingComplete: company.onboarding_complete,
+      profile: {
+        name:          company.name,
+        industry:      company.industry,
+        country:       company.country,
+        employeeCount: company.employee_count,
+      },
+      reporting: {
+        financialYearStart: company.financial_year_start,
+        frameworks:         frameworkRes.rows,
+      },
+      baseline:  baselineRes.rows,
+      targets: {
+        reductionTargetPct: company.reduction_target_pct,
+        targetYear:         company.target_year,
+        alignmentStandard:  company.alignment_standard,
+      },
+      invites: inviteRes.rows,
+    });
+  } catch (err) {
+    console.error('Onboarding status error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch onboarding status' });
+  }
+});
+
+// PUT /api/onboarding/profile  — Step 1
+router.put('/profile', async (req, res) => {
+  await ensureMigrated();
+  const { name, industry, country, employeeCount } = req.body;
+
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Company name is required' });
+  }
+
+  try {
+    await db.query(
+      `UPDATE companies
+          SET name           = $1,
+              industry       = $2,
+              country        = $3,
+              employee_count = $4
+        WHERE id = $5`,
+      [name.trim(), industry || null, country || null, employeeCount || null, req.companyId]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Onboarding profile error:', err.message);
+    res.status(500).json({ error: 'Failed to save profile' });
+  }
+});
+
+// PUT /api/onboarding/reporting  — Step 2
+router.put('/reporting', async (req, res) => {
+  await ensureMigrated();
+  const { financialYearStart, frameworks } = req.body;
+  // frameworks: array of { framework: 'GRI'|'TCFD'|'SASB'|'LOCAL', selected: true/false }
+
+  const fyStart = parseInt(financialYearStart);
+  if (isNaN(fyStart) || fyStart < 1 || fyStart > 12) {
+    return res.status(400).json({ error: 'financialYearStart must be 1–12' });
+  }
+
+  const validFW = ['GRI', 'TCFD', 'SASB', 'LOCAL'];
+
+  try {
+    await db.query(
+      'UPDATE companies SET financial_year_start = $1 WHERE id = $2',
+      [fyStart, req.companyId]
+    );
+
+    if (Array.isArray(frameworks)) {
+      for (const { framework, selected } of frameworks) {
+        if (!validFW.includes(framework)) continue;
+        const status = selected ? 'partial' : 'not_started';
+        await db.query(
+          `INSERT INTO framework_status (company_id, framework, status)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (company_id, framework)
+           DO UPDATE SET status = $3, updated_at = NOW()`,
+          [req.companyId, framework, status]
+        );
+      }
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Onboarding reporting error:', err.message);
+    res.status(500).json({ error: 'Failed to save reporting setup' });
+  }
+});
+
+// PUT /api/onboarding/baseline  — Step 3 (optional)
+router.put('/baseline', async (req, res) => {
+  await ensureMigrated();
+  const { baseline, year } = req.body;
+  // baseline: [{ scope: 1, co2e_tonnes: 120.5 }, ...]
+  // year: integer e.g. 2024
+
+  const baselineYear = parseInt(year) || (new Date().getFullYear() - 1);
+
+  try {
+    if (Array.isArray(baseline)) {
+      for (const { scope, co2e_tonnes } of baseline) {
+        const s   = parseInt(scope);
+        const val = parseFloat(co2e_tonnes);
+        if (![1, 2, 3].includes(s) || isNaN(val)) continue;
+
+        await db.query(
+          `INSERT INTO baseline_emissions (company_id, scope, co2e_tonnes, year)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (company_id, scope)
+           DO UPDATE SET co2e_tonnes = $3, year = $4`,
+          [req.companyId, s, val, baselineYear]
+        );
+      }
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Onboarding baseline error:', err.message);
+    res.status(500).json({ error: 'Failed to save baseline emissions' });
+  }
+});
+
+// PUT /api/onboarding/targets  — Step 4
+router.put('/targets', async (req, res) => {
+  await ensureMigrated();
+  const { reductionTargetPct, targetYear, alignmentStandard } = req.body;
+
+  const validStandards = ['SBTi', 'Paris 1.5°C', 'Paris 2°C', 'Custom', 'None'];
+
+  const pct  = reductionTargetPct != null ? parseFloat(reductionTargetPct) : null;
+  const yr   = targetYear         != null ? parseInt(targetYear)           : null;
+  const std  = validStandards.includes(alignmentStandard) ? alignmentStandard : null;
+
+  if (pct !== null && (pct < 0 || pct > 100)) {
+    return res.status(400).json({ error: 'reductionTargetPct must be 0–100' });
+  }
+  if (yr !== null && (yr < 2024 || yr > 2100)) {
+    return res.status(400).json({ error: 'targetYear must be 2024–2100' });
+  }
+
+  try {
+    await db.query(
+      `UPDATE companies
+          SET reduction_target_pct = $1,
+              target_year          = $2,
+              alignment_standard   = $3
+        WHERE id = $4`,
+      [pct, yr, std, req.companyId]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Onboarding targets error:', err.message);
+    res.status(500).json({ error: 'Failed to save targets' });
+  }
+});
+
+// PUT /api/onboarding/invites  — Step 5
+router.put('/invites', async (req, res) => {
+  await ensureMigrated();
+  const { invites } = req.body;
+  // invites: [{ email: '...', role: 'editor'|'viewer'|'admin' }]
+
+  const validRoles = ['admin', 'editor', 'viewer'];
+
+  try {
+    if (Array.isArray(invites)) {
+      // Replace all pending invites for this company
+      await db.query('DELETE FROM pending_invites WHERE company_id = $1', [req.companyId]);
+
+      for (const { email, role } of invites) {
+        if (!email || !email.includes('@')) continue;
+        const r = validRoles.includes(role) ? role : 'viewer';
+        await db.query(
+          `INSERT INTO pending_invites (company_id, email, role)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (company_id, email) DO UPDATE SET role = $3`,
+          [req.companyId, email.toLowerCase().trim(), r]
+        );
+      }
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Onboarding invites error:', err.message);
+    res.status(500).json({ error: 'Failed to save invites' });
+  }
+});
+
+// POST /api/onboarding/complete  — Mark onboarding done
+router.post('/complete', async (req, res) => {
+  await ensureMigrated();
+  try {
+    await db.query(
+      'UPDATE companies SET onboarding_complete = TRUE WHERE id = $1',
+      [req.companyId]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Onboarding complete error:', err.message);
+    res.status(500).json({ error: 'Failed to complete onboarding' });
+  }
+});
+
+module.exports = router;

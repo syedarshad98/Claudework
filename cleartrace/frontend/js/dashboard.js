@@ -8,6 +8,11 @@
 const token   = localStorage.getItem('ct_token');
 if (!token) window.location.replace('/login.html');
 
+// Redirect to onboarding if not yet complete
+if (localStorage.getItem('ct_onboarding') !== 'complete') {
+  window.location.replace('/onboarding.html');
+}
+
 const COMPANY = localStorage.getItem('ct_company') || '';
 const EMAIL   = localStorage.getItem('ct_email')   || '';
 
@@ -356,6 +361,76 @@ async function loadBannerStats() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+//  ONBOARDING — PERSONALISED DATA
+//  Fetches company setup (targets, baseline, financial year) and enriches
+//  the dashboard header and score banner with it.
+// ══════════════════════════════════════════════════════════════════════════════
+async function loadOnboardingData() {
+  const res = await api('/api/onboarding/status');
+  if (!res || !res.ok) return;
+  const d = await res.json();
+
+  // ── Financial year label in topbar ───────────────────────────────────────
+  const fyStart = d.reporting?.financialYearStart || 1;
+  const months  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const startLbl = months[fyStart - 1];
+  const yr       = new Date().getFullYear();
+  const endMon   = months[((fyStart - 2 + 12) % 12)];
+  const endYr    = fyStart === 1 ? yr : (fyStart <= new Date().getMonth() + 1 ? yr : yr - 1);
+  document.getElementById('page-sub').textContent =
+    `FY ${startLbl} ${endYr}–${endMon} ${endYr + 1} · ${EMAIL}`;
+
+  // ── Employee count in sidebar footer ────────────────────────────────────
+  if (d.profile?.employeeCount) {
+    const planEl = document.querySelector('.company-plan');
+    if (planEl) planEl.textContent = `${d.profile.employeeCount.toLocaleString()} employees`;
+  }
+
+  // ── Industry label ───────────────────────────────────────────────────────
+  if (d.profile?.industry) {
+    const planEl = document.querySelector('.company-plan');
+    if (planEl && !d.profile.employeeCount) planEl.textContent = d.profile.industry;
+  }
+
+  // ── Target banner row ────────────────────────────────────────────────────
+  const targetBanner = document.getElementById('target-banner');
+  if (!targetBanner) return;
+
+  const tgt = d.targets;
+  if (tgt?.reductionTargetPct && tgt?.targetYear) {
+    // Compute progress: total current CO2e vs baseline total
+    const baselineTotal = d.baseline.reduce((s, b) => s + parseFloat(b.co2e_tonnes || 0), 0);
+
+    let progressHtml = '';
+    if (baselineTotal > 0) {
+      const breakdownRes = await api('/api/charts/breakdown');
+      const bd = breakdownRes ? await breakdownRes.json() : null;
+      if (bd) {
+        const currentTotal = parseFloat(bd.total) || 0;
+        const targetTotal  = baselineTotal * (1 - tgt.reductionTargetPct / 100);
+        const pct          = Math.min(100, Math.max(0, Math.round(
+          ((baselineTotal - currentTotal) / (baselineTotal - targetTotal)) * 100
+        )));
+        progressHtml = `
+          <div class="target-progress-wrap">
+            <div class="target-progress-track">
+              <div class="target-progress-fill" style="width:${pct}%"></div>
+            </div>
+            <span class="target-progress-pct">${pct}%</span>
+          </div>`;
+      }
+    }
+
+    const std = tgt.alignmentStandard ? ` · ${tgt.alignmentStandard}` : '';
+    targetBanner.innerHTML = `
+      <div class="target-banner-label">🎯 Target: −${tgt.reductionTargetPct}% by ${tgt.targetYear}${std}</div>
+      ${progressHtml}
+    `;
+    targetBanner.style.display = 'flex';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 //  MANUAL ENTRY FORM
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -622,7 +697,8 @@ async function refreshAll() {
     loadDonutChart(),
     loadBannerStats(),
     loadEntries(),
-    loadFrameworks()
+    loadFrameworks(),
+    loadOnboardingData(),
   ]);
 }
 
