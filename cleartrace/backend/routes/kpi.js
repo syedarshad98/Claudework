@@ -35,11 +35,30 @@ router.get('/', async (req, res) => {
     const aligned      = parseInt(alignedRow.rows[0].cnt);
     const partial      = parseInt(partialRow.rows[0].cnt);
 
-    // Data completeness score (max 50): ~25 entries fills it
-    const dataScore = Math.min(50, Math.round(totalEntries / 25 * 50));
-    // Framework score (max 50): each of 4 frameworks worth 12.5, partial counts half
-    const fwScore   = Math.round(aligned * 12.5 + partial * 6.25);
-    const esgScore  = Math.min(100, dataScore + fwScore);
+    // Environmental: data completeness (max 40) + framework alignment (max 30) = max 70
+    const dataScore = Math.min(40, Math.round(totalEntries / 25 * 40));
+    const fwScore   = Math.min(30, Math.round(aligned * 7.5 + partial * 3.75));
+    const envScore  = dataScore + fwScore;
+
+    // Social +15 if any social_metrics rows exist for this company
+    let socialScore = 0;
+    try {
+      const socialRow = await db.query(
+        'SELECT 1 FROM social_metrics WHERE company_id = $1 LIMIT 1', [companyId]
+      );
+      if (socialRow.rows.length) socialScore = 15;
+    } catch (_) { /* table may not exist yet */ }
+
+    // Governance +15 if any governance_metrics rows exist for this company
+    let govScore = 0;
+    try {
+      const govRow = await db.query(
+        'SELECT 1 FROM governance_metrics WHERE company_id = $1 LIMIT 1', [companyId]
+      );
+      if (govRow.rows.length) govScore = 15;
+    } catch (_) { /* table may not exist yet */ }
+
+    const esgScore  = Math.min(100, envScore + socialScore + govScore);
     const esgRating = esgScore >= 80 ? 'A' : esgScore >= 60 ? 'B' : esgScore >= 40 ? 'C' : 'D';
 
     // ── KPI: Energy — Scope 2 electricity (kWh) ───────────────────────────
@@ -93,6 +112,9 @@ router.get('/', async (req, res) => {
     res.json({
       esgScore,
       esgRating,
+      eBreakdown: envScore,
+      sBreakdown: socialScore,
+      gBreakdown: govScore,
       totalEntries,
       energy: {
         value: parseFloat(energyCurr.rows[0].v),

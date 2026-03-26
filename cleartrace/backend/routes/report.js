@@ -54,11 +54,57 @@ router.get('/', requireRole('admin', 'editor'), async (req, res) => {
     const entries   = parseInt(totals.cnt);
 
     // ── ESG score (mirrors kpi.js logic) ─────────────────────────────────
-    const aligned = frameworks.filter(f => f.status === 'aligned').length;
-    const partial = frameworks.filter(f => f.status === 'partial').length;
-    const dataScore = Math.min(50, Math.round(entries / 25 * 50));
-    const fwScore   = Math.round(aligned * 12.5 + partial * 6.25);
-    const esgScore  = Math.min(100, dataScore + fwScore);
+    const aligned   = frameworks.filter(f => f.status === 'aligned').length;
+    const partial   = frameworks.filter(f => f.status === 'partial').length;
+    const dataScore = Math.min(40, Math.round(entries / 25 * 40));
+    const fwScore   = Math.min(30, Math.round(aligned * 7.5 + partial * 3.75));
+    const envScore  = dataScore + fwScore;
+
+    let socialScore = 0;
+    let socialData  = null;
+    try {
+      const sRow = await db.query(
+        'SELECT 1 FROM social_metrics WHERE company_id = $1 LIMIT 1', [companyId]
+      );
+      if (sRow.rows.length) {
+        socialScore = 15;
+        const sPeriod = await db.query(
+          'SELECT period FROM social_metrics WHERE company_id=$1 ORDER BY period DESC LIMIT 1', [companyId]
+        );
+        if (sPeriod.rows.length) {
+          const sp = sPeriod.rows[0].period;
+          const sMetrics = await db.query(
+            'SELECT category, metric_key, metric_value, metric_text FROM social_metrics WHERE company_id=$1 AND period=$2',
+            [companyId, sp]
+          );
+          socialData = { period: sp, rows: sMetrics.rows };
+        }
+      }
+    } catch (_) { /* table may not exist yet */ }
+
+    let govScore = 0;
+    let govData  = null;
+    try {
+      const gRow = await db.query(
+        'SELECT 1 FROM governance_metrics WHERE company_id = $1 LIMIT 1', [companyId]
+      );
+      if (gRow.rows.length) {
+        govScore = 15;
+        const gPeriod = await db.query(
+          'SELECT period FROM governance_metrics WHERE company_id=$1 ORDER BY period DESC LIMIT 1', [companyId]
+        );
+        if (gPeriod.rows.length) {
+          const gp = gPeriod.rows[0].period;
+          const gMetrics = await db.query(
+            'SELECT category, metric_key, metric_value, metric_text FROM governance_metrics WHERE company_id=$1 AND period=$2',
+            [companyId, gp]
+          );
+          govData = { period: gp, rows: gMetrics.rows };
+        }
+      }
+    } catch (_) { /* table may not exist yet */ }
+
+    const esgScore  = Math.min(100, envScore + socialScore + govScore);
     const esgRating = esgScore >= 80 ? 'A' : esgScore >= 60 ? 'B' : esgScore >= 40 ? 'C' : 'D';
 
     // ── Build PDF ─────────────────────────────────────────────────────────
@@ -153,6 +199,85 @@ router.get('/', requireRole('admin', 'editor'), async (req, res) => {
            .text(lbl, 60, rowY + 8, { align: 'right', width: WIDTH - 20 });
         doc.moveDown(1.4);
       });
+    }
+
+    // ── Social Metrics ────────────────────────────────────────────────────
+    doc.moveDown(2);
+    doc.fillColor(DARK).font('Helvetica-Bold').fontSize(14).text('Social Metrics');
+    doc.moveDown(0.4);
+
+    if (!socialData || !socialData.rows.length) {
+      doc.fillColor(GREY).font('Helvetica').fontSize(10).text('No social data recorded yet.');
+    } else {
+      doc.fillColor(GREY).font('Helvetica').fontSize(9).text(`Period: ${socialData.period}`);
+      doc.moveDown(0.3);
+
+      // Group by category
+      const socialByCategory = {};
+      for (const r of socialData.rows) {
+        if (!socialByCategory[r.category]) socialByCategory[r.category] = [];
+        socialByCategory[r.category].push(r);
+      }
+
+      const socialGriMap = { 'Diversity & Inclusion': 'GRI 405', 'Health & Safety': 'GRI 403', 'Supply Chain': 'GRI 414' };
+
+      for (const [cat, rows] of Object.entries(socialByCategory)) {
+        const gri = socialGriMap[cat] || '';
+        const catY = doc.y;
+        doc.rect(50, catY, WIDTH, 22).fill('#e8f5f0').stroke('#c3d9d0');
+        doc.fillColor(GREEN).font('Helvetica-Bold').fontSize(10).text(cat, 60, catY + 6);
+        if (gri) doc.fillColor(GREY).font('Helvetica').fontSize(8).text(gri, 60, catY + 6, { align: 'right', width: WIDTH - 20 });
+        doc.moveDown(1.2);
+
+        for (const r of rows) {
+          const val = r.metric_value !== null ? parseFloat(r.metric_value).toString() : (r.metric_text || '—');
+          const rowY2 = doc.y;
+          doc.rect(50, rowY2, WIDTH, 20).fill(LIGHT).stroke('#e5e7eb');
+          doc.fillColor(DARK).font('Helvetica').fontSize(9).text(r.metric_key.replace(/_/g, ' '), 60, rowY2 + 6, { width: WIDTH * 0.6 });
+          doc.fillColor(GREEN).font('Helvetica-Bold').fontSize(9).text(val, 60, rowY2 + 6, { align: 'right', width: WIDTH - 20 });
+          doc.moveDown(1.1);
+        }
+        doc.moveDown(0.3);
+      }
+    }
+
+    // ── Governance Metrics ────────────────────────────────────────────────
+    doc.moveDown(1);
+    doc.fillColor(DARK).font('Helvetica-Bold').fontSize(14).text('Governance Metrics');
+    doc.moveDown(0.4);
+
+    if (!govData || !govData.rows.length) {
+      doc.fillColor(GREY).font('Helvetica').fontSize(10).text('No governance data recorded yet.');
+    } else {
+      doc.fillColor(GREY).font('Helvetica').fontSize(9).text(`Period: ${govData.period}`);
+      doc.moveDown(0.3);
+
+      const govByCategory = {};
+      for (const r of govData.rows) {
+        if (!govByCategory[r.category]) govByCategory[r.category] = [];
+        govByCategory[r.category].push(r);
+      }
+
+      const govGriMap = { 'Board Composition': 'GRI 102', 'Anti-Bribery & Ethics': 'GRI 205' };
+
+      for (const [cat, rows] of Object.entries(govByCategory)) {
+        const gri = govGriMap[cat] || '';
+        const catY = doc.y;
+        doc.rect(50, catY, WIDTH, 22).fill('#eef0f8').stroke('#c5cce0');
+        doc.fillColor('#3b5bdb').font('Helvetica-Bold').fontSize(10).text(cat, 60, catY + 6);
+        if (gri) doc.fillColor(GREY).font('Helvetica').fontSize(8).text(gri, 60, catY + 6, { align: 'right', width: WIDTH - 20 });
+        doc.moveDown(1.2);
+
+        for (const r of rows) {
+          const val = r.metric_value !== null ? parseFloat(r.metric_value).toString() : (r.metric_text || '—');
+          const rowY2 = doc.y;
+          doc.rect(50, rowY2, WIDTH, 20).fill(LIGHT).stroke('#e5e7eb');
+          doc.fillColor(DARK).font('Helvetica').fontSize(9).text(r.metric_key.replace(/_/g, ' '), 60, rowY2 + 6, { width: WIDTH * 0.6 });
+          doc.fillColor('#3b5bdb').font('Helvetica-Bold').fontSize(9).text(val, 60, rowY2 + 6, { align: 'right', width: WIDTH - 20 });
+          doc.moveDown(1.1);
+        }
+        doc.moveDown(0.3);
+      }
     }
 
     // ── Footer ────────────────────────────────────────────────────────────

@@ -34,6 +34,8 @@ app.use('/api/validation',  auth, require('./routes/validation'));
 app.use('/api/team',        auth, require('./routes/team'));
 app.use('/api/benchmarking', auth, require('./routes/benchmarking'));
 app.use('/api/company',      auth, require('./routes/company'));
+app.use('/api/social',       auth, require('./routes/social'));
+app.use('/api/governance',   auth, require('./routes/governance'));
 
 // SPA fallback — serve index.html for any unmatched route
 app.get('*', (req, res) => {

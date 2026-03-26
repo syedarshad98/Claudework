@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ClearTrace — Audit Log</title>
+  <title>ClearTrace — Social</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -18,7 +18,7 @@
 
     <div class="nav-section">
       <div class="nav-label">Overview</div>
-      <div class="nav-item" data-href="/">            <span class="icon">📊</span> Dashboard</div>
+      <div class="nav-item" data-href="/"><span class="icon">📊</span> Dashboard</div>
       <div class="nav-item" data-href="/targets.html"><span class="icon">🎯</span> Targets &amp; Goals</div>
       <div class="nav-item" data-href="/benchmarking.html"><span class="icon">📈</span> Benchmarking</div>
     </div>
@@ -46,13 +46,13 @@
 
     <div class="nav-section">
       <div class="nav-label">ESG</div>
-      <div class="nav-item" data-href="/social.html"><span class="icon">🤝</span> Social</div>
+      <div class="nav-item active" data-href="/social.html"><span class="icon">🤝</span> Social</div>
       <div class="nav-item" data-href="/governance.html"><span class="icon">🏛️</span> Governance</div>
     </div>
 
     <div class="nav-section">
       <div class="nav-label">Compliance</div>
-      <div class="nav-item active" data-href="/audit.html">      <span class="icon">🔍</span> Audit Log</div>
+      <div class="nav-item" data-href="/audit.html"><span class="icon">🔍</span> Audit Log</div>
       <div class="nav-item" data-href="/validation.html"><span class="icon">⚠️</span> Data Validation</div>
     </div>
 
@@ -78,78 +78,25 @@
 
     <div class="topbar">
       <div>
-        <div class="page-title">Audit Log</div>
-        <div class="page-sub" id="page-sub">All data actions for your organisation</div>
+        <div class="page-title">Social</div>
+        <div class="page-sub" id="page-sub">Track people &amp; supply chain KPIs</div>
       </div>
-      <div class="topbar-right">
-        <a href="/validation.html" class="btn btn-outline">⚠️ Validation</a>
-      </div>
-    </div>
-
-    <!-- Filters -->
-    <div class="card al-filters">
-      <div class="al-filter-row">
-        <div class="ob-field">
-          <label>Action type</label>
-          <select id="f-action">
-            <option value="">All actions</option>
-            <option value="create">Create</option>
-            <option value="edit">Edit</option>
-            <option value="delete">Delete</option>
-            <option value="approve">Approve</option>
-            <option value="lock">Lock</option>
-            <option value="unlock">Unlock</option>
-          </select>
-        </div>
-        <div class="ob-field">
-          <label>User email</label>
-          <input type="text" id="f-email" placeholder="Search by email…">
-        </div>
-        <div class="ob-field">
-          <label>From date</label>
-          <input type="date" id="f-from">
-        </div>
-        <div class="ob-field">
-          <label>To date</label>
-          <input type="date" id="f-to">
-        </div>
-        <div class="ob-field" style="justify-content:flex-end">
-          <label>&nbsp;</label>
-          <button class="btn btn-primary" id="apply-filters-btn">Apply</button>
-        </div>
+      <div class="topbar-right" style="display:flex;gap:10px;align-items:center">
+        <select class="sc-period-select" id="period-select"></select>
+        <button class="btn btn-outline" id="edit-btn" style="display:none">Edit</button>
+        <button class="btn btn-primary" id="save-btn" style="display:none">Save All</button>
       </div>
     </div>
 
-    <!-- Results -->
-    <div class="card" style="padding:0;overflow:hidden">
-      <div class="al-table-wrap">
-        <table class="al-table" id="audit-table">
-          <thead>
-            <tr>
-              <th>Timestamp</th>
-              <th>User</th>
-              <th>Action</th>
-              <th>Record</th>
-              <th>Changes</th>
-              <th>IP</th>
-            </tr>
-          </thead>
-          <tbody id="audit-tbody">
-            <tr><td colspan="6" class="al-empty">Loading…</td></tr>
-          </tbody>
-        </table>
-      </div>
+    <!-- Toast -->
+    <div id="sc-toast-container" class="sc-toast-container"></div>
 
-      <!-- Pagination -->
-      <div class="al-pagination" id="al-pagination">
-        <button class="btn btn-outline al-page-btn" id="page-prev">← Prev</button>
-        <span class="al-page-info" id="page-info">—</span>
-        <button class="btn btn-outline al-page-btn" id="page-next">Next →</button>
-      </div>
-    </div>
+    <!-- Category panels -->
+    <div id="sc-panels"></div>
 
   </main>
 </div>
-<script src="js/audit.js"></script>
+
+<script src="js/social.js"></script>
 </body>
 </html>

@@ -110,6 +110,20 @@ async function loadKPI() {
   document.getElementById('score-desc').textContent =
     `${ratings[d.esgRating] || ''} · ESG rating ${d.esgRating}`;
 
+  const breakdown = document.getElementById('score-breakdown');
+  if (breakdown && (d.eBreakdown !== undefined || d.sBreakdown !== undefined || d.gBreakdown !== undefined)) {
+    const e = d.eBreakdown ?? 0;
+    const s = d.sBreakdown ?? 0;
+    const g = d.gBreakdown ?? 0;
+    breakdown.innerHTML =
+      `<span class="score-breakdown-e">E&nbsp;${e}</span>` +
+      `<span class="score-breakdown-sep"> · </span>` +
+      `<span class="score-breakdown-s">S&nbsp;${s}</span>` +
+      `<span class="score-breakdown-sep"> · </span>` +
+      `<span class="score-breakdown-g">G&nbsp;${g}</span>`;
+    breakdown.style.display = '';
+  }
+
   document.getElementById('stat-entries').textContent = d.totalEntries;
   document.getElementById('stat-framework').innerHTML =
     d.esgScore >= 60 ? '<span class="score-stat-val green">GRI ready</span>' :
