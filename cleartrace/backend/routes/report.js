@@ -1,11 +1,12 @@
-const express = require('express');
-const router  = express.Router();
+const express     = require('express');
+const router      = express.Router();
 const PDFDocument = require('pdfkit');
-const db      = require('../db/database');
+const db          = require('../db/database');
+const requireRole = require('../middleware/roles');
 
 // GET /api/report
 // Streams a PDF ESG summary report for the authenticated company
-router.get('/', async (req, res) => {
+router.get('/', requireRole('admin', 'editor'), async (req, res) => {
   const companyId = req.companyId;
   const year      = new Date().getFullYear();
 

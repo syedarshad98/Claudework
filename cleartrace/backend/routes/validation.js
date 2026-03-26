@@ -1,7 +1,8 @@
-const express = require('express');
-const router  = express.Router();
-const db      = require('../db/database');
+const express     = require('express');
+const router      = express.Router();
+const db          = require('../db/database');
 const { logAction, getIp } = require('../lib/audit');
+const requireRole = require('../middleware/roles');
 
 // GET /api/validation/summary — count of pending flags (for dashboard banner)
 router.get('/summary', async (req, res) => {
@@ -54,7 +55,7 @@ router.get('/flags', async (req, res) => {
 });
 
 // POST /api/validation/flags/:id/approve — mark as reviewed/approved
-router.post('/flags/:id/approve', async (req, res) => {
+router.post('/flags/:id/approve', requireRole('admin', 'editor'), async (req, res) => {
   const flagId = parseInt(req.params.id);
   try {
     const r = await db.query(
@@ -80,7 +81,7 @@ router.post('/flags/:id/approve', async (req, res) => {
 });
 
 // DELETE /api/validation/flags/:id — delete the underlying emission entry
-router.delete('/flags/:id', async (req, res) => {
+router.delete('/flags/:id', requireRole('admin', 'editor'), async (req, res) => {
   const flagId = parseInt(req.params.id);
   try {
     // Fetch the entry_id first
@@ -139,7 +140,7 @@ router.get('/locked', async (req, res) => {
 });
 
 // POST /api/validation/locked — lock a period (admin only)
-router.post('/locked', async (req, res) => {
+router.post('/locked', requireRole('admin'), async (req, res) => {
   if (req.role !== 'admin') {
     return res.status(403).json({ error: 'Only admins can lock periods' });
   }
@@ -170,7 +171,7 @@ router.post('/locked', async (req, res) => {
 });
 
 // DELETE /api/validation/locked/:period — unlock (admin only)
-router.delete('/locked/:period', async (req, res) => {
+router.delete('/locked/:period', requireRole('admin'), async (req, res) => {
   if (req.role !== 'admin') {
     return res.status(403).json({ error: 'Only admins can unlock periods' });
   }

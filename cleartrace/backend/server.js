@@ -31,6 +31,7 @@ app.use('/api/onboarding',  auth, require('./routes/onboarding'));
 app.use('/api/targets',     auth, require('./routes/targets'));
 app.use('/api/audit',       auth, require('./routes/audit'));
 app.use('/api/validation',  auth, require('./routes/validation'));
+app.use('/api/team',        auth, require('./routes/team'));
 
 // SPA fallback — serve index.html for any unmatched route
 app.get('*', (req, res) => {

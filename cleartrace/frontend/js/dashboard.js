@@ -15,6 +15,7 @@ if (localStorage.getItem('ct_onboarding') !== 'complete') {
 
 const COMPANY = localStorage.getItem('ct_company') || '';
 const EMAIL   = localStorage.getItem('ct_email')   || '';
+const ROLE    = localStorage.getItem('ct_role')    || 'viewer';
 
 // Populate sidebar
 const initials = COMPANY.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '—';
@@ -27,6 +28,23 @@ document.getElementById('logout-btn').addEventListener('click', () => {
   localStorage.clear();
   window.location.replace('/login.html');
 });
+
+// ── Frontend role enforcement (UX only — backend is the security layer) ───────
+(function applyRoleRestrictions() {
+  if (ROLE === 'viewer') {
+    // Viewers: hide data entry controls, upload zone, export PDF button
+    const hide = ['add-data-btn', 'export-btn', 'entry-submit-btn',
+                  'entry-form', 'panel-upload-tab'];
+    hide.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    // Hide the tab bar that shows Manual Entry / Upload File
+    document.querySelectorAll('.form-tab').forEach(el => { el.style.display = 'none'; });
+    // Hide upload zones
+    document.querySelectorAll('.upload-zone').forEach(el => { el.style.display = 'none'; });
+  }
+})();
 
 // ── Nav item click ────────────────────────────────────────────────────────────
 document.querySelectorAll('.nav-item').forEach(item => {

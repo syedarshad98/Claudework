@@ -90,9 +90,16 @@ async function loadPending(page = 1) {
   card.style.display  = '';
   empty.style.display = 'none';
 
+  const canAction = ROLE === 'admin' || ROLE === 'editor';
   tbody.innerHTML = data.flags.map(f => {
     const rm  = RULE_META[f.rule] || { label: f.rule, cls: 'vl-rule-warn' };
     const lock = f.locked ? '<span class="vl-lock-icon" title="Period locked">🔒</span>' : '';
+    const actionsCell = canAction
+      ? `<td class="vl-actions">
+           <button class="btn btn-outline vl-btn-approve" data-id="${f.id}">✓ Approve</button>
+           <button class="btn vl-btn-delete" data-id="${f.id}" ${f.locked ? 'disabled title="Period locked"' : ''}>✕ Delete</button>
+         </td>`
+      : '<td class="al-muted" style="font-size:0.82rem">Read-only</td>';
     return `<tr id="flag-row-${f.id}">
       <td>
         <div class="vl-entry-name">${f.category} ${lock}</div>
@@ -101,10 +108,7 @@ async function loadPending(page = 1) {
       <td class="al-mono">${f.period}</td>
       <td><span class="vl-rule-badge ${rm.cls}">${rm.label}</span></td>
       <td class="vl-message">${f.message}</td>
-      <td class="vl-actions">
-        <button class="btn btn-outline vl-btn-approve" data-id="${f.id}">✓ Approve</button>
-        <button class="btn vl-btn-delete" data-id="${f.id}" ${f.locked ? 'disabled title="Period locked"' : ''}>✕ Delete</button>
-      </td>
+      ${actionsCell}
     </tr>`;
   }).join('');
 

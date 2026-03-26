@@ -1,10 +1,11 @@
-const express = require('express');
-const router  = express.Router();
-const multer  = require('multer');
-const XLSX    = require('xlsx');
-const { parse } = require('csv-parse/sync');
-const db      = require('../db/database');
+const express     = require('express');
+const router      = express.Router();
+const multer      = require('multer');
+const XLSX        = require('xlsx');
+const { parse }   = require('csv-parse/sync');
+const db          = require('../db/database');
 const { lookupFactor } = require('../db/emission_factors');
+const requireRole = require('../middleware/roles');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -19,7 +20,7 @@ const upload = multer({
 // POST /api/upload
 // Expected spreadsheet columns (case-insensitive):
 //   category | scope | amount | unit | period | emission_factor (optional) | notes (optional)
-router.post('/', upload.single('file'), async (req, res) => {
+router.post('/', requireRole('admin', 'editor'), upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
   const ext = req.file.originalname.split('.').pop().toLowerCase();

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClearTrace — Team</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="layout">
+
+  <!-- ── SIDEBAR ──────────────────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-mark">🌿</div>
+      <div class="logo-text">Clear<span>Trace</span></div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Overview</div>
+      <div class="nav-item" data-href="/"><span class="icon">📊</span> Dashboard</div>
+      <div class="nav-item" data-href="/targets.html"><span class="icon">🎯</span> Targets &amp; Goals</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Data</div>
+      <div class="nav-item" data-href="/"><span class="icon">✏️</span> Manual Entry</div>
+      <div class="nav-item" data-href="/"><span class="icon">📂</span> Upload Data</div>
+      <div class="nav-item"><span class="icon">🔗</span> Integrations</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Emissions</div>
+      <div class="nav-item"><span class="icon">🏭</span> Scope 1 — Direct</div>
+      <div class="nav-item"><span class="icon">⚡</span> Scope 2 — Energy</div>
+      <div class="nav-item"><span class="icon">🔄</span> Scope 3 — Value Chain</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Reporting</div>
+      <div class="nav-item"><span class="icon">📋</span> Frameworks</div>
+      <div class="nav-item"><span class="icon">📄</span> Generate Report</div>
+      <div class="nav-item"><span class="icon">📬</span> Submissions</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Compliance</div>
+      <div class="nav-item" data-href="/audit.html">      <span class="icon">🔍</span> Audit Log</div>
+      <div class="nav-item" data-href="/validation.html"><span class="icon">⚠️</span> Data Validation</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Organisation</div>
+      <div class="nav-item active" data-href="/team.html"><span class="icon">👥</span> Team</div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="company-pill">
+        <div class="company-avatar" id="company-avatar">—</div>
+        <div>
+          <div class="company-name" id="sidebar-company">—</div>
+          <div class="company-plan" id="sidebar-plan">PRO PLAN · 2026</div>
+        </div>
+      </div>
+      <div class="logout-nav" id="logout-btn"><span class="icon">↩</span> Sign Out</div>
+    </div>
+  </aside>
+
+  <!-- ── MAIN ──────────────────────────────────────────────────────────────── -->
+  <main class="main">
+
+    <div class="topbar">
+      <div>
+        <div class="page-title">Team</div>
+        <div class="page-sub" id="page-sub">Manage members and permissions</div>
+      </div>
+      <div class="topbar-right">
+        <button class="btn btn-primary" id="invite-btn" style="display:none">
+          + Invite Member
+        </button>
+      </div>
+    </div>
+
+    <!-- Toast container -->
+    <div id="tm-toast-container" class="tm-toast-container"></div>
+
+    <!-- Members table -->
+    <div class="card" style="padding:0;overflow:hidden;margin-bottom:20px">
+      <div class="tm-table-header">
+        <div class="tm-table-title">Members</div>
+        <div class="tm-member-count" id="member-count">—</div>
+      </div>
+      <table class="tm-table" id="members-table">
+        <thead>
+          <tr>
+            <th>Name / Email</th>
+            <th>Role</th>
+            <th>Joined</th>
+            <th id="actions-th" style="display:none">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="members-tbody">
+          <tr><td colspan="4" class="al-empty">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pending invites (admin/editor only) -->
+    <div class="card" id="invites-card" style="padding:0;overflow:hidden;display:none">
+      <div class="tm-table-header">
+        <div class="tm-table-title">Pending Invites</div>
+      </div>
+      <table class="tm-table" id="invites-table">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Sent</th>
+            <th>Expires</th>
+            <th id="invite-actions-th">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="invites-tbody">
+          <tr><td colspan="5" class="al-empty">No pending invites.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </main>
+</div>
+
+<!-- ── INVITE MODAL ──────────────────────────────────────────────────────── -->
+<div class="tm-modal-overlay" id="invite-modal" style="display:none">
+  <div class="tm-modal">
+    <div class="tm-modal-header">
+      <div class="tm-modal-title">Invite a team member</div>
+      <button class="tm-modal-close" id="invite-modal-close">✕</button>
+    </div>
+    <div class="tm-modal-body">
+      <div class="ob-field">
+        <label for="invite-email">Email address</label>
+        <input type="email" id="invite-email" placeholder="colleague@company.com">
+      </div>
+      <div class="ob-field">
+        <label for="invite-role">Role</label>
+        <select id="invite-role">
+          <option value="admin">Admin — full access</option>
+          <option value="editor">Editor — can enter &amp; edit data</option>
+          <option value="viewer" selected>Viewer — read-only access</option>
+        </select>
+      </div>
+      <div id="invite-error" class="tm-field-error" style="display:none"></div>
+    </div>
+    <div class="tm-modal-footer">
+      <button class="btn btn-outline" id="invite-cancel-btn">Cancel</button>
+      <button class="btn btn-primary" id="invite-send-btn">Send Invite</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/team.js"></script>
+</body>
+</html>

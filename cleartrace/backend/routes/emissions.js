@@ -4,6 +4,7 @@ const db       = require('../db/database');
 const { lookupFactor }             = require('../db/emission_factors');
 const { logAction, getIp }         = require('../lib/audit');
 const { validateEntry, saveFlags } = require('../lib/validate');
+const requireRole                  = require('../middleware/roles');
 
 // ── Lazy migration ────────────────────────────────────────────────────────────
 let migrated = false;
@@ -77,7 +78,7 @@ router.get('/', async (req, res) => {
 });
 
 // ── POST /api/emissions ───────────────────────────────────────────────────────
-router.post('/', async (req, res) => {
+router.post('/', requireRole('admin', 'editor'), async (req, res) => {
   await ensureMigrated();
   const { category, scope, amount, unit, period, emission_factor, notes } = req.body;
 
@@ -136,7 +137,7 @@ router.post('/', async (req, res) => {
 });
 
 // ── PATCH /api/emissions/:id ──────────────────────────────────────────────────
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
   await ensureMigrated();
   const id = parseInt(req.params.id);
 
@@ -206,7 +207,7 @@ router.patch('/:id', async (req, res) => {
 });
 
 // ── DELETE /api/emissions/:id ─────────────────────────────────────────────────
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireRole('admin', 'editor'), async (req, res) => {
   await ensureMigrated();
   const id = parseInt(req.params.id);
 
