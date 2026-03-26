@@ -1878,3 +1878,297 @@ textarea.form-input {
   .tg-scope-grid { grid-template-columns: 1fr; }
   .tg-hero-stats { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   VALIDATION BANNER (dashboard)
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.validation-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  background: var(--warn-light);
+  border: 1px solid #f0c060;
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+}
+.validation-banner .vb-icon { font-size: 1.2rem; flex-shrink: 0; }
+.validation-banner .vb-text { flex: 1; color: var(--text); }
+.validation-banner .vb-count {
+  font-weight: 700;
+  color: var(--warn);
+}
+.validation-banner .vb-link {
+  font-weight: 600;
+  color: var(--warn);
+  text-decoration: underline;
+  white-space: nowrap;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   AUDIT LOG PAGE  (.al-*)
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* Filters row */
+.al-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  margin-bottom: 18px;
+}
+.al-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.al-filter-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.al-filter-group select,
+.al-filter-group input[type="text"],
+.al-filter-group input[type="date"] {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.88rem;
+  min-width: 140px;
+}
+.al-filter-group select:focus,
+.al-filter-group input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Table */
+.al-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+.al-table thead th {
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+  white-space: nowrap;
+}
+.al-table tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background 0.12s;
+}
+.al-table tbody tr:last-child { border-bottom: none; }
+.al-table tbody tr:hover { background: var(--surface2); }
+.al-table td {
+  padding: 10px 14px;
+  vertical-align: top;
+}
+
+/* Helpers */
+.al-mono  { font-family: var(--font-mono); font-size: 0.82rem; }
+.al-muted { color: var(--muted); }
+.al-nowrap { white-space: nowrap; }
+.al-email { font-size: 0.82rem; color: var(--muted); }
+.al-empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* Action badges */
+.al-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.al-badge-create  { background: var(--accent-light);  color: var(--accent); }
+.al-badge-edit    { background: var(--accent2-light); color: var(--accent2); }
+.al-badge-delete  { background: var(--danger-light);  color: var(--danger); }
+.al-badge-approve { background: var(--accent-light);  color: var(--accent); }
+.al-badge-lock    { background: #f0ede6; color: #6b5c30; }
+.al-badge-unlock  { background: #e6f0f8; color: #1a4a7a; }
+
+/* Diff display */
+.al-diff { font-size: 0.82rem; line-height: 1.6; }
+.al-diff-row { display: flex; gap: 6px; align-items: baseline; margin-bottom: 2px; }
+.al-diff-key { font-family: var(--font-mono); color: var(--muted); min-width: 80px; }
+.al-diff-old { color: var(--danger); text-decoration: line-through; font-family: var(--font-mono); }
+.al-diff-new { color: var(--accent); font-family: var(--font-mono); }
+.al-diff-only { font-family: var(--font-mono); color: var(--text); }
+.al-diff-arrow { color: var(--muted); font-size: 0.7rem; }
+.al-diff-no-change { color: var(--muted); font-style: italic; }
+
+/* Pagination */
+.al-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--border);
+}
+.al-page-btn { min-width: 80px; }
+.al-page-info { color: var(--muted); font-size: 0.85rem; }
+
+/* Record cell */
+.al-record-type {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+.al-record-id { font-family: var(--font-mono); color: var(--muted); font-size: 0.8rem; }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   VALIDATION PAGE  (.vl-*)
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* Summary strip */
+.vl-summary-strip {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.vl-stat {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+}
+.vl-stat-val {
+  font-family: var(--font-head);
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+.vl-stat-val.warn  { color: var(--warn); }
+.vl-stat-val.green { color: var(--accent); }
+.vl-stat-label { font-size: 0.82rem; color: var(--muted); }
+
+/* Tab bar */
+.vl-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 20px;
+}
+.vl-tab {
+  padding: 10px 20px;
+  border: none;
+  background: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.vl-tab:hover  { color: var(--text); }
+.vl-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.vl-tab-count  { color: var(--warn); font-weight: 700; }
+
+/* Panel */
+.vl-panel { margin-bottom: 24px; }
+
+/* Validation table */
+.vl-table .vl-entry-name { font-weight: 500; margin-bottom: 2px; }
+.vl-table .vl-entry-meta { font-size: 0.8rem; color: var(--muted); }
+.vl-table .vl-message    { font-size: 0.85rem; color: var(--muted); max-width: 280px; }
+.vl-table .vl-actions    { white-space: nowrap; }
+
+/* Rule badges */
+.vl-rule-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.vl-rule-danger { background: var(--danger-light); color: var(--danger); }
+.vl-rule-warn   { background: var(--warn-light);   color: var(--warn); }
+
+/* Action buttons inside table */
+.vl-btn-approve {
+  margin-right: 6px;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.vl-btn-approve:hover { background: var(--accent-light); }
+.vl-btn-delete {
+  background: var(--danger-light);
+  color: var(--danger);
+  border: 1px solid transparent;
+}
+.vl-btn-delete:hover  { background: #f5c0bb; }
+.vl-btn-delete:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Lock icon */
+.vl-lock-icon { margin-left: 4px; font-size: 0.85rem; }
+
+/* Empty state */
+.vl-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.vl-empty-icon  { font-size: 2.5rem; }
+.vl-empty-title { font-size: 1.1rem; font-weight: 700; }
+.vl-empty-desc  { color: var(--muted); font-size: 0.9rem; text-align: center; max-width: 320px; }
+
+/* Lock form */
+.vl-lock-form {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.vl-month-input {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.88rem;
+}
+.vl-month-input:focus { outline: none; border-color: var(--accent); }
+
+/* Responsive */
+@media (max-width: 800px) {
+  .vl-summary-strip { flex-direction: column; }
+  .al-filters { flex-direction: column; }
+  .al-filter-group { width: 100%; }
+  .al-filter-group select,
+  .al-filter-group input { width: 100%; }
+}

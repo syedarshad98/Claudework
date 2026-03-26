@@ -692,6 +692,30 @@ document.getElementById('export-btn').addEventListener('click', async () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
+//  VALIDATION WARNING BANNER
+// ══════════════════════════════════════════════════════════════════════════════
+async function loadValidationBanner() {
+  const res = await api('/api/validation/summary');
+  if (!res || !res.ok) return;
+  const { pending } = await res.json();
+  const banner = document.getElementById('validation-banner');
+  if (!banner) return;
+  if (pending > 0) {
+    banner.innerHTML = `
+      <span class="vb-icon">⚠️</span>
+      <span class="vb-text">
+        <strong>${pending} validation warning${pending === 1 ? '' : 's'}</strong>
+        — ${pending === 1 ? 'one entry has' : 'some entries have'} been flagged for review.
+      </span>
+      <a href="/validation.html" class="vb-link btn btn-outline">Review →</a>
+    `;
+    banner.style.display = 'flex';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════════════════════════════════════════
 async function refreshAll() {
@@ -703,6 +727,7 @@ async function refreshAll() {
     loadEntries(),
     loadFrameworks(),
     loadOnboardingData(),
+    loadValidationBanner(),
   ]);
 }
 

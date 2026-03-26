@@ -4,9 +4,9 @@ const bcrypt  = require('bcrypt');
 const jwt     = require('jsonwebtoken');
 const db      = require('../db/database');
 
-function makeToken(userId, companyId, role) {
+function makeToken(userId, companyId, role, email) {
   return jwt.sign(
-    { userId, companyId, role },
+    { userId, companyId, role, email },
     process.env.JWT_SECRET,
     { expiresIn: '7d' }
   );
@@ -51,7 +51,7 @@ router.post('/register', async (req, res) => {
 
     await client.query('COMMIT');
 
-    const token = makeToken(user.id, companyId, user.role);
+    const token = makeToken(user.id, companyId, user.role, email.toLowerCase().trim());
     res.status(201).json({
       token,
       companyName,
@@ -100,7 +100,7 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const token = makeToken(user.id, user.company_id, user.role);
+    const token = makeToken(user.id, user.company_id, user.role, email.toLowerCase().trim());
     res.json({
       token,
       companyName:        user.company_name,

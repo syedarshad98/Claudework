@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClearTrace — Data Validation</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="layout">
+
+  <!-- ── SIDEBAR ──────────────────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-mark">🌿</div>
+      <div class="logo-text">Clear<span>Trace</span></div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Overview</div>
+      <div class="nav-item" data-href="/">            <span class="icon">📊</span> Dashboard</div>
+      <div class="nav-item" data-href="/targets.html"><span class="icon">🎯</span> Targets &amp; Goals</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Data</div>
+      <div class="nav-item" data-href="/"><span class="icon">✏️</span> Manual Entry</div>
+      <div class="nav-item" data-href="/"><span class="icon">📂</span> Upload Data</div>
+      <div class="nav-item"><span class="icon">🔗</span> Integrations</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Emissions</div>
+      <div class="nav-item"><span class="icon">🏭</span> Scope 1 — Direct</div>
+      <div class="nav-item"><span class="icon">⚡</span> Scope 2 — Energy</div>
+      <div class="nav-item"><span class="icon">🔄</span> Scope 3 — Value Chain</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Reporting</div>
+      <div class="nav-item"><span class="icon">📋</span> Frameworks</div>
+      <div class="nav-item"><span class="icon">📄</span> Generate Report</div>
+      <div class="nav-item"><span class="icon">📬</span> Submissions</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Compliance</div>
+      <div class="nav-item" data-href="/audit.html">          <span class="icon">🔍</span> Audit Log</div>
+      <div class="nav-item active" data-href="/validation.html"><span class="icon">⚠️</span> Data Validation</div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="company-pill">
+        <div class="company-avatar" id="company-avatar">—</div>
+        <div>
+          <div class="company-name" id="sidebar-company">—</div>
+          <div class="company-plan" id="sidebar-plan">PRO PLAN · 2026</div>
+        </div>
+      </div>
+      <div class="logout-nav" id="logout-btn"><span class="icon">↩</span> Sign Out</div>
+    </div>
+  </aside>
+
+  <!-- ── MAIN ──────────────────────────────────────────────────────────────── -->
+  <main class="main">
+
+    <div class="topbar">
+      <div>
+        <div class="page-title">Data Validation</div>
+        <div class="page-sub" id="page-sub">Review and action flagged entries</div>
+      </div>
+      <div class="topbar-right">
+        <a href="/audit.html" class="btn btn-outline">🔍 Audit Log</a>
+      </div>
+    </div>
+
+    <!-- ── SUMMARY STRIP ──────────────────────────────────────────────────── -->
+    <div class="vl-summary-strip" id="vl-summary">
+      <div class="vl-stat">
+        <div class="vl-stat-val warn" id="vl-pending-count">—</div>
+        <div class="vl-stat-label">Pending review</div>
+      </div>
+      <div class="vl-stat">
+        <div class="vl-stat-val green" id="vl-approved-count">—</div>
+        <div class="vl-stat-label">Approved</div>
+      </div>
+      <div class="vl-stat">
+        <div class="vl-stat-val" id="vl-locked-count">—</div>
+        <div class="vl-stat-label">Locked periods</div>
+      </div>
+    </div>
+
+    <!-- ── TAB BAR ────────────────────────────────────────────────────────── -->
+    <div class="vl-tabs">
+      <button class="vl-tab active" data-tab="pending">Pending <span class="vl-tab-count" id="tab-pending-count"></span></button>
+      <button class="vl-tab" data-tab="approved">Approved</button>
+      <button class="vl-tab" data-tab="locked">Locked Periods</button>
+    </div>
+
+    <!-- ── PENDING FLAGS ──────────────────────────────────────────────────── -->
+    <div id="panel-pending" class="vl-panel">
+      <div id="pending-empty" class="vl-empty" style="display:none">
+        <div class="vl-empty-icon">✓</div>
+        <div class="vl-empty-title">All clear</div>
+        <div class="vl-empty-desc">No validation warnings to review.</div>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden" id="pending-card">
+        <table class="al-table vl-table">
+          <thead>
+            <tr>
+              <th>Entry</th>
+              <th>Period</th>
+              <th>Rule</th>
+              <th>Warning</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="pending-tbody">
+            <tr><td colspan="5" class="al-empty">Loading…</td></tr>
+          </tbody>
+        </table>
+        <div class="al-pagination" id="pending-pagination">
+          <button class="btn btn-outline al-page-btn" id="pending-prev">← Prev</button>
+          <span class="al-page-info" id="pending-page-info">—</span>
+          <button class="btn btn-outline al-page-btn" id="pending-next">Next →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── APPROVED FLAGS ─────────────────────────────────────────────────── -->
+    <div id="panel-approved" class="vl-panel" style="display:none">
+      <div class="card" style="padding:0;overflow:hidden">
+        <table class="al-table vl-table">
+          <thead>
+            <tr>
+              <th>Entry</th>
+              <th>Period</th>
+              <th>Rule</th>
+              <th>Warning</th>
+              <th>Reviewed</th>
+            </tr>
+          </thead>
+          <tbody id="approved-tbody">
+            <tr><td colspan="5" class="al-empty">Loading…</td></tr>
+          </tbody>
+        </table>
+        <div class="al-pagination" id="approved-pagination">
+          <button class="btn btn-outline al-page-btn" id="approved-prev">← Prev</button>
+          <span class="al-page-info" id="approved-page-info">—</span>
+          <button class="btn btn-outline al-page-btn" id="approved-next">Next →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── LOCKED PERIODS ────────────────────────────────────────────────── -->
+    <div id="panel-locked" class="vl-panel" style="display:none">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Locked Periods</div>
+            <div class="card-sub">Periods with a generated report are locked. Admins can unlock.</div>
+          </div>
+          <div id="lock-form-wrap">
+            <div class="vl-lock-form">
+              <input type="month" id="lock-period-input" class="vl-month-input">
+              <button class="btn btn-primary" id="lock-btn">🔒 Lock period</button>
+            </div>
+          </div>
+        </div>
+        <div id="locked-list">
+          <div class="al-empty">Loading…</div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+<script src="js/validation.js"></script>
+</body>
+</html>
