@@ -23,7 +23,8 @@ router.get('/status', async (req, res) => {
     const result = await db.query(
       `SELECT name, industry, country, employee_count,
               financial_year_start, reduction_target_pct,
-              target_year, alignment_standard, onboarding_complete
+              target_year, alignment_standard, onboarding_complete,
+              industry_sector, annual_revenue_gbp_m
          FROM companies WHERE id = $1`,
       [req.companyId]
     );
@@ -40,10 +41,12 @@ router.get('/status', async (req, res) => {
     res.json({
       onboardingComplete: company.onboarding_complete,
       profile: {
-        name:          company.name,
-        industry:      company.industry,
-        country:       company.country,
-        employeeCount: company.employee_count,
+        name:                company.name,
+        industry:            company.industry,
+        country:             company.country,
+        employeeCount:       company.employee_count,
+        industrySector:      company.industry_sector      || null,
+        annualRevenueGbpM:   company.annual_revenue_gbp_m || null,
       },
       reporting: {
         financialYearStart: company.financial_year_start,

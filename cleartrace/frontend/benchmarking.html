@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClearTrace — Benchmarking</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="layout">
+
+  <!-- ── SIDEBAR ──────────────────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-mark">🌿</div>
+      <div class="logo-text">Clear<span>Trace</span></div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Overview</div>
+      <div class="nav-item" data-href="/"><span class="icon">📊</span> Dashboard</div>
+      <div class="nav-item" data-href="/targets.html"><span class="icon">🎯</span> Targets &amp; Goals</div>
+      <div class="nav-item active" data-href="/benchmarking.html"><span class="icon">📈</span> Benchmarking</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Data</div>
+      <div class="nav-item" data-href="/"><span class="icon">✏️</span> Manual Entry</div>
+      <div class="nav-item" data-href="/"><span class="icon">📂</span> Upload Data</div>
+      <div class="nav-item"><span class="icon">🔗</span> Integrations</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Emissions</div>
+      <div class="nav-item"><span class="icon">🏭</span> Scope 1 — Direct</div>
+      <div class="nav-item"><span class="icon">⚡</span> Scope 2 — Energy</div>
+      <div class="nav-item"><span class="icon">🔄</span> Scope 3 — Value Chain</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Reporting</div>
+      <div class="nav-item"><span class="icon">📋</span> Frameworks</div>
+      <div class="nav-item"><span class="icon">📄</span> Generate Report</div>
+      <div class="nav-item"><span class="icon">📬</span> Submissions</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Compliance</div>
+      <div class="nav-item" data-href="/audit.html">      <span class="icon">🔍</span> Audit Log</div>
+      <div class="nav-item" data-href="/validation.html"><span class="icon">⚠️</span> Data Validation</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Organisation</div>
+      <div class="nav-item" data-href="/team.html"><span class="icon">👥</span> Team</div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="company-pill">
+        <div class="company-avatar" id="company-avatar">—</div>
+        <div>
+          <div class="company-name" id="sidebar-company">—</div>
+          <div class="company-plan" id="sidebar-plan">PRO PLAN · 2026</div>
+        </div>
+      </div>
+      <div class="logout-nav" id="logout-btn"><span class="icon">↩</span> Sign Out</div>
+    </div>
+  </aside>
+
+  <!-- ── MAIN ──────────────────────────────────────────────────────────────── -->
+  <main class="main">
+
+    <!-- Topbar -->
+    <div class="topbar">
+      <div>
+        <div class="page-title">Benchmarking</div>
+        <div class="page-sub" id="page-sub">See how your emissions compare to industry peers.</div>
+      </div>
+      <div class="topbar-right">
+        <!-- Mode toggle -->
+        <div class="bm-toggle" id="mode-toggle" style="display:none">
+          <button class="bm-toggle-btn active" data-mode="intensity">Intensity</button>
+          <button class="bm-toggle-btn"        data-mode="absolute">Absolute</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- No-sector banner -->
+    <div class="bm-sector-banner" id="sector-banner" style="display:none">
+      <span class="bm-sector-banner-icon">📊</span>
+      <div class="bm-sector-banner-text">
+        Set your industry sector to unlock benchmarking.
+      </div>
+      <button class="btn btn-primary bm-sector-set-btn" id="open-sector-settings">Settings →</button>
+    </div>
+
+    <!-- Sector settings inline form (admin only) -->
+    <div class="card bm-sector-form" id="sector-form" style="display:none">
+      <div class="bm-sector-form-title">Industry Settings</div>
+      <div class="bm-sector-form-row">
+        <div class="ob-field">
+          <label for="sf-sector">Industry Sector</label>
+          <select id="sf-sector">
+            <option value="">Select sector…</option>
+          </select>
+        </div>
+        <div class="ob-field">
+          <label for="sf-revenue">Annual Revenue (£m) <span class="al-muted" style="font-weight:400;font-size:0.78rem">Optional — enables intensity benchmarking</span></label>
+          <input type="number" id="sf-revenue" min="0" step="0.1" placeholder="e.g. 8.5">
+        </div>
+        <div class="ob-field bm-sector-form-actions">
+          <label>&nbsp;</label>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" id="sf-save-btn">Save</button>
+            <button class="btn btn-outline"  id="sf-cancel-btn">Cancel</button>
+          </div>
+        </div>
+      </div>
+      <div id="sf-error" class="tm-field-error" style="display:none"></div>
+    </div>
+
+    <!-- Current sector info bar (shown when sector is set) -->
+    <div class="bm-sector-info" id="sector-info" style="display:none">
+      <span class="bm-sector-pill" id="sector-pill">—</span>
+      <span class="bm-sector-year" id="sector-data-year"></span>
+      <button class="bm-change-sector" id="change-sector-btn" style="display:none">✎ Change</button>
+    </div>
+
+    <!-- No-emissions empty state (shown when sector set but no data) -->
+    <div class="bm-no-data" id="no-data-banner" style="display:none">
+      <div class="vl-empty">
+        <div class="vl-empty-icon">📭</div>
+        <div class="vl-empty-title">No emissions data for <span id="no-data-year">—</span></div>
+        <div class="vl-empty-desc">Add emissions entries for the current year to see your benchmark comparison.</div>
+      </div>
+    </div>
+
+    <!-- ── PANEL 1: Your Position ────────────────────────────────────────── -->
+    <div class="card bm-panel" id="panel-position" style="display:none">
+      <div class="bm-panel-header">
+        <div class="bm-panel-title">Your Position</div>
+        <div class="bm-panel-sub" id="position-sub">Combined Scope 1 + 2 + 3</div>
+      </div>
+
+      <!-- Position bar -->
+      <div class="bm-pos-wrap">
+        <div class="bm-pos-bar-container" id="pos-bar-container">
+          <!-- rendered by JS -->
+        </div>
+        <div class="bm-pos-verdict" id="pos-verdict"></div>
+        <div class="bm-pos-footnote" id="pos-footnote"></div>
+      </div>
+    </div>
+
+    <!-- ── PANEL 2: Scope Breakdown ──────────────────────────────────────── -->
+    <div class="card bm-panel" id="panel-breakdown" style="display:none">
+      <div class="bm-panel-header">
+        <div class="bm-panel-title">Scope Breakdown</div>
+        <div class="bm-panel-sub">Performance by emission scope</div>
+      </div>
+      <div id="breakdown-rows">
+        <!-- rendered by JS -->
+      </div>
+    </div>
+
+    <!-- ── PANEL 3: Peer Band ────────────────────────────────────────────── -->
+    <div class="card bm-panel" id="panel-peer" style="display:none">
+      <div class="bm-panel-header">
+        <div class="bm-panel-title">Peer Band</div>
+        <div class="bm-panel-sub">Emissions distribution across your sector</div>
+      </div>
+      <div class="bm-peer-chart-wrap">
+        <svg id="peer-chart" class="bm-peer-chart" viewBox="0 0 600 240" preserveAspectRatio="xMidYMid meet">
+          <!-- rendered by JS -->
+        </svg>
+        <div class="bm-peer-legend">
+          <div class="bm-peer-legend-item"><span class="bm-peer-legend-dot" style="background:var(--accent2)"></span> Your value</div>
+          <div class="bm-peer-legend-item"><span class="bm-peer-legend-swatch bm-peer-swatch-p25"></span> Bottom 25%</div>
+          <div class="bm-peer-legend-item"><span class="bm-peer-legend-swatch bm-peer-swatch-p50"></span> Median</div>
+          <div class="bm-peer-legend-item"><span class="bm-peer-legend-swatch bm-peer-swatch-p75"></span> Top 25%</div>
+          <div class="bm-peer-legend-item"><span class="bm-peer-legend-swatch bm-peer-swatch-p90"></span> Best-in-class</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PANEL 4: Regulatory Context ──────────────────────────────────── -->
+    <div class="card bm-panel" id="panel-regulatory" style="display:none">
+      <div class="bm-panel-header">
+        <div class="bm-panel-title">Regulatory Context</div>
+        <div class="bm-panel-sub">Framework trajectory assessment</div>
+      </div>
+      <div class="bm-reg-grid" id="reg-grid">
+        <!-- rendered by JS -->
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script src="js/benchmarking.js"></script>
+</body>
+</html>

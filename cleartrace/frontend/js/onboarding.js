@@ -129,6 +129,9 @@ async function saveStep(step) {
 
     if (!name) { showError('Company name is required.'); return false; }
 
+    const sector  = document.getElementById('p1-sector')?.value  || '';
+    const revenue = document.getElementById('p1-revenue')?.value || '';
+
     const res = await api('PUT', '/api/onboarding/profile', {
       name, industry, country,
       employeeCount: employees ? parseInt(employees) : null,
@@ -137,6 +140,12 @@ async function saveStep(step) {
       const data = res ? await res.json() : {};
       showError(data.error || 'Failed to save — please try again.');
       return false;
+    }
+    // Save sector + revenue to benchmarking endpoint (best-effort)
+    if (sector) {
+      const body = { industry_sector: sector };
+      if (revenue && !isNaN(parseFloat(revenue))) body.annual_revenue_gbp_m = parseFloat(revenue);
+      await api('PATCH', '/api/company/sector', body).catch(() => {});
     }
     // Update sidebar company name
     localStorage.setItem('ct_company', name);
@@ -279,10 +288,12 @@ async function prefill() {
   }
 
   // Step 1
-  if (d.profile.name)          document.getElementById('p1-name').value = d.profile.name;
-  if (d.profile.industry)      document.getElementById('p1-industry').value = d.profile.industry;
-  if (d.profile.country)       document.getElementById('p1-country').value = d.profile.country;
-  if (d.profile.employeeCount) document.getElementById('p1-employees').value = d.profile.employeeCount;
+  if (d.profile.name)              document.getElementById('p1-name').value     = d.profile.name;
+  if (d.profile.industry)          document.getElementById('p1-industry').value  = d.profile.industry;
+  if (d.profile.country)           document.getElementById('p1-country').value   = d.profile.country;
+  if (d.profile.employeeCount)     document.getElementById('p1-employees').value = d.profile.employeeCount;
+  if (d.profile.industrySector)    document.getElementById('p1-sector').value    = d.profile.industrySector;
+  if (d.profile.annualRevenueGbpM) document.getElementById('p1-revenue').value   = d.profile.annualRevenueGbpM;
 
   // Step 2
   if (d.reporting.financialYearStart) {

@@ -2366,3 +2366,219 @@ textarea.form-input {
 @media (max-width: 800px) {
   .tm-actions-cell { flex-direction: column; align-items: flex-start; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   BENCHMARKING PAGE  (.bm-*)
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* Mode toggle (pill switcher) */
+.bm-toggle {
+  display: inline-flex;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+.bm-toggle-btn {
+  padding: 6px 16px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--muted);
+  transition: background 0.15s, color 0.15s;
+}
+.bm-toggle-btn:hover:not(:disabled)  { color: var(--text); }
+.bm-toggle-btn.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.bm-toggle-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* No-sector banner */
+.bm-sector-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 22px;
+  background: var(--accent2-light);
+  border: 1px solid #c5d0f8;
+  border-radius: var(--radius-lg);
+  margin-bottom: 20px;
+}
+.bm-sector-banner-icon { font-size: 1.5rem; flex-shrink: 0; }
+.bm-sector-banner-text { flex: 1; color: var(--text); font-size: 0.95rem; }
+.bm-sector-set-btn     { flex-shrink: 0; }
+
+/* Sector settings inline form */
+.bm-sector-form {
+  margin-bottom: 20px;
+  padding: 20px 24px;
+}
+.bm-sector-form-title {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1rem;
+  margin-bottom: 16px;
+}
+.bm-sector-form-row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.bm-sector-form-actions { flex-shrink: 0; }
+
+/* Sector info bar (shown when sector is set) */
+.bm-sector-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.bm-sector-pill {
+  display: inline-block;
+  padding: 4px 12px;
+  background: var(--accent-light);
+  color: var(--accent);
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.bm-sector-year  { font-size: 0.82rem; color: var(--muted); }
+.bm-change-sector {
+  background: none;
+  border: none;
+  font-size: 0.82rem;
+  color: var(--accent2);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.bm-change-sector:hover { background: var(--accent2-light); }
+
+/* Empty state */
+.bm-no-data { margin-bottom: 20px; }
+
+/* Panels */
+.bm-panel         { margin-bottom: 20px; }
+.bm-panel-header  { margin-bottom: 20px; }
+.bm-panel-title   { font-family: var(--font-head); font-weight: 700; font-size: 1.05rem; }
+.bm-panel-sub     { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
+
+/* Position bar */
+.bm-pos-wrap        { }
+.bm-pos-bar-container { margin-bottom: 12px; }
+.bm-pos-verdict     { font-size: 0.92rem; margin-bottom: 6px; }
+.bm-verdict-green   { color: var(--accent); font-weight: 500; }
+.bm-verdict-amber   { color: var(--warn);   font-weight: 500; }
+.bm-verdict-red     { color: var(--danger); font-weight: 500; }
+.bm-pos-footnote    { font-size: 0.78rem; color: var(--muted); }
+
+/* Scope breakdown rows */
+.bm-scope-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.bm-scope-row:last-child { border-bottom: none; }
+.bm-scope-name {
+  flex-shrink: 0;
+  width: 180px;
+  font-weight: 500;
+  font-size: 0.88rem;
+}
+.bm-scope-bar-wrap { flex: 1; min-width: 100px; }
+.bm-scope-stats    { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+.bm-scope-stat     { text-align: right; }
+.bm-scope-stat-val { font-family: var(--font-mono); font-size: 0.9rem; font-weight: 500; }
+.bm-scope-stat-label { font-size: 0.72rem; color: var(--muted); }
+.bm-scope-stat-unit  { font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
+
+/* "Highest gap" badge */
+.bm-worst-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  background: var(--warn-light);
+  color: var(--warn);
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+/* Peer band chart */
+.bm-peer-chart-wrap { }
+.bm-peer-chart      { width: 100%; display: block; }
+.bm-peer-legend {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.bm-peer-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.bm-peer-legend-dot    { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.bm-peer-legend-swatch { width: 20px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.bm-peer-swatch-p25 { background: #a7f3d0; }
+.bm-peer-swatch-p50 { background: #6ee7b7; }
+.bm-peer-swatch-p75 { background: #34d399; }
+.bm-peer-swatch-p90 { background: #059669; }
+
+/* Regulatory context */
+.bm-reg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+.bm-reg-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+}
+.bm-reg-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.bm-reg-icon  { font-size: 1.4rem; flex-shrink: 0; margin-top: 1px; }
+.bm-reg-name  { font-family: var(--font-head); font-weight: 700; font-size: 0.95rem; }
+.bm-reg-full  { font-size: 0.75rem; color: var(--muted); }
+.bm-reg-badge-wrap { margin-left: auto; flex-shrink: 0; }
+
+.bm-reg-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.bm-reg-badge-green { background: var(--accent-light);  color: var(--accent);  }
+.bm-reg-badge-amber { background: var(--warn-light);    color: var(--warn);    }
+.bm-reg-badge-red   { background: var(--danger-light);  color: var(--danger);  }
+.bm-reg-badge-grey  { background: var(--surface2);      color: var(--muted);   border: 1px solid var(--border); }
+
+.bm-reg-context {
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+@media (max-width: 900px) {
+  .bm-scope-name { width: 140px; }
+  .bm-sector-form-row { flex-direction: column; }
+}
+@media (max-width: 700px) {
+  .bm-scope-row { flex-wrap: wrap; }
+  .bm-scope-name { width: 100%; }
+}
