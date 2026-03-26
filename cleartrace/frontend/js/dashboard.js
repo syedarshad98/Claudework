@@ -750,6 +750,44 @@ async function loadValidationBanner() {
 // ══════════════════════════════════════════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
+//  RECOMMENDED ACTIONS PANEL
+// ══════════════════════════════════════════════════════════════════════════════
+async function loadRecommendationsSummary() {
+  const panel = document.getElementById('rc-dash-panel');
+  if (!panel) return;
+
+  try {
+    const res = await api('/api/recommendations/summary');
+    if (!res || !res.ok) {
+      panel.innerHTML = '<div class="rc-dash-empty">Run your first gap analysis to see recommendations.</div>';
+      return;
+    }
+    const data = await res.json();
+    const quickWins = data.quick_wins || [];
+
+    if (!quickWins.length) {
+      panel.innerHTML = '<div class="rc-dash-empty">Run your first gap analysis to see recommendations.</div>';
+      return;
+    }
+
+    const rows = quickWins.map(qw => {
+      const saving = qw.co2e_saving_max
+        ? ` <span class="rc-dash-saving">${qw.co2e_saving_min ?? ''}${qw.co2e_saving_min ? '–' : 'up to '}${qw.co2e_saving_max} ${qw.unit || 'tCO₂e/year'}</span>`
+        : '';
+      return `<div class="rc-dash-row">
+        <span class="rc-dash-icon">💡</span>
+        <span class="rc-dash-title">${qw.title}</span>
+        ${saving}
+      </div>`;
+    }).join('');
+
+    panel.innerHTML = rows;
+  } catch (_) {
+    panel.innerHTML = '<div class="rc-dash-empty">Run your first gap analysis to see recommendations.</div>';
+  }
+}
+
 async function refreshAll() {
   await Promise.all([
     loadKPI(),
@@ -760,6 +798,7 @@ async function refreshAll() {
     loadFrameworks(),
     loadOnboardingData(),
     loadValidationBanner(),
+    loadRecommendationsSummary(),
   ]);
 }
 

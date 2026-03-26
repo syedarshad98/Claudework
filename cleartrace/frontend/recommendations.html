@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ClearTrace — Audit Log</title>
+  <title>ClearTrace — Recommendations</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -18,10 +18,10 @@
 
     <div class="nav-section">
       <div class="nav-label">Overview</div>
-      <div class="nav-item" data-href="/">            <span class="icon">📊</span> Dashboard</div>
+      <div class="nav-item" data-href="/"><span class="icon">📊</span> Dashboard</div>
       <div class="nav-item" data-href="/targets.html"><span class="icon">🎯</span> Targets &amp; Goals</div>
       <div class="nav-item" data-href="/benchmarking.html"><span class="icon">📈</span> Benchmarking</div>
-      <div class="nav-item" data-href="/recommendations.html"><span class="icon">💡</span> Recommendations</div>
+      <div class="nav-item active" data-href="/recommendations.html"><span class="icon">💡</span> Recommendations</div>
     </div>
 
     <div class="nav-section">
@@ -53,7 +53,7 @@
 
     <div class="nav-section">
       <div class="nav-label">Compliance</div>
-      <div class="nav-item active" data-href="/audit.html">      <span class="icon">🔍</span> Audit Log</div>
+      <div class="nav-item" data-href="/audit.html"><span class="icon">🔍</span> Audit Log</div>
       <div class="nav-item" data-href="/validation.html"><span class="icon">⚠️</span> Data Validation</div>
     </div>
 
@@ -79,78 +79,79 @@
 
     <div class="topbar">
       <div>
-        <div class="page-title">Audit Log</div>
-        <div class="page-sub" id="page-sub">All data actions for your organisation</div>
-      </div>
-      <div class="topbar-right">
-        <a href="/validation.html" class="btn btn-outline">⚠️ Validation</a>
+        <div class="page-title">Reduction Recommendations</div>
+        <div class="page-sub">Actions ranked by impact on your emissions gap.</div>
       </div>
     </div>
 
-    <!-- Filters -->
-    <div class="card al-filters">
-      <div class="al-filter-row">
-        <div class="ob-field">
-          <label>Action type</label>
-          <select id="f-action">
-            <option value="">All actions</option>
-            <option value="create">Create</option>
-            <option value="edit">Edit</option>
-            <option value="delete">Delete</option>
-            <option value="approve">Approve</option>
-            <option value="lock">Lock</option>
-            <option value="unlock">Unlock</option>
-          </select>
+    <!-- Summary bar -->
+    <div class="rc-summary-bar" id="rc-summary-bar">
+      <div class="rc-summary-item">
+        <div class="rc-summary-val" id="rc-total">—</div>
+        <div class="rc-summary-label">recommendations available</div>
+      </div>
+      <div class="rc-summary-sep"></div>
+      <div class="rc-summary-item">
+        <div class="rc-summary-val rc-val-green" id="rc-saving">—</div>
+        <div class="rc-summary-label">tCO₂e/year estimated saving if all completed</div>
+      </div>
+      <div class="rc-summary-sep"></div>
+      <div class="rc-summary-item">
+        <div class="rc-summary-val rc-val-blue" id="rc-inprogress">—</div>
+        <div class="rc-summary-label">actions in progress</div>
+      </div>
+    </div>
+
+    <!-- Filter bar -->
+    <div class="rc-filter-bar" id="rc-filter-bar">
+      <div class="rc-filter-group">
+        <span class="rc-filter-label">Scope</span>
+        <div class="rc-pills" id="filter-scope">
+          <button class="rc-pill active" data-val="">All</button>
+          <button class="rc-pill" data-val="scope1">1</button>
+          <button class="rc-pill" data-val="scope2">2</button>
+          <button class="rc-pill" data-val="scope3">3</button>
         </div>
-        <div class="ob-field">
-          <label>User email</label>
-          <input type="text" id="f-email" placeholder="Search by email…">
+      </div>
+      <div class="rc-filter-group">
+        <span class="rc-filter-label">Cost</span>
+        <div class="rc-pills" id="filter-cost">
+          <button class="rc-pill active" data-val="">All</button>
+          <button class="rc-pill" data-val="low">Low</button>
+          <button class="rc-pill" data-val="medium">Medium</button>
+          <button class="rc-pill" data-val="high">High</button>
         </div>
-        <div class="ob-field">
-          <label>From date</label>
-          <input type="date" id="f-from">
+      </div>
+      <div class="rc-filter-group">
+        <span class="rc-filter-label">Time</span>
+        <div class="rc-pills" id="filter-time">
+          <button class="rc-pill active" data-val="">All</button>
+          <button class="rc-pill" data-val="quick_win">Quick Win</button>
+          <button class="rc-pill" data-val="medium_term">Medium Term</button>
+          <button class="rc-pill" data-val="long_term">Long Term</button>
         </div>
-        <div class="ob-field">
-          <label>To date</label>
-          <input type="date" id="f-to">
-        </div>
-        <div class="ob-field" style="justify-content:flex-end">
-          <label>&nbsp;</label>
-          <button class="btn btn-primary" id="apply-filters-btn">Apply</button>
+      </div>
+      <div class="rc-filter-group">
+        <span class="rc-filter-label">Status</span>
+        <div class="rc-pills" id="filter-status">
+          <button class="rc-pill active" data-val="">All</button>
+          <button class="rc-pill" data-val="new">New</button>
+          <button class="rc-pill" data-val="saved">Saved</button>
+          <button class="rc-pill" data-val="in_progress">In Progress</button>
+          <button class="rc-pill" data-val="completed">Completed</button>
+          <button class="rc-pill" data-val="dismissed">Dismissed</button>
         </div>
       </div>
     </div>
 
-    <!-- Results -->
-    <div class="card" style="padding:0;overflow:hidden">
-      <div class="al-table-wrap">
-        <table class="al-table" id="audit-table">
-          <thead>
-            <tr>
-              <th>Timestamp</th>
-              <th>User</th>
-              <th>Action</th>
-              <th>Record</th>
-              <th>Changes</th>
-              <th>IP</th>
-            </tr>
-          </thead>
-          <tbody id="audit-tbody">
-            <tr><td colspan="6" class="al-empty">Loading…</td></tr>
-          </tbody>
-        </table>
-      </div>
+    <!-- Toast -->
+    <div id="rc-toast-container" class="rc-toast-container"></div>
 
-      <!-- Pagination -->
-      <div class="al-pagination" id="al-pagination">
-        <button class="btn btn-outline al-page-btn" id="page-prev">← Prev</button>
-        <span class="al-page-info" id="page-info">—</span>
-        <button class="btn btn-outline al-page-btn" id="page-next">Next →</button>
-      </div>
-    </div>
+    <!-- Cards -->
+    <div id="rc-list"></div>
 
   </main>
 </div>
-<script src="js/audit.js"></script>
+<script src="js/recommendations.js"></script>
 </body>
 </html>
