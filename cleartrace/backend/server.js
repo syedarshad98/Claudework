@@ -28,6 +28,7 @@ app.use('/api/frameworks', auth, require('./routes/frameworks'));
 app.use('/api/upload',      auth, require('./routes/upload'));
 app.use('/api/report',      auth, require('./routes/report'));
 app.use('/api/onboarding',  auth, require('./routes/onboarding'));
+app.use('/api/targets',     auth, require('./routes/targets'));
 
 // SPA fallback — serve index.html for any unmatched route
 app.get('*', (req, res) => {

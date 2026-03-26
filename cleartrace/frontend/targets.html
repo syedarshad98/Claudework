@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClearTrace — Targets &amp; Goals</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="layout">
+
+  <!-- ── SIDEBAR ──────────────────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-mark">🌿</div>
+      <div class="logo-text">Clear<span>Trace</span></div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Overview</div>
+      <div class="nav-item" data-href="/"><span class="icon">📊</span> Dashboard</div>
+      <div class="nav-item active" data-href="/targets.html"><span class="icon">🎯</span> Targets &amp; Goals</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Data</div>
+      <div class="nav-item" data-href="/"><span class="icon">✏️</span> Manual Entry</div>
+      <div class="nav-item" data-href="/"><span class="icon">📂</span> Upload Data</div>
+      <div class="nav-item"><span class="icon">🔗</span> Integrations</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Emissions</div>
+      <div class="nav-item"><span class="icon">🏭</span> Scope 1 — Direct</div>
+      <div class="nav-item"><span class="icon">⚡</span> Scope 2 — Energy</div>
+      <div class="nav-item"><span class="icon">🔄</span> Scope 3 — Value Chain</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Reporting</div>
+      <div class="nav-item"><span class="icon">📋</span> Frameworks</div>
+      <div class="nav-item"><span class="icon">📄</span> Generate Report</div>
+      <div class="nav-item"><span class="icon">📬</span> Submissions</div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="company-pill">
+        <div class="company-avatar" id="company-avatar">—</div>
+        <div>
+          <div class="company-name" id="sidebar-company">—</div>
+          <div class="company-plan" id="sidebar-plan">PRO PLAN · 2026</div>
+        </div>
+      </div>
+      <div class="logout-nav" id="logout-btn">
+        <span class="icon">↩</span> Sign Out
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── MAIN CONTENT ──────────────────────────────────────────────────────── -->
+  <main class="main">
+
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <div>
+        <div class="page-title">Targets &amp; Goals</div>
+        <div class="page-sub" id="page-sub">Loading…</div>
+      </div>
+      <div class="topbar-right">
+        <a href="/" class="btn btn-outline">← Dashboard</a>
+      </div>
+    </div>
+
+    <!-- ── NO TARGET STATE ────────────────────────────────────────────────── -->
+    <div class="tg-empty" id="tg-empty" style="display:none">
+      <div class="tg-empty-icon">🎯</div>
+      <div class="tg-empty-title">No targets set yet</div>
+      <div class="tg-empty-desc">Complete your onboarding setup to set reduction targets and unlock this dashboard.</div>
+      <a href="/onboarding.html" class="btn btn-primary" style="margin-top:20px">Complete Setup →</a>
+    </div>
+
+    <!-- ── TARGETS CONTENT ────────────────────────────────────────────────── -->
+    <div id="tg-content" style="display:none">
+
+      <!-- ── 1. OVERALL PROGRESS CARD ────────────────────────────────────── -->
+      <div class="tg-hero card" id="tg-hero">
+        <div class="tg-hero-left">
+          <div class="card-title">Overall Emissions Reduction</div>
+          <div class="card-sub" id="tg-hero-sub">—</div>
+
+          <div class="tg-big-number">
+            <span id="tg-reduction-pct" class="tg-big-val">—</span>
+            <span class="tg-big-unit">% reduced</span>
+          </div>
+          <div class="tg-target-label" id="tg-target-label">—</div>
+
+          <div class="tg-hero-progress">
+            <div class="tg-hero-track">
+              <div class="tg-hero-fill" id="tg-hero-fill" style="width:0%"></div>
+              <div class="tg-hero-marker" id="tg-hero-marker"></div>
+            </div>
+            <div class="tg-hero-track-labels">
+              <span id="tg-baseline-label">Baseline</span>
+              <span id="tg-target-year-label">Target year</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="tg-hero-right">
+          <div class="tg-status-badge" id="tg-status-badge">—</div>
+
+          <div class="tg-hero-stats">
+            <div class="tg-stat">
+              <div class="tg-stat-val" id="tg-baseline-total">—</div>
+              <div class="tg-stat-label">Baseline (tCO₂e)</div>
+            </div>
+            <div class="tg-stat">
+              <div class="tg-stat-val" id="tg-current-total">—</div>
+              <div class="tg-stat-label">Current year (tCO₂e)</div>
+            </div>
+            <div class="tg-stat">
+              <div class="tg-stat-val" id="tg-target-total">—</div>
+              <div class="tg-stat-label">Target total (tCO₂e)</div>
+            </div>
+            <div class="tg-stat">
+              <div class="tg-stat-val" id="tg-years-left">—</div>
+              <div class="tg-stat-label">Years remaining</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── 2. PER-SCOPE BREAKDOWN ────────────────────────────────────────── -->
+      <div class="tg-section-title">Per-Scope Progress</div>
+      <div class="tg-scope-grid" id="tg-scope-grid">
+        <!-- Injected by JS -->
+      </div>
+
+      <!-- ── 3. YEAR-ON-YEAR COMPARISON ───────────────────────────────────── -->
+      <div class="tg-section-title">Year-on-Year Comparison</div>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Annual Emissions by Scope</div>
+            <div class="card-sub" id="yoy-sub">Baseline · Prior year · Current year</div>
+          </div>
+          <div class="tg-chart-legend" id="yoy-legend">
+            <span class="tg-leg-dot" style="background:var(--scope1)"></span> Scope 1
+            <span class="tg-leg-dot" style="background:var(--scope2)"></span> Scope 2
+            <span class="tg-leg-dot" style="background:var(--scope3)"></span> Scope 3
+          </div>
+        </div>
+        <div class="tg-yoy-chart" id="yoy-chart">
+          <!-- SVG injected by JS -->
+        </div>
+      </div>
+
+      <!-- ── 4. FRAMEWORK MILESTONES ───────────────────────────────────────── -->
+      <div class="tg-section-title">Framework Milestones</div>
+      <div class="tg-fw-grid" id="tg-fw-grid">
+        <!-- Injected by JS -->
+      </div>
+
+      <!-- ── 5. PROJECTED TRAJECTORY ──────────────────────────────────────── -->
+      <div class="tg-section-title">Projected Trajectory</div>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Emissions Pathway</div>
+            <div class="card-sub" id="traj-sub">At current pace vs target</div>
+          </div>
+          <div class="tg-chart-legend">
+            <span class="tg-leg-line" style="background:var(--accent)"></span> Actual
+            <span class="tg-leg-line tg-leg-dashed"></span> Projected
+            <span class="tg-leg-dot tg-leg-target"></span> Target
+          </div>
+        </div>
+        <div class="tg-traj-chart" id="traj-chart">
+          <!-- SVG injected by JS -->
+        </div>
+        <div class="tg-traj-verdict" id="traj-verdict"></div>
+      </div>
+
+    </div><!-- /tg-content -->
+
+  </main>
+</div>
+
+<script src="js/targets.js"></script>
+</body>
+</html>

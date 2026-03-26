@@ -1456,3 +1456,425 @@ textarea.form-input {
   color: var(--accent);
   white-space: nowrap;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   TARGETS & GOALS PAGE
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Section titles ───────────────────────────────────────────────────────── */
+.tg-section-title {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.2px;
+  color: var(--text);
+  margin: 28px 0 12px;
+}
+
+/* ── Empty state ──────────────────────────────────────────────────────────── */
+.tg-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 24px;
+  text-align: center;
+}
+.tg-empty-icon  { font-size: 48px; margin-bottom: 16px; }
+.tg-empty-title { font-family: var(--font-head); font-weight: 700; font-size: 20px; margin-bottom: 8px; }
+.tg-empty-desc  { font-size: 14px; color: var(--muted); max-width: 360px; line-height: 1.6; }
+
+/* ── No data fallback inside a card ──────────────────────────────────────── */
+.tg-no-data {
+  padding: 32px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+/* ── Overall hero card ────────────────────────────────────────────────────── */
+.tg-hero {
+  display: flex;
+  gap: 40px;
+  align-items: flex-start;
+  margin-bottom: 4px;
+}
+
+.tg-hero-left  { flex: 1; min-width: 0; }
+.tg-hero-right {
+  width: 260px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 20px;
+}
+
+.tg-big-number {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 16px 0 6px;
+}
+
+.tg-big-val {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 52px;
+  letter-spacing: -2px;
+  line-height: 1;
+}
+
+.tg-big-unit {
+  font-size: 16px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.color-good { color: var(--accent); }
+.color-bad  { color: var(--danger); }
+
+.tg-target-label {
+  font-size: 12px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  margin-bottom: 20px;
+}
+
+/* Hero progress bar */
+.tg-hero-progress { margin-top: 8px; }
+
+.tg-hero-track {
+  position: relative;
+  height: 10px;
+  background: var(--dim);
+  border-radius: 5px;
+  overflow: visible;
+}
+
+.tg-hero-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 5px;
+  transition: width 0.7s ease;
+}
+
+.tg-hero-marker {
+  position: absolute;
+  top: -4px;
+  width: 3px;
+  height: 18px;
+  background: var(--warn);
+  border-radius: 2px;
+  display: none;
+  transform: translateX(-50%);
+}
+
+.tg-hero-track-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+/* Status badge */
+.tg-status-badge {
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: 24px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-head);
+  letter-spacing: -0.2px;
+}
+
+.status-on-track    { background: var(--accent-light);  color: var(--accent);  }
+.status-at-risk     { background: var(--warn-light);    color: var(--warn);    }
+.status-behind      { background: var(--danger-light);  color: var(--danger);  }
+.status-none        { background: var(--dim);           color: var(--muted);   }
+
+/* Hero stats grid */
+.tg-hero-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 20px;
+  width: 100%;
+}
+
+.tg-stat-val {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: -0.5px;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.tg-stat-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  margin-top: 2px;
+}
+
+/* ── Scope cards ──────────────────────────────────────────────────────────── */
+.tg-scope-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 4px;
+}
+
+.tg-scope-card { padding: 20px; }
+.tg-scope-card.tg-scope-scope1 { border-top: 3px solid var(--scope1); }
+.tg-scope-card.tg-scope-scope2 { border-top: 3px solid var(--scope2); }
+.tg-scope-card.tg-scope-scope3 { border-top: 3px solid var(--scope3); }
+
+.tg-scope-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.tg-scope-icon {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.tg-scope-name {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 13px;
+  flex: 1;
+}
+
+.tg-scope-status {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  padding: 3px 8px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+.tg-scope-numbers {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.tg-scope-num-val {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: -0.5px;
+}
+
+.tg-scope-num-label {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tg-scope-arrow { color: var(--muted); font-size: 18px; }
+
+/* Scope bar */
+.tg-scope-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tg-scope-bar-track {
+  flex: 1;
+  height: 6px;
+  background: var(--dim);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.tg-scope-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s ease;
+}
+
+.tg-scope-bar-label {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Trend tags */
+.tg-trend {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+.tg-trend-good { background: var(--accent-light); color: var(--accent); }
+.tg-trend-bad  { background: var(--danger-light); color: var(--danger); }
+.tg-trend-none { background: var(--dim);          color: var(--muted);  }
+
+/* ── YoY chart area ───────────────────────────────────────────────────────── */
+.tg-yoy-chart,
+.tg-traj-chart {
+  width: 100%;
+  overflow: hidden;
+}
+
+.tg-chart-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+
+.tg-leg-dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.tg-leg-line {
+  display: inline-block;
+  width: 18px; height: 2.5px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.tg-leg-dashed {
+  background: transparent;
+  border-top: 2px dashed var(--accent);
+  height: 0;
+  opacity: 0.55;
+}
+
+.tg-leg-target {
+  background: #c0392b;
+  width: 8px; height: 8px;
+}
+
+/* ── Framework milestone cards ────────────────────────────────────────────── */
+.tg-fw-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 4px;
+}
+
+.tg-fw-card { padding: 20px; }
+
+.tg-fw-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.tg-fw-name {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: -0.5px;
+  margin-bottom: 3px;
+}
+
+.tg-fw-full {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tg-fw-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.tg-ms-list { display: flex; flex-direction: column; gap: 8px; }
+
+.tg-ms-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.tg-ms-row.tg-ms-done { color: var(--text); }
+
+.tg-ms-check {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  width: 16px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.tg-ms-row.tg-ms-done .tg-ms-check { color: var(--accent); font-weight: 700; }
+
+/* ── Trajectory verdict ───────────────────────────────────────────────────── */
+.tg-traj-verdict {
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 10px 14px;
+  border-radius: 8px;
+  display: none;
+}
+
+.tg-traj-verdict:not(:empty) { display: block; }
+
+.tg-verdict-good {
+  display: block;
+  padding: 10px 14px;
+  background: var(--accent-light);
+  border-radius: 8px;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.tg-verdict-warn {
+  display: block;
+  padding: 10px 14px;
+  background: var(--warn-light);
+  border-radius: 8px;
+  color: var(--warn);
+  font-weight: 500;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .tg-scope-grid { grid-template-columns: repeat(2, 1fr); }
+  .tg-hero       { flex-direction: column; }
+  .tg-hero-right { width: 100%; flex-direction: row; align-items: center; }
+  .tg-hero-stats { grid-template-columns: repeat(4, 1fr); }
+}
+
+@media (max-width: 800px) {
+  .tg-fw-grid    { grid-template-columns: 1fr; }
+  .tg-scope-grid { grid-template-columns: 1fr; }
+  .tg-hero-stats { grid-template-columns: repeat(2, 1fr); }
+}

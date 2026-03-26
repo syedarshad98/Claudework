@@ -28,9 +28,13 @@ document.getElementById('logout-btn').addEventListener('click', () => {
   window.location.replace('/login.html');
 });
 
-// ── Nav item click (visual only — single-page for now) ────────────────────────
+// ── Nav item click ────────────────────────────────────────────────────────────
 document.querySelectorAll('.nav-item').forEach(item => {
   item.addEventListener('click', () => {
+    if (item.dataset.href && item.dataset.href !== '/') {
+      window.location.href = item.dataset.href;
+      return;
+    }
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     item.classList.add('active');
   });
