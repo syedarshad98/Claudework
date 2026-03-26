@@ -17,6 +17,11 @@ const COMPANY = localStorage.getItem('ct_company') || '';
 const EMAIL   = localStorage.getItem('ct_email')   || '';
 const ROLE    = localStorage.getItem('ct_role')    || 'viewer';
 
+// Panel data cache (populated by load functions, consumed by accordion)
+let _breakdownData     = null;
+let _fwData            = null;
+let _validationPending = 0;
+
 // Populate sidebar
 const initials = COMPANY.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '—';
 document.getElementById('company-avatar').textContent   = initials;
@@ -320,6 +325,7 @@ async function loadFrameworks() {
   const res = await api('/api/frameworks');
   if (!res) return;
   const rows = await res.json();
+  _fwData = rows;
 
   const grid = document.getElementById('framework-grid');
   grid.innerHTML = rows.map(fw => {
@@ -392,6 +398,7 @@ async function loadBannerStats() {
   const res = await api('/api/charts/breakdown');
   if (!res) return;
   const d = await res.json();
+  _breakdownData = d;
   document.getElementById('stat-total').textContent = fmt(d.total, 0) + ' tCO₂e';
   document.getElementById('stat-yoy').textContent   = d.total > 0 ? 'Active' : 'No data';
 }
@@ -730,6 +737,7 @@ async function loadValidationBanner() {
   const res = await api('/api/validation/summary');
   if (!res || !res.ok) return;
   const { pending } = await res.json();
+  _validationPending = pending || 0;
   const banner = document.getElementById('validation-banner');
   if (!banner) return;
   if (pending > 0) {
@@ -787,6 +795,220 @@ async function loadRecommendationsSummary() {
     panel.innerHTML = '<div class="rc-dash-empty">Run your first gap analysis to see recommendations.</div>';
   }
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  SIDEBAR ACCORDION PANELS  (.dp-*)
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Accordion toast ───────────────────────────────────────────────────────────
+let _dpToastTimer = null;
+function dpShowToast(msg, type = 'success') {
+  let ct = document.getElementById('dp-toast');
+  if (!ct) {
+    ct = Object.assign(document.createElement('div'), { id: 'dp-toast' });
+    document.body.appendChild(ct);
+  }
+  ct.textContent = msg;
+  ct.className = `dp-toast dp-toast-${type} dp-toast-show`;
+  clearTimeout(_dpToastTimer);
+  _dpToastTimer = setTimeout(() => ct.classList.remove('dp-toast-show'), 3000);
+}
+
+// ── Accordion toggle (one open at a time) ────────────────────────────────────
+function initAccordions() {
+  document.querySelectorAll('.dp-hdr').forEach(hdr => {
+    hdr.addEventListener('click', () => {
+      const panelId = hdr.dataset.panel;
+      const panel   = document.getElementById(panelId);
+      const wasOpen = panel.classList.contains('dp-open');
+
+      // Close all
+      document.querySelectorAll('.dp-panel').forEach(p => p.classList.remove('dp-open'));
+
+      // Open this one if it was closed
+      if (!wasOpen) {
+        panel.classList.add('dp-open');
+        if (panelId === 'dp-panel-emissions') populateEmissionsPanel();
+        if (panelId === 'dp-panel-reporting') populateReportingPanel();
+        if (panelId === 'dp-panel-data')      populateDataPanel();
+      }
+    });
+  });
+}
+
+// ── Emissions panel ───────────────────────────────────────────────────────────
+function populateEmissionsPanel() {
+  if (!_breakdownData) return;
+  const d = _breakdownData;
+  document.getElementById('dp-scope1-val').textContent = `${fmt(d.scope1, 1)} t`;
+  document.getElementById('dp-scope2-val').textContent = `${fmt(d.scope2, 1)} t`;
+  document.getElementById('dp-scope3-val').textContent = `${fmt(d.scope3, 1)} t`;
+  document.getElementById('dp-scope1-yoy').textContent = d.scope1Pct != null ? `${d.scope1Pct}%` : '';
+  document.getElementById('dp-scope2-yoy').textContent = d.scope2Pct != null ? `${d.scope2Pct}%` : '';
+  document.getElementById('dp-scope3-yoy').textContent = d.scope3Pct != null ? `${d.scope3Pct}%` : '';
+}
+
+// ── Reporting panel ───────────────────────────────────────────────────────────
+function populateReportingPanel() {
+  const rowsEl = document.getElementById('dp-fw-rows');
+  if (rowsEl && _fwData) {
+    const FWS = ['GRI', 'TCFD', 'SASB'];
+    rowsEl.innerHTML = FWS.map(name => {
+      const fw     = _fwData.find(f => f.framework === name);
+      const status = fw ? fw.status : 'not_started';
+      const cls    = status === 'aligned' ? 'dp-fw-aligned'
+                   : status === 'partial' ? 'dp-fw-partial'
+                   : 'dp-fw-pending';
+      const lbl    = status === 'aligned' ? '✓ Ready'
+                   : status === 'partial' ? '⚠ Partial'
+                   : '— Not started';
+      return `<div class="dp-fw-row"><span class="dp-fw-name">${name}</span><span class="dp-fw-badge ${cls}">${lbl}</span></div>`;
+    }).join('');
+  }
+
+  const badge = document.getElementById('dp-validation-badge');
+  if (badge) {
+    if (_validationPending > 0) {
+      badge.textContent  = _validationPending;
+      badge.style.display = '';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+}
+
+// ── Data panel (role enforcement + mini-form period pre-fill) ─────────────────
+function populateDataPanel() {
+  const editorEl = document.getElementById('dp-editor-content');
+  const viewerEl = document.getElementById('dp-viewer-msg');
+  if (ROLE === 'viewer') {
+    if (editorEl) editorEl.style.display = 'none';
+    if (viewerEl) viewerEl.style.display = '';
+  } else {
+    if (editorEl) editorEl.style.display = '';
+    if (viewerEl) viewerEl.style.display = 'none';
+    // Pre-fill period to current month if blank
+    const periodEl = document.getElementById('dp-f-period');
+    if (periodEl && !periodEl.value) {
+      const n = new Date();
+      periodEl.value = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
+    }
+  }
+}
+
+// ── Mini-form submission ───────────────────────────────────────────────────────
+(function wireMiniForm() {
+  const form = document.getElementById('dp-mini-form');
+  if (!form) return;
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = form.querySelector('.dp-submit');
+    btn.textContent = 'Saving…';
+    btn.disabled    = true;
+    try {
+      const scopeVal = document.getElementById('dp-f-scope').value;
+      const payload  = {
+        category: document.getElementById('dp-f-cat').value,
+        scope:    parseInt(scopeVal.replace('scope', '')),
+        amount:   parseFloat(document.getElementById('dp-f-amount').value),
+        unit:     document.getElementById('dp-f-unit').value,
+        period:   document.getElementById('dp-f-period').value,
+      };
+      const res  = await api('/api/emissions', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        dpShowToast(data.error || 'Failed to save', 'error');
+      } else {
+        dpShowToast(`✓ Saved — ${fmt(parseFloat(data.co2e_tonnes), 4)} tCO₂e`);
+        form.reset();
+        const n = new Date();
+        document.getElementById('dp-f-period').value =
+          `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
+        refreshAll();
+      }
+    } catch {
+      dpShowToast('Network error — please try again', 'error');
+    } finally {
+      btn.textContent = 'Add Entry';
+      btn.disabled    = false;
+    }
+  });
+})();
+
+// ── Mini-upload zone ──────────────────────────────────────────────────────────
+(function wireMiniUpload() {
+  const zone  = document.getElementById('dp-upload-zone');
+  const input = document.getElementById('dp-upload-input');
+  if (!zone || !input) return;
+
+  zone.addEventListener('click', () => input.click());
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('dp-drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dp-drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('dp-drag-over');
+    if (e.dataTransfer.files[0]) dpDoUpload(e.dataTransfer.files[0], zone);
+  });
+  input.addEventListener('change', () => {
+    if (input.files[0]) dpDoUpload(input.files[0], zone);
+    input.value = '';
+  });
+  zone.querySelector('.dp-upload-browse').addEventListener('click', e => e.stopPropagation());
+})();
+
+async function dpDoUpload(file, zone) {
+  const lbl = zone.querySelector('.dp-upload-label');
+  if (lbl) lbl.textContent = 'Uploading…';
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const res  = await api('/api/upload', { method: 'POST', body: form });
+    const data = await res.json();
+    if (!res.ok) {
+      dpShowToast(data.error || 'Upload failed', 'error');
+    } else {
+      dpShowToast(`✓ Imported ${data.imported} of ${data.total} rows`);
+      refreshAll();
+    }
+  } catch {
+    dpShowToast('Upload failed — please try again', 'error');
+  } finally {
+    if (lbl) lbl.innerHTML = 'Drop CSV here or <span class="dp-upload-browse">browse</span>';
+  }
+}
+
+// ── Reporting panel PDF button ────────────────────────────────────────────────
+(function wireDpExportBtn() {
+  const btn = document.getElementById('dp-export-btn');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    const orig = btn.textContent;
+    btn.textContent = '⏳ Generating…';
+    btn.disabled    = true;
+    try {
+      const res = await api('/api/report');
+      if (!res || !res.ok) throw new Error();
+      const blob = await res.blob();
+      const a = Object.assign(document.createElement('a'), {
+        href:     URL.createObjectURL(blob),
+        download: `ClearTrace-ESG-Report-${new Date().getFullYear()}.pdf`,
+      });
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch {
+      dpShowToast('Could not generate report', 'error');
+    } finally {
+      btn.textContent = orig;
+      btn.disabled    = false;
+    }
+  });
+})();
+
+initAccordions();
 
 async function refreshAll() {
   await Promise.all([

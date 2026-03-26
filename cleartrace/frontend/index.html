@@ -24,25 +24,116 @@
       <div class="nav-item" data-href="/recommendations.html"><span class="icon">💡</span> Recommendations</div>
     </div>
 
-    <div class="nav-section">
-      <div class="nav-label">Data</div>
-      <div class="nav-item"><span class="icon">✏️</span> Manual Entry</div>
-      <div class="nav-item"><span class="icon">📂</span> Upload Data</div>
-      <div class="nav-item"><span class="icon">🔗</span> Integrations</div>
+    <!-- DATA accordion -->
+    <div class="nav-section dp-panel" id="dp-panel-data">
+      <div class="dp-hdr" data-panel="dp-panel-data">
+        <span class="nav-label">Data</span>
+        <span class="dp-chevron">▸</span>
+      </div>
+      <div class="dp-body">
+        <!-- Editor view -->
+        <div id="dp-editor-content">
+          <div class="dp-sub-heading">Manual Entry</div>
+          <form id="dp-mini-form" class="dp-mini-form">
+            <select id="dp-f-cat" class="dp-input" required>
+              <option value="">Category…</option>
+              <option value="electricity">Electricity</option>
+              <option value="natural_gas">Natural Gas</option>
+              <option value="fuel">Fuel</option>
+              <option value="water">Water</option>
+              <option value="waste">Waste</option>
+              <option value="travel">Business Travel</option>
+              <option value="freight">Freight</option>
+              <option value="other">Other</option>
+            </select>
+            <select id="dp-f-scope" class="dp-input" required>
+              <option value="">Scope…</option>
+              <option value="scope1">Scope 1</option>
+              <option value="scope2">Scope 2</option>
+              <option value="scope3">Scope 3</option>
+            </select>
+            <div class="dp-row2">
+              <input id="dp-f-amount" type="number" step="any" placeholder="Amount" class="dp-input" required>
+              <select id="dp-f-unit" class="dp-input" required>
+                <option value="">Unit…</option>
+                <option value="kWh">kWh</option>
+                <option value="litres">litres</option>
+                <option value="m3">m³</option>
+                <option value="kg">kg</option>
+                <option value="tonnes">tonnes</option>
+                <option value="km">km</option>
+              </select>
+            </div>
+            <input id="dp-f-period" type="month" class="dp-input" required>
+            <button type="submit" class="btn btn-primary dp-submit">Add Entry</button>
+          </form>
+          <a href="/" class="dp-link">Full data entry →</a>
+
+          <div class="dp-sub-heading dp-mt">Upload Data</div>
+          <div class="dp-upload-zone" id="dp-upload-zone">
+            <div class="dp-upload-icon">📂</div>
+            <div class="dp-upload-label">Drop CSV here or <span class="dp-upload-browse">browse</span></div>
+            <input type="file" id="dp-upload-input" accept=".csv" style="display:none">
+          </div>
+          <a href="/" class="dp-link">Go to upload page →</a>
+
+          <div class="dp-sub-heading dp-mt">Integrations</div>
+          <div class="dp-disabled-row"><span class="icon">🔗</span> Connect systems <span class="dp-coming-soon">Coming soon</span></div>
+        </div>
+        <!-- Viewer view -->
+        <div id="dp-viewer-msg" class="dp-viewer-msg" style="display:none">
+          You don't have permission to add data.
+        </div>
+      </div>
     </div>
 
-    <div class="nav-section">
-      <div class="nav-label">Emissions</div>
-      <div class="nav-item"><span class="icon">🏭</span> Scope 1 — Direct</div>
-      <div class="nav-item"><span class="icon">⚡</span> Scope 2 — Energy</div>
-      <div class="nav-item"><span class="icon">🔄</span> Scope 3 — Value Chain</div>
+    <!-- EMISSIONS accordion -->
+    <div class="nav-section dp-panel" id="dp-panel-emissions">
+      <div class="dp-hdr" data-panel="dp-panel-emissions">
+        <span class="nav-label">Emissions</span>
+        <span class="dp-chevron">▸</span>
+      </div>
+      <div class="dp-body">
+        <div class="dp-scope-row" id="dp-scope1-row">
+          <span class="dp-scope-dot" style="background:#1a6b4a"></span>
+          <span class="dp-scope-name">Scope 1 — Direct</span>
+          <span class="dp-scope-val" id="dp-scope1-val">—</span>
+          <span class="dp-scope-yoy" id="dp-scope1-yoy"></span>
+        </div>
+        <div class="dp-scope-row" id="dp-scope2-row">
+          <span class="dp-scope-dot" style="background:#2d5be3"></span>
+          <span class="dp-scope-name">Scope 2 — Energy</span>
+          <span class="dp-scope-val" id="dp-scope2-val">—</span>
+          <span class="dp-scope-yoy" id="dp-scope2-yoy"></span>
+        </div>
+        <div class="dp-scope-row" id="dp-scope3-row">
+          <span class="dp-scope-dot" style="background:#c47d1a"></span>
+          <span class="dp-scope-name">Scope 3 — Value Chain</span>
+          <span class="dp-scope-val" id="dp-scope3-val">—</span>
+          <span class="dp-scope-yoy" id="dp-scope3-yoy"></span>
+        </div>
+        <a href="/targets.html" class="dp-link dp-mt">View details →</a>
+      </div>
     </div>
 
-    <div class="nav-section">
-      <div class="nav-label">Reporting</div>
-      <div class="nav-item"><span class="icon">📋</span> Frameworks</div>
-      <div class="nav-item"><span class="icon">📄</span> Generate Report</div>
-      <div class="nav-item"><span class="icon">📬</span> Submissions</div>
+    <!-- REPORTING accordion -->
+    <div class="nav-section dp-panel" id="dp-panel-reporting">
+      <div class="dp-hdr" data-panel="dp-panel-reporting">
+        <span class="nav-label">Reporting</span>
+        <span class="dp-chevron">▸</span>
+      </div>
+      <div class="dp-body">
+        <div class="dp-sub-heading">Framework Alignment</div>
+        <div class="dp-fw-rows" id="dp-fw-rows">
+          <div class="dp-fw-row"><span class="dp-fw-name">GRI</span><span class="dp-fw-badge dp-fw-loading">…</span></div>
+          <div class="dp-fw-row"><span class="dp-fw-name">TCFD</span><span class="dp-fw-badge dp-fw-loading">…</span></div>
+          <div class="dp-fw-row"><span class="dp-fw-name">SASB</span><span class="dp-fw-badge dp-fw-loading">…</span></div>
+        </div>
+        <button class="btn btn-outline dp-report-btn" id="dp-export-btn">↓ Generate Report</button>
+        <a href="/audit.html" class="dp-link dp-submissions-link">
+          Submissions <span class="dp-validation-badge" id="dp-validation-badge" style="display:none"></span>
+        </a>
+      </div>
     </div>
 
     <div class="nav-section">

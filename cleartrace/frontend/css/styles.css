@@ -3040,3 +3040,219 @@ textarea.form-input {
   .rc-summary-sep   { width: 100%; height: 1px; margin: 0; }
   .rc-filter-bar    { flex-direction: column; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   SIDEBAR ACCORDION PANELS  (.dp-*)
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* Panel wrapper — replaces nav-section for the three accordion groups */
+.dp-panel { padding: 0 !important; }
+
+/* Header row (clickable) */
+.dp-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  cursor: pointer;
+  user-select: none;
+}
+.dp-hdr:hover { background: rgba(255,255,255,0.04); }
+.dp-hdr .nav-label { margin: 0; font-size: 10px; letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
+
+/* Chevron — rotates when panel is open */
+.dp-chevron {
+  font-size: 10px;
+  color: var(--muted);
+  transition: transform 0.2s ease;
+  display: inline-block;
+  line-height: 1;
+}
+.dp-panel.dp-open .dp-chevron { transform: rotate(90deg); }
+
+/* Body — animated expand/collapse via max-height */
+.dp-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+  padding: 0 14px;
+}
+.dp-panel.dp-open .dp-body {
+  max-height: 900px;
+  padding-bottom: 10px;
+}
+
+/* ── Scope rows (Emissions panel) ─────────────────────────────────────────── */
+.dp-scope-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  font-size: 11px;
+}
+.dp-scope-row:last-of-type { border-bottom: none; }
+.dp-scope-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.dp-scope-name { flex: 1; color: var(--sidebar-text, #e5e2d9); font-size: 11px; }
+.dp-scope-val  { font-family: var(--font-mono); font-size: 11px; color: #e5e2d9; font-weight: 600; }
+.dp-scope-yoy  { font-size: 10px; color: var(--muted); font-family: var(--font-mono); min-width: 30px; text-align: right; }
+
+/* ── Sub-headings inside panels ──────────────────────────────────────────── */
+.dp-sub-heading {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 8px 0 4px;
+}
+.dp-mt { margin-top: 14px; }
+
+/* ── Link ─────────────────────────────────────────────────────────────────── */
+.dp-link {
+  display: block;
+  font-size: 11px;
+  color: #6ec99a;
+  text-decoration: none;
+  margin-top: 6px;
+}
+.dp-link:hover { text-decoration: underline; }
+
+/* ── Framework rows (Reporting panel) ────────────────────────────────────── */
+.dp-fw-rows { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.dp-fw-row  { display: flex; align-items: center; justify-content: space-between; font-size: 11px; }
+.dp-fw-name { color: #e5e2d9; font-weight: 600; }
+.dp-fw-badge {
+  font-size: 10px; font-weight: 600; padding: 1px 6px;
+  border-radius: 10px; white-space: nowrap;
+}
+.dp-fw-aligned  { background: #1a6b4a22; color: #6ec99a; border: 1px solid #1a6b4a44; }
+.dp-fw-partial  { background: #c47d1a22; color: #e0a84a; border: 1px solid #c47d1a44; }
+.dp-fw-pending  { background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid rgba(255,255,255,0.1); }
+.dp-fw-loading  { background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid rgba(255,255,255,0.1); }
+
+.dp-report-btn {
+  width: 100%;
+  font-size: 11px;
+  padding: 5px 10px;
+  margin-bottom: 6px;
+}
+
+.dp-submissions-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #6ec99a;
+  text-decoration: none;
+  margin-top: 2px;
+}
+.dp-submissions-link:hover { text-decoration: underline; }
+
+.dp-validation-badge {
+  background: #dc2626;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 10px;
+  line-height: 1.4;
+}
+
+/* ── Mini-form (Data panel) ──────────────────────────────────────────────── */
+.dp-mini-form { display: flex; flex-direction: column; gap: 5px; margin-top: 4px; }
+
+.dp-input {
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: #e5e2d9;
+  font-size: 11px;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.dp-input:focus { outline: none; border-color: #4ade80; }
+.dp-input option { background: #1e1f1a; color: #e5e2d9; }
+
+.dp-row2 { display: flex; gap: 5px; }
+.dp-row2 .dp-input { flex: 1; }
+
+.dp-submit {
+  font-size: 11px;
+  padding: 5px 10px;
+  width: 100%;
+}
+
+/* ── Mini-upload zone ─────────────────────────────────────────────────────── */
+.dp-upload-zone {
+  border: 1px dashed rgba(255,255,255,0.2);
+  border-radius: 8px;
+  padding: 10px;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  margin-top: 4px;
+}
+.dp-upload-zone:hover,
+.dp-upload-zone.dp-drag-over {
+  background: rgba(255,255,255,0.06);
+  border-color: #4ade80;
+}
+.dp-upload-icon  { font-size: 18px; margin-bottom: 3px; }
+.dp-upload-label { font-size: 11px; color: var(--muted); }
+.dp-upload-browse { color: #6ec99a; text-decoration: underline; cursor: pointer; }
+
+/* ── Disabled / Coming soon row ──────────────────────────────────────────── */
+.dp-disabled-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.3);
+  padding: 6px 0;
+}
+.dp-coming-soon {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.4);
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: auto;
+}
+
+/* ── Viewer message ──────────────────────────────────────────────────────── */
+.dp-viewer-msg {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 8px 0;
+  font-style: italic;
+}
+
+/* ── Accordion toast (body-level) ────────────────────────────────────────── */
+.dp-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(16px);
+  background: var(--dark, #1e1f1a);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s, transform 0.25s;
+  z-index: 9999;
+  white-space: nowrap;
+}
+.dp-toast-show  { opacity: 1; transform: translateX(-50%) translateY(0); }
+.dp-toast-error { background: #dc2626; }
