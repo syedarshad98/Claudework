@@ -47,4 +47,10 @@ app.get('*', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`ClearTrace server running → http://localhost:${PORT}`);
+
+  if (process.env.NODE_ENV !== 'test') {
+    const db = require('./db/database');
+    const { seedDemo } = require('./scripts/seed-demo');
+    seedDemo(db).catch(err => console.error('Demo seed skipped:', err.message));
+  }
 });

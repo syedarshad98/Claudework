@@ -6,18 +6,13 @@
  * Seeds Verdant Group with 18 months of realistic ESG data.
  * Idempotent — safe to run multiple times (all inserts use ON CONFLICT DO NOTHING).
  * Fully transactional — rolls back completely on any error.
+ *
+ * Exports seedDemo(db) so server.js can call it on startup without a second connection.
  */
 
-require('dotenv').config();
-const { Pool } = require('pg');
-const bcrypt   = require('bcrypt');
-const fs       = require('fs');
-const path     = require('path');
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-});
+const bcrypt = require('bcrypt');
+const fs     = require('fs');
+const path   = require('path');
 
 // ── Data definitions ──────────────────────────────────────────────────────────
 
@@ -82,8 +77,22 @@ async function runMigrations(client) {
 
 // ── Main seeder ───────────────────────────────────────────────────────────────
 
-async function seed() {
-  const client = await pool.connect();
+/**
+ * Seeds demo data for "Verdant Group".
+ * Accepts the existing pg Pool so no second connection is created.
+ * Safe to call multiple times — skips immediately if company already exists.
+ *
+ * @param {import('pg').Pool} db
+ */
+async function seedDemo(db) {
+  // Quick existence check before acquiring a transaction client
+  const check = await db.query('SELECT id FROM companies WHERE name = $1 LIMIT 1', ['Verdant Group']);
+  if (check.rows.length) {
+    console.log('Demo data already present, skipping.');
+    return;
+  }
+
+  const client = await db.connect();
 
   try {
     await client.query('BEGIN');
@@ -92,23 +101,14 @@ async function seed() {
     await runMigrations(client);
 
     // ── 1. Company ──────────────────────────────────────────────────────────
-    let companyId;
-    const existingCo = await client.query(
-      'SELECT id FROM companies WHERE name = $1', ['Verdant Group']
+    const coRes = await client.query(
+      `INSERT INTO companies (name, industry, onboarding_complete, target_year, reduction_target_pct, alignment_standard)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id`,
+      ['Verdant Group', 'Professional Services', true, 2030, 45.00, 'SBTi']
     );
-    if (existingCo.rows.length) {
-      companyId = existingCo.rows[0].id;
-      console.log(`  Company already exists: Verdant Group (id: ${companyId})`);
-    } else {
-      const coRes = await client.query(
-        `INSERT INTO companies (name, industry, onboarding_complete, target_year, reduction_target_pct, alignment_standard)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING id`,
-        ['Verdant Group', 'Professional Services', true, 2030, 45.00, 'SBTi']
-      );
-      companyId = coRes.rows[0].id;
-      console.log(`✓ Company created: Verdant Group (id: ${companyId})`);
-    }
+    const companyId = coRes.rows[0].id;
+    console.log(`✓ Company created: Verdant Group (id: ${companyId})`);
 
     // ── 2. Users ────────────────────────────────────────────────────────────
     const PASSWORD_HASH = await bcrypt.hash('Demo1234!', 10);
@@ -468,13 +468,29 @@ async function seed() {
 
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('\n✗ Seeding failed — transaction rolled back');
+    console.error('\n✗ Demo seeding failed — transaction rolled back');
     console.error(err.message);
-    process.exitCode = 1;
+    throw err;
   } finally {
     client.release();
-    await pool.end();
   }
 }
 
-seed();
+module.exports = { seedDemo };
+
+// Allow running directly: node scripts/seed-demo.js  /  npm run seed:demo
+if (require.main === module) {
+  require('dotenv').config();
+  const { Pool } = require('pg');
+  const standalonePool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  });
+  seedDemo(standalonePool)
+    .then(() => standalonePool.end())
+    .catch(err => {
+      console.error(err.message);
+      standalonePool.end();
+      process.exitCode = 1;
+    });
+}
