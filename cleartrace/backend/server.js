@@ -36,6 +36,8 @@ app.use('/api/benchmarking', auth, require('./routes/benchmarking'));
 app.use('/api/company',      auth, require('./routes/company'));
 app.use('/api/social',           auth, require('./routes/social'));
 app.use('/api/governance',       auth, require('./routes/governance'));
+app.use('/api/water',            auth, require('./routes/water'));
+app.use('/api/waste',            auth, require('./routes/waste'));
 app.use('/api/recommendations',  auth, require('./routes/recommendations'));
 
 // SPA fallback — serve index.html for any unmatched route

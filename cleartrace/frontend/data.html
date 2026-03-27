@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ClearTrace — Governance</title>
+  <title>ClearTrace — Data</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -28,13 +28,13 @@
       <div class="nav-label">Manage</div>
       <div class="nav-item" data-href="/environment.html"><span class="icon">🌿</span> Environment</div>
       <div class="nav-item" data-href="/reporting.html"><span class="icon">📄</span> Reporting</div>
-      <div class="nav-item" data-href="/data.html"><span class="icon">🗄️</span> Data</div>
+      <div class="nav-item active" data-href="/data.html"><span class="icon">🗄️</span> Data</div>
     </div>
 
     <div class="nav-section">
       <div class="nav-label">ESG</div>
       <div class="nav-item" data-href="/social.html"><span class="icon">🤝</span> Social</div>
-      <div class="nav-item active" data-href="/governance.html"><span class="icon">🏛️</span> Governance</div>
+      <div class="nav-item" data-href="/governance.html"><span class="icon">🏛️</span> Governance</div>
     </div>
 
     <div class="nav-section">
@@ -65,25 +65,54 @@
 
     <div class="topbar">
       <div>
-        <div class="page-title">Governance</div>
-        <div class="page-sub" id="page-sub">Track board &amp; ethics KPIs</div>
-      </div>
-      <div class="topbar-right" style="display:flex;gap:10px;align-items:center">
-        <select class="gv-period-select" id="period-select"></select>
-        <button class="btn btn-outline" id="edit-btn" style="display:none">Edit</button>
-        <button class="btn btn-primary" id="save-btn" style="display:none">Save All</button>
+        <div class="page-title">Data</div>
+        <div class="page-sub">Entry · Upload · Integrations</div>
       </div>
     </div>
 
-    <!-- Toast -->
-    <div id="gv-toast-container" class="gv-toast-container"></div>
+    <div class="dh-hub-grid">
 
-    <!-- Category panels -->
-    <div id="gv-panels"></div>
+      <!-- Card 1: Manual Entry -->
+      <div class="card dh-hub-card">
+        <div class="dh-hub-icon">✏️</div>
+        <div class="dh-hub-title">Manual Entry</div>
+        <div class="dh-hub-desc">Log emissions, water and waste data manually with automatic DEFRA 2023 emission factor lookup.</div>
+        <div id="dh-manual-editor">
+          <a href="/" class="btn btn-primary" style="display:block;text-align:center">Open manual entry →</a>
+        </div>
+        <div id="dh-manual-viewer" class="dh-viewer-msg" style="display:none">
+          🔒 View only — contact your admin to add data
+        </div>
+      </div>
+
+      <!-- Card 2: Upload Data -->
+      <div class="card dh-hub-card">
+        <div class="dh-hub-icon">📂</div>
+        <div class="dh-hub-title">Upload Data</div>
+        <div class="dh-hub-desc">Import data via spreadsheet (.xlsx or .csv). DEFRA 2023 emission factors applied automatically when not provided.</div>
+        <div id="dh-upload-editor">
+          <a href="/" class="btn btn-primary" style="display:block;text-align:center">Go to upload →</a>
+        </div>
+        <div id="dh-upload-viewer" class="dh-viewer-msg" style="display:none">
+          🔒 View only — contact your admin to add data
+        </div>
+      </div>
+
+      <!-- Card 3: Integrations (coming soon) -->
+      <div class="card dh-hub-card dh-coming-soon-card">
+        <div class="dh-hub-icon" style="opacity:0.4">🔗</div>
+        <div class="dh-hub-title">
+          Integrations
+          <span class="dh-coming-soon-badge">Coming soon</span>
+        </div>
+        <div class="dh-hub-desc">Connect your energy meters, accounting tools and more. Available soon.</div>
+      </div>
+
+    </div>
 
   </main>
 </div>
 
-<script src="js/governance.js"></script>
+<script src="js/data.js"></script>
 </body>
 </html>

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClearTrace — Environment</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="layout">
+
+  <!-- ── SIDEBAR ──────────────────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-mark">🌿</div>
+      <div class="logo-text">Clear<span>Trace</span></div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Overview</div>
+      <div class="nav-item" data-href="/"><span class="icon">📊</span> Dashboard</div>
+      <div class="nav-item" data-href="/targets.html"><span class="icon">🎯</span> Targets &amp; Goals</div>
+      <div class="nav-item" data-href="/benchmarking.html"><span class="icon">📈</span> Benchmarking</div>
+      <div class="nav-item" data-href="/recommendations.html"><span class="icon">💡</span> Recommendations</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Manage</div>
+      <div class="nav-item active" data-href="/environment.html"><span class="icon">🌿</span> Environment</div>
+      <div class="nav-item" data-href="/reporting.html"><span class="icon">📄</span> Reporting</div>
+      <div class="nav-item" data-href="/data.html"><span class="icon">🗄️</span> Data</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">ESG</div>
+      <div class="nav-item" data-href="/social.html"><span class="icon">🤝</span> Social</div>
+      <div class="nav-item" data-href="/governance.html"><span class="icon">🏛️</span> Governance</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Compliance</div>
+      <div class="nav-item" data-href="/audit.html"><span class="icon">🔍</span> Audit Log</div>
+      <div class="nav-item" data-href="/validation.html"><span class="icon">⚠️</span> Data Validation</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Organisation</div>
+      <div class="nav-item" data-href="/team.html"><span class="icon">👥</span> Team</div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="company-pill">
+        <div class="company-avatar" id="company-avatar">—</div>
+        <div>
+          <div class="company-name" id="sidebar-company">—</div>
+          <div class="company-plan" id="sidebar-plan">PRO PLAN · 2026</div>
+        </div>
+      </div>
+      <div class="logout-nav" id="logout-btn"><span class="icon">↩</span> Sign Out</div>
+    </div>
+  </aside>
+
+  <!-- ── MAIN ──────────────────────────────────────────────────────────────── -->
+  <main class="main">
+
+    <div class="topbar">
+      <div>
+        <div class="page-title">Environment</div>
+        <div class="page-sub">Emissions · Water · Waste</div>
+      </div>
+      <div class="topbar-right" style="display:flex;gap:10px;align-items:center">
+        <select class="period-select" id="period-select"></select>
+        <button class="btn btn-outline" id="env-edit-btn" style="display:none">Edit</button>
+        <button class="btn btn-primary" id="env-save-btn" style="display:none">Save All</button>
+      </div>
+    </div>
+
+    <!-- Tab bar -->
+    <div class="env-tabs">
+      <button class="env-tab active" data-tab="emissions">🌡️ Emissions</button>
+      <button class="env-tab" data-tab="water">💧 Water</button>
+      <button class="env-tab" data-tab="waste">♻️ Waste</button>
+    </div>
+
+    <!-- EMISSIONS TAB -->
+    <div id="env-tab-emissions" class="env-tab-panel">
+      <!-- KPI cards row -->
+      <div class="env-kpi-row" id="env-emissions-kpis">
+        <div class="env-kpi-card">
+          <div class="env-kpi-label">Scope 1 — Direct</div>
+          <div class="env-kpi-val" id="env-s1-val">—</div>
+          <div class="env-kpi-unit">tCO₂e</div>
+          <div class="env-kpi-trend" id="env-s1-trend"></div>
+        </div>
+        <div class="env-kpi-card">
+          <div class="env-kpi-label">Scope 2 — Energy</div>
+          <div class="env-kpi-val" id="env-s2-val">—</div>
+          <div class="env-kpi-unit">tCO₂e</div>
+          <div class="env-kpi-trend" id="env-s2-trend"></div>
+        </div>
+        <div class="env-kpi-card">
+          <div class="env-kpi-label">Scope 3 — Value Chain</div>
+          <div class="env-kpi-val" id="env-s3-val">—</div>
+          <div class="env-kpi-unit">tCO₂e</div>
+          <div class="env-kpi-trend" id="env-s3-trend"></div>
+        </div>
+      </div>
+      <!-- Trend chart -->
+      <div class="card" style="margin-top:16px">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Monthly Emissions Trend</div>
+            <div class="card-sub">tCO₂e · Scope 1 + 2 + 3 · 12-month rolling</div>
+          </div>
+        </div>
+        <div class="chart-container">
+          <div class="trend-chart-wrap" id="env-trend-wrap">
+            <div style="height:200px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px">Loading…</div>
+          </div>
+          <div class="trend-tooltip" id="env-trend-tooltip"></div>
+        </div>
+      </div>
+      <div style="margin-top:12px">
+        <a href="/" class="btn btn-outline" style="font-size:13px">+ Add emissions data →</a>
+      </div>
+    </div>
+
+    <!-- WATER TAB -->
+    <div id="env-tab-water" class="env-tab-panel" style="display:none">
+      <div id="env-water-panels"></div>
+      <div id="env-water-toast-container" class="sc-toast-container"></div>
+    </div>
+
+    <!-- WASTE TAB -->
+    <div id="env-tab-waste" class="env-tab-panel" style="display:none">
+      <div id="env-waste-panels"></div>
+      <div id="env-waste-toast-container" class="sc-toast-container"></div>
+    </div>
+
+  </main>
+</div>
+
+<script src="js/environment.js"></script>
+</body>
+</html>

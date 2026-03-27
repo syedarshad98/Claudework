@@ -35,10 +35,30 @@ router.get('/', async (req, res) => {
     const aligned      = parseInt(alignedRow.rows[0].cnt);
     const partial      = parseInt(partialRow.rows[0].cnt);
 
-    // Environmental: data completeness (max 40) + framework alignment (max 30) = max 70
+    // Environmental base: data completeness (max 40) + framework alignment (max 20) = max 60
     const dataScore = Math.min(40, Math.round(totalEntries / 25 * 40));
-    const fwScore   = Math.min(30, Math.round(aligned * 7.5 + partial * 3.75));
-    const envScore  = dataScore + fwScore;
+    const fwScore   = Math.min(20, Math.round(aligned * 5 + partial * 2.5));
+    const baseEnv   = Math.min(60, dataScore + fwScore);
+
+    // +5 if water_metrics data exists for this company
+    let waterScore = 0;
+    try {
+      const wRow = await db.query(
+        'SELECT 1 FROM water_metrics WHERE company_id = $1 LIMIT 1', [companyId]
+      );
+      if (wRow.rows.length) waterScore = 5;
+    } catch (_) { /* table may not exist yet */ }
+
+    // +5 if waste_metrics data exists for this company
+    let wasteScore = 0;
+    try {
+      const wsRow = await db.query(
+        'SELECT 1 FROM waste_metrics WHERE company_id = $1 LIMIT 1', [companyId]
+      );
+      if (wsRow.rows.length) wasteScore = 5;
+    } catch (_) { /* table may not exist yet */ }
+
+    const envScore = Math.min(70, baseEnv + waterScore + wasteScore);
 
     // Social +15 if any social_metrics rows exist for this company
     let socialScore = 0;

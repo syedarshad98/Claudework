@@ -57,8 +57,40 @@ router.get('/', requireRole('admin', 'editor'), async (req, res) => {
     const aligned   = frameworks.filter(f => f.status === 'aligned').length;
     const partial   = frameworks.filter(f => f.status === 'partial').length;
     const dataScore = Math.min(40, Math.round(entries / 25 * 40));
-    const fwScore   = Math.min(30, Math.round(aligned * 7.5 + partial * 3.75));
-    const envScore  = dataScore + fwScore;
+    const fwScore   = Math.min(20, Math.round(aligned * 5 + partial * 2.5));
+    const baseEnv   = Math.min(60, dataScore + fwScore);
+
+    let waterScore = 0;
+    let waterData  = null;
+    try {
+      const wRow = await db.query('SELECT 1 FROM water_metrics WHERE company_id=$1 LIMIT 1', [companyId]);
+      if (wRow.rows.length) {
+        waterScore = 5;
+        const wPeriod = await db.query('SELECT period FROM water_metrics WHERE company_id=$1 ORDER BY period DESC LIMIT 1', [companyId]);
+        if (wPeriod.rows.length) {
+          const wp = wPeriod.rows[0].period;
+          const wMetrics = await db.query('SELECT category, metric_key, metric_value FROM water_metrics WHERE company_id=$1 AND period=$2', [companyId, wp]);
+          waterData = { period: wp, rows: wMetrics.rows };
+        }
+      }
+    } catch (_) { /* table may not exist yet */ }
+
+    let wasteScore = 0;
+    let wasteData  = null;
+    try {
+      const wsRow = await db.query('SELECT 1 FROM waste_metrics WHERE company_id=$1 LIMIT 1', [companyId]);
+      if (wsRow.rows.length) {
+        wasteScore = 5;
+        const wsPeriod = await db.query('SELECT period FROM waste_metrics WHERE company_id=$1 ORDER BY period DESC LIMIT 1', [companyId]);
+        if (wsPeriod.rows.length) {
+          const wsp = wsPeriod.rows[0].period;
+          const wsMetrics = await db.query('SELECT category, metric_key, metric_value FROM waste_metrics WHERE company_id=$1 AND period=$2', [companyId, wsp]);
+          wasteData = { period: wsp, rows: wsMetrics.rows };
+        }
+      }
+    } catch (_) { /* table may not exist yet */ }
+
+    const envScore = Math.min(70, baseEnv + waterScore + wasteScore);
 
     let socialScore = 0;
     let socialData  = null;
@@ -199,6 +231,49 @@ router.get('/', requireRole('admin', 'editor'), async (req, res) => {
            .text(lbl, 60, rowY + 8, { align: 'right', width: WIDTH - 20 });
         doc.moveDown(1.4);
       });
+    }
+
+    // ── Water & Waste Metrics ─────────────────────────────────────────────
+    doc.moveDown(2);
+    doc.fillColor(DARK).font('Helvetica-Bold').fontSize(14).text('Water & Waste');
+    doc.moveDown(0.4);
+
+    const WATER_BLUE = '#1e6a9f';
+    const WASTE_GREEN = '#2d7a4f';
+
+    if ((!waterData || !waterData.rows.length) && (!wasteData || !wasteData.rows.length)) {
+      doc.fillColor(GREY).font('Helvetica').fontSize(10)
+         .text('No water/waste data recorded for this period.');
+    } else {
+      if (waterData && waterData.rows.length) {
+        doc.fillColor(GREY).font('Helvetica').fontSize(9).text(`Water — Period: ${waterData.period}`);
+        doc.moveDown(0.3);
+        for (const r of waterData.rows) {
+          const val = r.metric_value !== null ? parseFloat(r.metric_value).toLocaleString() : '—';
+          const rowY = doc.y;
+          doc.rect(50, rowY, WIDTH, 20).fill(LIGHT).stroke('#e5e7eb');
+          doc.fillColor(DARK).font('Helvetica').fontSize(9)
+             .text(r.metric_key.replace(/_/g, ' '), 60, rowY + 6, { width: WIDTH * 0.6 });
+          doc.fillColor(WATER_BLUE).font('Helvetica-Bold').fontSize(9)
+             .text(val, 60, rowY + 6, { align: 'right', width: WIDTH - 20 });
+          doc.moveDown(1.1);
+        }
+        doc.moveDown(0.3);
+      }
+      if (wasteData && wasteData.rows.length) {
+        doc.fillColor(GREY).font('Helvetica').fontSize(9).text(`Waste — Period: ${wasteData.period}`);
+        doc.moveDown(0.3);
+        for (const r of wasteData.rows) {
+          const val = r.metric_value !== null ? parseFloat(r.metric_value).toLocaleString() : '—';
+          const rowY = doc.y;
+          doc.rect(50, rowY, WIDTH, 20).fill(LIGHT).stroke('#e5e7eb');
+          doc.fillColor(DARK).font('Helvetica').fontSize(9)
+             .text(r.metric_key.replace(/_/g, ' '), 60, rowY + 6, { width: WIDTH * 0.6 });
+          doc.fillColor(WASTE_GREEN).font('Helvetica-Bold').fontSize(9)
+             .text(val, 60, rowY + 6, { align: 'right', width: WIDTH - 20 });
+          doc.moveDown(1.1);
+        }
+      }
     }
 
     // ── Social Metrics ────────────────────────────────────────────────────
