@@ -24,7 +24,8 @@ router.get('/status', async (req, res) => {
       `SELECT name, industry, country, employee_count,
               financial_year_start, reduction_target_pct,
               target_year, alignment_standard, onboarding_complete,
-              industry_sector, annual_revenue_gbp_m
+              industry_sector, annual_revenue_gbp_m,
+              COALESCE(is_demo, FALSE) AS is_demo
          FROM companies WHERE id = $1`,
       [req.companyId]
     );
@@ -38,8 +39,11 @@ router.get('/status', async (req, res) => {
       db.query('SELECT framework, status FROM framework_status WHERE company_id = $1 ORDER BY framework',      [req.companyId]),
     ]);
 
+    // Demo accounts always appear as incomplete so the guide re-runs on every login
+    const onboardingComplete = company.is_demo ? false : company.onboarding_complete;
+
     res.json({
-      onboardingComplete: company.onboarding_complete,
+      onboardingComplete,
       profile: {
         name:                company.name,
         industry:            company.industry,

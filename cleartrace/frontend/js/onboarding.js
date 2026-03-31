@@ -4,9 +4,10 @@
    ───────────────────────────────────────────────────────────────────────────── */
 
 // ── Auth guard ────────────────────────────────────────────────────────────────
-const token = localStorage.getItem('ct_token');
+const token   = localStorage.getItem('ct_token');
 if (!token) window.location.replace('/login.html');
 
+const IS_DEMO = localStorage.getItem('ct_demo') === 'true';
 const COMPANY = localStorage.getItem('ct_company') || '';
 document.getElementById('ob-company-name').textContent = COMPANY;
 
@@ -234,6 +235,12 @@ async function saveStep(step) {
 
 // ── Complete ──────────────────────────────────────────────────────────────────
 async function completeOnboarding() {
+  // Demo accounts: skip the API call so onboarding_complete stays false
+  // in the DB and the guide replays on the next login
+  if (IS_DEMO) {
+    window.location.replace('/');
+    return;
+  }
   const res = await api('POST', '/api/onboarding/complete');
   if (!res || !res.ok) return;
   localStorage.setItem('ct_onboarding', 'complete');
@@ -270,11 +277,26 @@ backBtn.addEventListener('click', () => {
 });
 
 skipLink.addEventListener('click', async () => {
+  if (IS_DEMO) {
+    window.location.replace('/');
+    return;
+  }
   if (!confirm('Skip setup? You can complete it later from your dashboard settings.')) return;
   await api('POST', '/api/onboarding/complete');
   localStorage.setItem('ct_onboarding', 'complete');
   window.location.replace('/');
 });
+
+// ── Demo: inject per-panel "Skip to dashboard" links ─────────────────────────
+if (IS_DEMO) {
+  document.querySelectorAll('.ob-panel').forEach(function (panel) {
+    var skip = document.createElement('div');
+    skip.className   = 'ob-demo-skip';
+    skip.textContent = 'Skip to dashboard →';
+    skip.addEventListener('click', function () { window.location.replace('/'); });
+    panel.appendChild(skip);
+  });
+}
 
 // ── Pre-fill from saved data ──────────────────────────────────────────────────
 async function prefill() {

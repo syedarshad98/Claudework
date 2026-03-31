@@ -73,7 +73,8 @@ loginForm.addEventListener('submit', async (e) => {
     }
 
     storeSession(data);
-    const dest = data.onboardingComplete ? '/' : '/onboarding.html';
+    // Demo accounts always go through the onboarding guide on every login
+    const dest = data.isDemo ? '/onboarding.html' : (data.onboardingComplete ? '/' : '/onboarding.html');
     window.location.replace(dest);
   } catch {
     showError('Network error — please try again');

@@ -1075,6 +1075,18 @@ textarea.form-input {
 
 .ob-skip:hover { color: rgba(255,255,255,0.60); }
 
+.ob-demo-skip {
+  text-align: center;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+.ob-demo-skip:hover { color: var(--text); text-decoration: underline; }
+
 /* ── Main panel ───────────────────────────────────────────────────────────── */
 .ob-main {
   margin-left: 280px;
