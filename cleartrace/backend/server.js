@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
+const fs      = require('fs');
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -47,12 +48,36 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`ClearTrace server running → http://localhost:${PORT}`);
+// ── Startup: run idempotent migrations, then begin listening ─────────────────
+const db = require('./db/database');
 
-  if (process.env.NODE_ENV !== 'test') {
-    const db = require('./db/database');
-    const { seedDemo } = require('./scripts/seed-demo');
-    seedDemo(db).catch(err => console.error('Demo seed skipped:', err.message));
+// Migrations that must exist before any request is served.
+// All files use IF NOT EXISTS so they are safe to re-run on every boot.
+const STARTUP_MIGRATIONS = [
+  'demo_migration.sql',
+];
+
+async function startup() {
+  for (const file of STARTUP_MIGRATIONS) {
+    const filePath = path.join(__dirname, 'db', file);
+    if (!fs.existsSync(filePath)) continue;
+    try {
+      await db.query(fs.readFileSync(filePath, 'utf8'));
+      console.log(`✓ Migration applied: ${file}`);
+    } catch (err) {
+      // Log but don't abort — the server can still serve non-affected routes
+      console.error(`Migration warning (${file}):`, err.message);
+    }
   }
-});
+
+  app.listen(PORT, () => {
+    console.log(`ClearTrace server running → http://localhost:${PORT}`);
+
+    if (process.env.NODE_ENV !== 'test') {
+      const { seedDemo } = require('./scripts/seed-demo');
+      seedDemo(db).catch(err => console.error('Demo seed skipped:', err.message));
+    }
+  });
+}
+
+startup();

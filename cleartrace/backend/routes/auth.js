@@ -108,7 +108,7 @@ router.post('/login', async (req, res) => {
       email:              email.toLowerCase().trim(),
       role:               user.role,
       onboardingComplete: user.onboarding_complete,
-      isDemo:             user.is_demo,
+      isDemo:             user.is_demo || false,
     });
   } catch (err) {
     console.error('Login error:', err.message);
