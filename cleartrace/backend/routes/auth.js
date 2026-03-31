@@ -83,7 +83,8 @@ router.post('/login', async (req, res) => {
     const result = await db.query(
       `SELECT u.id, u.password_hash, u.role, u.company_id,
               c.name AS company_name,
-              COALESCE(c.onboarding_complete, FALSE) AS onboarding_complete
+              COALESCE(c.onboarding_complete, FALSE) AS onboarding_complete,
+              COALESCE(c.is_demo, FALSE) AS is_demo
          FROM users u
          JOIN companies c ON c.id = u.company_id
         WHERE u.email = $1`,
@@ -107,6 +108,7 @@ router.post('/login', async (req, res) => {
       email:              email.toLowerCase().trim(),
       role:               user.role,
       onboardingComplete: user.onboarding_complete,
+      isDemo:             user.is_demo,
     });
   } catch (err) {
     console.error('Login error:', err.message);

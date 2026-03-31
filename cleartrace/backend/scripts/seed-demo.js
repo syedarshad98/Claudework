@@ -64,6 +64,7 @@ async function runMigrations(client) {
     'sg_migration.sql',
     'env_migration.sql',
     'team_migration.sql',
+    'demo_migration.sql',
   ];
   for (const file of migrationFiles) {
     const filePath = path.join(__dirname, '../db', file);

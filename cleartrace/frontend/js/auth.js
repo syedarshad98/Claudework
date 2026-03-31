@@ -44,6 +44,7 @@ function storeSession(data) {
   localStorage.setItem('ct_email',       data.email);
   localStorage.setItem('ct_role',        data.role);
   localStorage.setItem('ct_onboarding',  data.onboardingComplete ? 'complete' : 'pending');
+  localStorage.setItem('ct_demo',        data.isDemo ? 'true' : 'false');
 }
 
 // ── Login ─────────────────────────────────────────────────────────────────────
