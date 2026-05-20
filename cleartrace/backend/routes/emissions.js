@@ -95,10 +95,17 @@ router.post('/', requireRole('admin', 'editor'), async (req, res) => {
     return res.status(423).json({ error: `Period ${period} is locked. Contact an admin to unlock.` });
   }
 
-  const defra = lookupFactor(category);
+  const compRow = await db.query('SELECT jurisdiction FROM companies WHERE id=$1', [req.companyId]);
+  const jurisdiction = compRow.rows[0]?.jurisdiction || 'UK';
+
+  const factorResult = lookupFactor(category, { jurisdiction });
   let ef;
-  if (defra && !defra.custom && defra.factor != null) {
-    ef = defra.factor;
+  let factorSource = null;
+  let factorJurisdiction = null;
+  if (factorResult && !factorResult.custom && factorResult.factor != null) {
+    ef = factorResult.factor;
+    factorSource = factorResult.source || 'DEFRA 2023';
+    factorJurisdiction = factorResult.jurisdiction || 'UK';
   } else {
     ef = parseFloat(emission_factor) || 1.0;
   }
@@ -106,11 +113,11 @@ router.post('/', requireRole('admin', 'editor'), async (req, res) => {
   try {
     const result = await db.query(
       `INSERT INTO emissions_entries
-         (company_id, user_id, category, scope, amount, unit, period, emission_factor, source, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'manual',$9)
+         (company_id, user_id, category, scope, amount, unit, period, emission_factor, source, notes, factor_source, factor_jurisdiction)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'manual',$9,$10,$11)
        RETURNING *`,
       [req.companyId, req.userId, category, parseInt(scope),
-       parseFloat(amount), unit, period, ef, notes || null]
+       parseFloat(amount), unit, period, ef, notes || null, factorSource, factorJurisdiction]
     );
     const entry = result.rows[0];
 
@@ -158,31 +165,49 @@ router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
     return res.status(423).json({ error: `Target period ${newPeriod} is locked.`, locked: true });
   }
 
+  const compRowP = await db.query('SELECT jurisdiction FROM companies WHERE id=$1', [req.companyId]);
+  const jurisdictionP = compRowP.rows[0]?.jurisdiction || 'UK';
+
   let ef = parseFloat(oldEntry.emission_factor);
+  let factorSource = oldEntry.factor_source || null;
+  let factorJurisdiction = oldEntry.factor_jurisdiction || null;
+
   if (category && category !== oldEntry.category) {
-    const defra = lookupFactor(category);
-    ef = (defra && !defra.custom && defra.factor != null) ? defra.factor : (parseFloat(emission_factor) || ef);
+    const factorResult = lookupFactor(category, { jurisdiction: jurisdictionP });
+    if (factorResult && !factorResult.custom && factorResult.factor != null) {
+      ef = factorResult.factor;
+      factorSource = factorResult.source || 'DEFRA 2023';
+      factorJurisdiction = factorResult.jurisdiction || 'UK';
+    } else {
+      ef = parseFloat(emission_factor) || ef;
+      factorSource = null;
+      factorJurisdiction = null;
+    }
   } else if (emission_factor != null) {
     ef = parseFloat(emission_factor);
+    factorSource = null;
+    factorJurisdiction = null;
   }
 
   try {
     const result = await db.query(
       `UPDATE emissions_entries
-          SET category        = COALESCE($1, category),
-              scope           = COALESCE($2, scope),
-              amount          = COALESCE($3, amount),
-              unit            = COALESCE($4, unit),
-              period          = COALESCE($5, period),
-              emission_factor = $6,
-              notes           = COALESCE($7, notes)
+          SET category           = COALESCE($1, category),
+              scope              = COALESCE($2, scope),
+              amount             = COALESCE($3, amount),
+              unit               = COALESCE($4, unit),
+              period             = COALESCE($5, period),
+              emission_factor    = $6,
+              notes              = COALESCE($7, notes),
+              factor_source      = $10,
+              factor_jurisdiction = $11
         WHERE id=$8 AND company_id=$9
         RETURNING *`,
       [category || null, scope != null ? parseInt(scope) : null,
        amount != null ? parseFloat(amount) : null, unit || null,
        period || null, ef,
        notes !== undefined ? notes : null,
-       id, req.companyId]
+       id, req.companyId, factorSource, factorJurisdiction]
     );
     const entry = result.rows[0];
 

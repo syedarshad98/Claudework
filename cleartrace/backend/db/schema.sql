@@ -48,6 +48,11 @@ CREATE TABLE IF NOT EXISTS framework_status (
   UNIQUE (company_id, framework)
 );
 
+-- Multi-jurisdiction emission factor support
+ALTER TABLE companies        ADD COLUMN IF NOT EXISTS jurisdiction        TEXT NOT NULL DEFAULT 'UK';
+ALTER TABLE emissions_entries ADD COLUMN IF NOT EXISTS factor_source      TEXT;
+ALTER TABLE emissions_entries ADD COLUMN IF NOT EXISTS factor_jurisdiction TEXT;
+
 -- Indexes for common query patterns
 CREATE INDEX IF NOT EXISTS idx_emissions_company     ON emissions_entries(company_id);
 CREATE INDEX IF NOT EXISTS idx_emissions_period      ON emissions_entries(period);

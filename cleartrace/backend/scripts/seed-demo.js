@@ -172,10 +172,10 @@ async function seedDemo(db) {
       const s1Amount = S1_CO2E[i] * 1000 / EF_S1;
       const r1 = await client.query(
         `INSERT INTO emissions_entries
-           (company_id, user_id, category, scope, amount, unit, period, emission_factor, source)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           (company_id, user_id, category, scope, amount, unit, period, emission_factor, source, factor_source, factor_jurisdiction)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
          ON CONFLICT DO NOTHING`,
-        [companyId, enteredBy, 'Natural Gas', 1, s1Amount.toFixed(4), 'm³', period, EF_S1, 'manual']
+        [companyId, enteredBy, 'Natural Gas', 1, s1Amount.toFixed(4), 'm³', period, EF_S1, 'manual', 'DEFRA 2023', 'UK']
       );
       if (r1.rowCount) emissionsInserted++;
 
@@ -183,10 +183,10 @@ async function seedDemo(db) {
       const s2Amount = S2_CO2E[i] * 1000 / EF_S2;
       const r2 = await client.query(
         `INSERT INTO emissions_entries
-           (company_id, user_id, category, scope, amount, unit, period, emission_factor, source)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           (company_id, user_id, category, scope, amount, unit, period, emission_factor, source, factor_source, factor_jurisdiction)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
          ON CONFLICT DO NOTHING`,
-        [companyId, enteredBy, 'Grid Electricity (UK)', 2, s2Amount.toFixed(4), 'kWh', period, EF_S2, 'manual']
+        [companyId, enteredBy, 'Grid Electricity (UK)', 2, s2Amount.toFixed(4), 'kWh', period, EF_S2, 'manual', 'DEFRA 2023', 'UK']
       );
       if (r2.rowCount) emissionsInserted++;
 
@@ -194,10 +194,10 @@ async function seedDemo(db) {
       const s3Amount = S3_CO2E[i] * 1000 / EF_S3;
       const r3 = await client.query(
         `INSERT INTO emissions_entries
-           (company_id, user_id, category, scope, amount, unit, period, emission_factor, source)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           (company_id, user_id, category, scope, amount, unit, period, emission_factor, source, factor_source, factor_jurisdiction)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
          ON CONFLICT DO NOTHING`,
-        [companyId, enteredBy, 'Business Travel (Car)', 3, s3Amount.toFixed(4), 'km', period, EF_S3, 'manual']
+        [companyId, enteredBy, 'Business Travel (Car)', 3, s3Amount.toFixed(4), 'km', period, EF_S3, 'manual', 'DEFRA 2023', 'UK']
       );
       if (r3.rowCount) emissionsInserted++;
     }

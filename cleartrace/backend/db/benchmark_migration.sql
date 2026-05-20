@@ -1,3 +1,8 @@
+-- NOTE: Benchmark data sourced from DEFRA 2023 (UK grid).
+-- For Indian client benchmarking, CEA-based benchmarks are required.
+-- CEA India grid EF: 0.7117 tCO2/MWh (V21.0, FY 2024-25).
+-- Indian benchmarks to be added in a separate migration.
+
 -- ClearTrace — Benchmarking migration
 -- Extends companies, creates benchmark_data table and seeds it
 

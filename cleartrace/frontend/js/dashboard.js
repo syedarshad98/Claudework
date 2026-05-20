@@ -476,7 +476,7 @@ const now = new Date();
 document.getElementById('f-period').value =
   `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-// ── DEFRA 2023 emission factors ────────────────────────────────────────────
+// ── Emission factors ───────────────────────────────────────────────────────
 // Mirrors cleartrace/backend/db/emission_factors.js — keep in sync.
 // factor = kg CO₂e per unit. custom:true means no standard factor — user supplies.
 const DEFRA_FACTORS = {
@@ -510,11 +510,45 @@ const DEFRA_FACTORS = {
   'Other Scope 3':                       { factor: null,    unit: 'kg',    scope: 3, custom: true },
 };
 
-function applyDefraFactor(category) {
-  const entry = DEFRA_FACTORS[category];
+// CEA India grid factors — mirrors cleartrace/backend/db/emission_factors.js — keep in sync.
+const CEA_FACTORS = {
+  versions: {
+    'V21.0': { fy: '2024-25', published: '2025-11', gridEF: 0.7117 },
+    'V20.0': { fy: '2023-24', published: '2025-01', gridEF: 0.727  },
+    'V19.0': { fy: '2022-23', published: '2024-01', gridEF: 0.716  },
+  },
+  latest: 'V21.0',
+  source: 'Central Electricity Authority, CO₂ Baseline Database for the Indian Power Sector',
+  scope: 2,
+  unit: 'tCO2/MWh',
+  applicability: 'India grid-connected electricity (location-based, GHG Protocol Scope 2)',
+};
+
+const GRID_ELECTRICITY_CATEGORIES = new Set(['Grid Electricity (UK)', 'Grid Electricity']);
+
+function applyEmissionFactor(category, jurisdiction = 'UK', ceaVersion = 'V21.0') {
   const defraGroup  = document.getElementById('defra-ef-group');
   const customGroup = document.getElementById('custom-ef-group');
   const badge       = document.getElementById('defra-ef-badge');
+
+  // CEA path: Indian jurisdiction + grid electricity category
+  if (jurisdiction === 'IN' && GRID_ELECTRICITY_CATEGORIES.has(category)) {
+    const ver = CEA_FACTORS.versions[ceaVersion] || CEA_FACTORS.versions[CEA_FACTORS.latest];
+    const resolvedVersion = CEA_FACTORS.versions[ceaVersion] ? ceaVersion : CEA_FACTORS.latest;
+    document.getElementById('f-scope').value = '2';
+    const unitSel = document.getElementById('f-unit');
+    for (const opt of unitSel.options) {
+      if (opt.value === 'kWh') { unitSel.value = 'kWh'; break; }
+    }
+    badge.innerHTML =
+      `<span>&#x2705; <strong>${ver.gridEF}</strong> tCO₂/MWh</span>` +
+      `<span class="defra-source">CEA ${resolvedVersion} — FY ${ver.fy} (${ver.gridEF} tCO₂/MWh)</span>`;
+    defraGroup.style.display  = '';
+    customGroup.style.display = 'none';
+    return;
+  }
+
+  const entry = DEFRA_FACTORS[category];
 
   if (!entry) {
     // Unknown category — show manual EF input
@@ -546,8 +580,11 @@ function applyDefraFactor(category) {
   }
 }
 
+// Backward-compatible alias
+const applyDefraFactor = applyEmissionFactor;
+
 document.getElementById('f-category').addEventListener('change', (e) => {
-  applyDefraFactor(e.target.value);
+  applyEmissionFactor(e.target.value);
 });
 
 document.getElementById('entry-form').addEventListener('submit', async (e) => {

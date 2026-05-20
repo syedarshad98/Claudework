@@ -84,15 +84,15 @@ async function seed() {
       // Add slight monthly variance ±10%
       const variance = 0.9 + Math.random() * 0.2;
       const amount   = Math.round(baseAmounts[cat] * variance * 10) / 10;
-      entries.push([companyId, userId, cat, scope, amount, units[cat], period, factors[cat], 'upload']);
+      entries.push([companyId, userId, cat, scope, amount, units[cat], period, factors[cat], 'upload', 'DEFRA 2023', 'UK']);
     }
   }
 
   for (const e of entries) {
     await db.query(
       `INSERT INTO emissions_entries
-         (company_id, user_id, category, scope, amount, unit, period, emission_factor, source)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+         (company_id, user_id, category, scope, amount, unit, period, emission_factor, source, factor_source, factor_jurisdiction)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
       e
     );
   }

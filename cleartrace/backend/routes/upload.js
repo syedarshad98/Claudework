@@ -23,6 +23,9 @@ const upload = multer({
 router.post('/', requireRole('admin', 'editor'), upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
+  const compRow = await db.query('SELECT jurisdiction FROM companies WHERE id=$1', [req.companyId]);
+  const jurisdiction = compRow.rows[0]?.jurisdiction || 'UK';
+
   const ext = req.file.originalname.split('.').pop().toLowerCase();
   let rows  = [];
 
@@ -68,14 +71,22 @@ router.post('/', requireRole('admin', 'editor'), upload.single('file'), async (r
     const notes          = String(r.notes           || '').trim() || null;
 
     // Resolve emission factor: if the spreadsheet provides one, use it.
-    // Otherwise auto-apply the DEFRA factor for the category (if known).
+    // Otherwise auto-apply the standard factor for the category (DEFRA or CEA by jurisdiction).
     const efProvided = r.emission_factor != null && String(r.emission_factor).trim() !== '';
     let ef;
+    let factorSource = null;
+    let factorJurisdiction = null;
     if (efProvided) {
       ef = parseFloat(String(r.emission_factor).trim()) || 1.0;
     } else {
-      const defra = lookupFactor(category);
-      ef = (defra && !defra.custom && defra.factor != null) ? defra.factor : 1.0;
+      const factorResult = lookupFactor(category, { jurisdiction });
+      if (factorResult && !factorResult.custom && factorResult.factor != null) {
+        ef = factorResult.factor;
+        factorSource = factorResult.source || 'DEFRA 2023';
+        factorJurisdiction = factorResult.jurisdiction || 'UK';
+      } else {
+        ef = 1.0;
+      }
     }
 
     if (!category || !scopeRaw || !amountRaw || !unit || !period) {
@@ -102,10 +113,10 @@ router.post('/', requireRole('admin', 'editor'), upload.single('file'), async (r
     try {
       const result = await db.query(
         `INSERT INTO emissions_entries
-           (company_id, user_id, category, scope, amount, unit, period, emission_factor, source, notes)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'upload',$9)
+           (company_id, user_id, category, scope, amount, unit, period, emission_factor, source, notes, factor_source, factor_jurisdiction)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'upload',$9,$10,$11)
          RETURNING id`,
-        [req.companyId, req.userId, category, scope, amount, unit, period, ef, notes]
+        [req.companyId, req.userId, category, scope, amount, unit, period, ef, notes, factorSource, factorJurisdiction]
       );
       inserted.push(result.rows[0].id);
     } catch (dbErr) {

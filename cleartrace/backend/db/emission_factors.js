@@ -54,18 +54,49 @@ const LEGACY_ALIASES = {
   'Refrigerants':        'Refrigerants (R-134a)',
 };
 
+const CEA_FACTORS = {
+  versions: {
+    'V21.0': { fy: '2024-25', published: '2025-11', gridEF: 0.7117 },
+    'V20.0': { fy: '2023-24', published: '2025-01', gridEF: 0.727  },
+    'V19.0': { fy: '2022-23', published: '2024-01', gridEF: 0.716  },
+  },
+  latest: 'V21.0',
+  source: 'Central Electricity Authority, CO₂ Baseline Database for the Indian Power Sector',
+  scope: 2,
+  unit: 'tCO2/MWh',
+  applicability: 'India grid-connected electricity (location-based, GHG Protocol Scope 2)',
+};
+
 /**
- * Look up the DEFRA entry for a given category name.
+ * Look up the emission factor entry for a given category name and jurisdiction.
  * Returns null when no match is found.
  * @param {string} category
- * @returns {{ factor: number|null, unit: string, scope: number, custom?: boolean } | null}
+ * @param {{ jurisdiction?: 'UK'|'IN', ceaVersion?: string }} [options]
+ * @returns {{ factor: number|null, unit: string, scope?: number, custom?: boolean, source?: string, jurisdiction?: string } | null}
  */
-function lookupFactor(category) {
+function lookupFactor(category, options = {}) {
+  const { jurisdiction = 'UK', ceaVersion = CEA_FACTORS.latest } = options;
   const cat = (category || '').trim();
+
+  if (jurisdiction === 'IN') {
+    // Resolve canonical DEFRA name to detect grid electricity categories
+    const canonical = DEFRA_FACTORS[cat] ? cat : (LEGACY_ALIASES[cat] || cat);
+    if (canonical === 'Grid Electricity (UK)') {
+      const ver = CEA_FACTORS.versions[ceaVersion] || CEA_FACTORS.versions[CEA_FACTORS.latest];
+      const resolvedVersion = CEA_FACTORS.versions[ceaVersion] ? ceaVersion : CEA_FACTORS.latest;
+      return {
+        factor: ver.gridEF,
+        source: `CEA ${resolvedVersion} — FY ${ver.fy}`,
+        jurisdiction: 'IN',
+        unit: 'tCO2/MWh',
+      };
+    }
+  }
+
   if (DEFRA_FACTORS[cat]) return DEFRA_FACTORS[cat];
   const alias = LEGACY_ALIASES[cat];
   if (alias && DEFRA_FACTORS[alias]) return DEFRA_FACTORS[alias];
   return null;
 }
 
-module.exports = { DEFRA_FACTORS, LEGACY_ALIASES, lookupFactor };
+module.exports = { DEFRA_FACTORS, CEA_FACTORS, LEGACY_ALIASES, lookupFactor };
