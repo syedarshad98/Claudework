@@ -65,6 +65,7 @@ async function runMigrations(client) {
     'env_migration.sql',
     'team_migration.sql',
     'demo_migration.sql',
+    'brsr_migration.sql',
   ];
   for (const file of migrationFiles) {
     const filePath = path.join(__dirname, '../db', file);
@@ -446,7 +447,16 @@ async function seedDemo(db) {
     }
     console.log(`✓ ${baseInserted} baseline emission records inserted (2022 total: 487.2 tCO₂e)`);
 
-    // ── 13. Company target — update companies row ────────────────────────────
+    // ── 13. BRSR submission stub (FY 2024-25, in_review) ────────────────────
+    const brsrRes = await client.query(
+      `INSERT INTO brsr_submissions (company_id, financial_year, status, submitted_by)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (company_id, financial_year) DO NOTHING`,
+      [companyId, '2024-25', 'in_review', adminId]
+    );
+    console.log(`✓ BRSR submission created for FY 2024-25${brsrRes.rowCount === 0 ? ' (already existed)' : ''}`);
+
+    // ── 14. Company target — update companies row ────────────────────────────
     // target_year and reduction_target_pct were set on company insert.
     // Ensure they're correct even if company already existed.
     await client.query(

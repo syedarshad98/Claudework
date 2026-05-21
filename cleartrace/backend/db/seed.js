@@ -97,6 +97,14 @@ async function seed() {
     );
   }
 
+  // Seed BRSR submission stub
+  await db.query(
+    `INSERT INTO brsr_submissions (company_id, financial_year, status)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (company_id, financial_year) DO NOTHING`,
+    [companyId, '2025-26', 'draft']
+  );
+
   // Seed framework statuses
   const frameworks = [
     { framework: 'GRI',   status: 'partial',  details: '8 of 13 disclosures complete' },
