@@ -102,9 +102,13 @@
             <option value="">Select sector…</option>
           </select>
         </div>
-        <div class="ob-field">
+        <div class="ob-field" id="sf-revenue-gbp-wrap">
           <label for="sf-revenue">Annual Revenue (£m) <span class="al-muted" style="font-weight:400;font-size:0.78rem">Optional — enables intensity benchmarking</span></label>
           <input type="number" id="sf-revenue" min="0" step="0.1" placeholder="e.g. 8.5">
+        </div>
+        <div class="ob-field" id="sf-revenue-inr-wrap" style="display:none">
+          <label for="sf-revenue-inr">Annual Revenue (₹ Crore) <span class="al-muted" style="font-weight:400;font-size:0.78rem">Optional — enables intensity benchmarking</span></label>
+          <input type="number" id="sf-revenue-inr" min="0" step="0.1" placeholder="e.g. 120.5">
         </div>
         <div class="ob-field bm-sector-form-actions">
           <label>&nbsp;</label>
@@ -123,6 +127,9 @@
       <span class="bm-sector-year" id="sector-data-year"></span>
       <button class="bm-change-sector" id="change-sector-btn" style="display:none">✎ Change</button>
     </div>
+
+    <!-- Data methodology disclosure (shown for CEA-derived or pending benchmark rows) -->
+    <div id="bm-disclosure" style="display:none"></div>
 
     <!-- No-emissions empty state (shown when sector set but no data) -->
     <div class="bm-no-data" id="no-data-banner" style="display:none">

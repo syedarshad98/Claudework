@@ -18,7 +18,7 @@ async function ensureMigrated() {
 // Admin only. Updates industry_sector and optional annual_revenue_gbp_m.
 router.patch('/sector', requireRole('admin'), async (req, res) => {
   await ensureMigrated();
-  const { industry_sector, annual_revenue_gbp_m } = req.body;
+  const { industry_sector, annual_revenue_gbp_m, annual_revenue_inr_cr } = req.body;
 
   if (!industry_sector) {
     return res.status(400).json({ error: 'industry_sector is required' });
@@ -27,10 +27,14 @@ router.patch('/sector', requireRole('admin'), async (req, res) => {
   try {
     await db.query(
       `UPDATE companies
-          SET industry_sector      = $1,
-              annual_revenue_gbp_m = COALESCE($2, annual_revenue_gbp_m)
-        WHERE id = $3`,
-      [industry_sector, annual_revenue_gbp_m ?? null, req.companyId]
+          SET industry_sector       = $1,
+              annual_revenue_gbp_m  = COALESCE($2, annual_revenue_gbp_m),
+              annual_revenue_inr_cr = COALESCE($3, annual_revenue_inr_cr)
+        WHERE id = $4`,
+      [industry_sector,
+       annual_revenue_gbp_m  != null ? parseFloat(annual_revenue_gbp_m)  : null,
+       annual_revenue_inr_cr != null ? parseFloat(annual_revenue_inr_cr) : null,
+       req.companyId]
     );
     res.json({ ok: true });
   } catch (err) {

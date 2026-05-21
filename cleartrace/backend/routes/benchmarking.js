@@ -16,15 +16,21 @@ async function ensureMigrated() {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function currentYear() { return new Date().getFullYear(); }
 
-// Build a "total" benchmark row by summing the three scope rows
+// Build a "total" benchmark row by summing the three scope rows.
+// Rows with all-NULL intensities and absolutes (pending_verification) are excluded
+// from the sum to avoid presenting zeroes as real benchmarks.
 function sumBenchmarks(rows) {
   if (!rows.length) return null;
+  const activeRows = rows.filter(r => r.p50_intensity != null || r.p50_absolute != null);
+  if (!activeRows.length) return null;
+
   const sum = {
     p25_intensity: 0, p50_intensity: 0, p75_intensity: 0, p90_intensity: 0,
     p25_absolute:  0, p50_absolute:  0, p75_absolute:  0, p90_absolute:  0,
     sources: new Set(), years: new Set(),
+    isPartial: activeRows.length < rows.length,
   };
-  for (const r of rows) {
+  for (const r of activeRows) {
     sum.p25_intensity += parseFloat(r.p25_intensity || 0);
     sum.p50_intensity += parseFloat(r.p50_intensity || 0);
     sum.p75_intensity += parseFloat(r.p75_intensity || 0);
@@ -37,8 +43,7 @@ function sumBenchmarks(rows) {
     if (r.year)   sum.years.add(r.year);
   }
   sum.source = [...sum.sources].join(' / ');
-  sum.year   = Math.max(...sum.years);
-  // Round to 2 dp
+  sum.year   = sum.years.size ? Math.max(...sum.years) : null;
   ['p25_intensity','p50_intensity','p75_intensity','p90_intensity',
    'p25_absolute','p50_absolute','p75_absolute','p90_absolute'].forEach(k => {
     sum[k] = parseFloat(sum[k].toFixed(2));
@@ -85,20 +90,39 @@ router.get('/sectors', async (req, res) => {
 async function getCompanyBenchmarkData(companyId) {
   const year = currentYear();
 
-  // Company profile (sector, revenue, targets, baseline)
+  // Company profile — includes jurisdiction and both revenue fields
   const compRes = await db.query(
-    `SELECT industry_sector, annual_revenue_gbp_m,
-            reduction_target_pct, target_year, alignment_standard
+    `SELECT industry_sector, annual_revenue_gbp_m, annual_revenue_inr_cr,
+            jurisdiction, reduction_target_pct, target_year, alignment_standard
        FROM companies WHERE id = $1`,
     [companyId]
   );
-  const company = compRes.rows[0] || {};
+  const company     = compRes.rows[0] || {};
+  const jurisdiction = company.jurisdiction || 'UK';
 
   if (!company.industry_sector) {
     return { sector_required: true };
   }
 
-  // Company emissions this year
+  // Revenue — currency depends on jurisdiction.
+  // For Indian companies, use INR crore; skip intensity if that field is NULL.
+  let revenue = 0;
+  if (jurisdiction === 'IN') {
+    if (!company.annual_revenue_inr_cr) {
+      console.warn(
+        `[benchmarking] Company ${companyId} has jurisdiction=IN but annual_revenue_inr_cr ` +
+        `is NULL — intensity comparison will be skipped.`
+      );
+    }
+    revenue = parseFloat(company.annual_revenue_inr_cr) || 0;
+  } else {
+    revenue = parseFloat(company.annual_revenue_gbp_m) || 0;
+  }
+
+  // Company emissions this year.
+  // Part 4 scope-type fix: benchmark_data.scope stores strings ('scope1', 'scope2', 'scope3')
+  // while emissions_entries.scope is an integer (1, 2, 3).
+  // Cast applied in SQL: 'scope' || scope::TEXT produces the matching string key.
   const emissionsRes = await db.query(
     `SELECT scope, COALESCE(SUM(co2e_tonnes), 0) AS co2e
        FROM emissions_entries
@@ -108,11 +132,11 @@ async function getCompanyBenchmarkData(companyId) {
     [companyId, `${year}-%`]
   );
 
+  // scopeMap uses integer keys internally; the benchmark join uses 'scope' || scope::TEXT
   const scopeMap = { 1: 0, 2: 0, 3: 0 };
   for (const r of emissionsRes.rows) scopeMap[r.scope] = parseFloat(r.co2e);
 
   const totalCo2e = scopeMap[1] + scopeMap[2] + scopeMap[3];
-  const revenue   = parseFloat(company.annual_revenue_gbp_m) || 0;
   const intensity = revenue > 0 ? parseFloat((totalCo2e / revenue).toFixed(2)) : null;
 
   const scopeIntensity = {
@@ -130,22 +154,30 @@ async function getCompanyBenchmarkData(companyId) {
   for (const r of baselineRes.rows) baselineMap[r.scope] = parseFloat(r.co2e_tonnes);
   const baselineTotal = baselineMap[1] + baselineMap[2] + baselineMap[3];
 
-  // Benchmark rows for sector
+  // Benchmark rows — filtered by jurisdiction so UK companies get UK rows,
+  // Indian companies get IN rows (scope2 cea_derived + scope1/3 pending_verification).
   const bRes = await db.query(
     `SELECT scope, p25_intensity, p50_intensity, p75_intensity, p90_intensity,
-            p25_absolute, p50_absolute, p75_absolute, p90_absolute, source, year
+            p25_absolute, p50_absolute, p75_absolute, p90_absolute,
+            source, year, data_status, intensity_unit
        FROM benchmark_data
-      WHERE industry_sector = $1
+      WHERE industry_sector = $1 AND jurisdiction = $2
       ORDER BY scope`,
-    [company.industry_sector]
+    [company.industry_sector, jurisdiction]
   );
+
+  const dataStatuses = [...new Set(bRes.rows.map(r => r.data_status).filter(Boolean))];
 
   return {
     sector_required: false,
     year,
+    jurisdiction,
+    dataStatuses,
     company: {
       industry_sector:       company.industry_sector,
-      annual_revenue_gbp_m:  revenue || null,
+      jurisdiction,
+      annual_revenue_gbp_m:  company.annual_revenue_gbp_m  ? parseFloat(company.annual_revenue_gbp_m)  : null,
+      annual_revenue_inr_cr: company.annual_revenue_inr_cr ? parseFloat(company.annual_revenue_inr_cr) : null,
       scope1_co2e:           scopeMap[1],
       scope2_co2e:           scopeMap[2],
       scope3_co2e:           scopeMap[3],
@@ -170,7 +202,7 @@ router.get('/summary', async (req, res) => {
     const data = await getCompanyBenchmarkData(req.companyId);
     if (data.sector_required) return res.json({ sector_required: true });
 
-    const { company, benchmarkRows, baselineTotal, year } = data;
+    const { company, benchmarkRows, baselineTotal, year, dataStatuses, jurisdiction } = data;
     const total = sumBenchmarks(benchmarkRows);
 
     const benchmarkStatus_ = company.intensity != null
@@ -180,6 +212,8 @@ router.get('/summary', async (req, res) => {
     res.json({
       sector_required: false,
       year,
+      jurisdiction,
+      data_statuses: dataStatuses,
       company,
       baselineTotal,
       benchmarks: { total },
@@ -198,22 +232,27 @@ router.get('/breakdown', async (req, res) => {
     const data = await getCompanyBenchmarkData(req.companyId);
     if (data.sector_required) return res.json({ sector_required: true });
 
-    const { company, benchmarkRows, baselineTotal, year } = data;
+    const { company, benchmarkRows, baselineTotal, year, dataStatuses, jurisdiction } = data;
 
-    // Index benchmark rows by scope
+    // Index benchmark rows by scope string key (matches benchmark_data.scope format).
+    // Pending rows (all-NULL intensities) are included with null values so the
+    // frontend can show the correct "no data" state rather than zeroes.
+    // SQL scope-type cast reference: benchmark_data.scope = 'scope' || emissions_entries.scope::TEXT
     const scopeBenchmarks = {};
     for (const row of benchmarkRows) {
+      const isPending = row.p50_intensity == null && row.p50_absolute == null;
       scopeBenchmarks[row.scope] = {
-        p25_intensity: parseFloat(row.p25_intensity || 0),
-        p50_intensity: parseFloat(row.p50_intensity || 0),
-        p75_intensity: parseFloat(row.p75_intensity || 0),
-        p90_intensity: parseFloat(row.p90_intensity || 0),
-        p25_absolute:  parseFloat(row.p25_absolute  || 0),
-        p50_absolute:  parseFloat(row.p50_absolute  || 0),
-        p75_absolute:  parseFloat(row.p75_absolute  || 0),
-        p90_absolute:  parseFloat(row.p90_absolute  || 0),
-        source: row.source,
-        year:   row.year,
+        p25_intensity: isPending ? null : parseFloat(row.p25_intensity || 0),
+        p50_intensity: isPending ? null : parseFloat(row.p50_intensity || 0),
+        p75_intensity: isPending ? null : parseFloat(row.p75_intensity || 0),
+        p90_intensity: isPending ? null : parseFloat(row.p90_intensity || 0),
+        p25_absolute:  isPending ? null : parseFloat(row.p25_absolute  || 0),
+        p50_absolute:  isPending ? null : parseFloat(row.p50_absolute  || 0),
+        p75_absolute:  isPending ? null : parseFloat(row.p75_absolute  || 0),
+        p90_absolute:  isPending ? null : parseFloat(row.p90_absolute  || 0),
+        source:      row.source,
+        year:        row.year,
+        data_status: row.data_status,
       };
     }
 
@@ -233,6 +272,8 @@ router.get('/breakdown', async (req, res) => {
     res.json({
       sector_required: false,
       year,
+      jurisdiction,
+      data_statuses: dataStatuses,
       company,
       baselineTotal,
       benchmarks: scopeBenchmarks,

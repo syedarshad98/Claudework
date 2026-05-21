@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS framework_status (
 
 -- Multi-jurisdiction emission factor support
 ALTER TABLE companies        ADD COLUMN IF NOT EXISTS jurisdiction        TEXT NOT NULL DEFAULT 'UK';
+ALTER TABLE companies        ADD COLUMN IF NOT EXISTS annual_revenue_inr_cr NUMERIC(18,2);
 ALTER TABLE emissions_entries ADD COLUMN IF NOT EXISTS factor_source      TEXT;
 ALTER TABLE emissions_entries ADD COLUMN IF NOT EXISTS factor_jurisdiction TEXT;
 

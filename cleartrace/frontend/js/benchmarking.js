@@ -22,9 +22,10 @@ document.querySelectorAll('.nav-item[data-href]').forEach(el =>
 );
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let mode        = 'intensity'; // 'intensity' | 'absolute'
-let summaryData = null;
+let mode          = 'intensity'; // 'intensity' | 'absolute'
+let summaryData   = null;
 let breakdownData = null;
+let dataStatuses  = [];          // unique data_status values from current benchmark rows
 
 // ── API helper ────────────────────────────────────────────────────────────────
 async function api(method, path, body) {
@@ -48,7 +49,9 @@ function fmt(n, dp = 1) {
 }
 
 function unitLabel() {
-  return mode === 'intensity' ? 'tCO₂e / £1m' : 'tCO₂e';
+  if (mode !== 'intensity') return 'tCO₂e';
+  const jurisdiction = summaryData?.company?.jurisdiction || 'UK';
+  return jurisdiction === 'IN' ? 'tCO₂e / ₹1Cr' : 'tCO₂e / £1m';
 }
 
 function companyValue(co2eAbs, intensityVal) {
@@ -85,11 +88,19 @@ async function loadSectors() {
   });
 }
 
-function openSectorForm(currentSector, currentRevenue) {
-  const form = document.getElementById('sector-form');
+function openSectorForm(currentSector, currentRevenueGbp, currentRevenueInr) {
+  const form        = document.getElementById('sector-form');
+  const jurisdiction = summaryData?.company?.jurisdiction || 'UK';
+  const isIN        = jurisdiction === 'IN';
+
   form.style.display = '';
   if (currentSector) document.getElementById('sf-sector').value = currentSector;
-  if (currentRevenue) document.getElementById('sf-revenue').value = currentRevenue;
+
+  document.getElementById('sf-revenue-gbp-wrap').style.display = isIN ? 'none' : '';
+  document.getElementById('sf-revenue-inr-wrap').style.display = isIN ? '' : 'none';
+
+  if (currentRevenueGbp) document.getElementById('sf-revenue').value = currentRevenueGbp;
+  if (currentRevenueInr) document.getElementById('sf-revenue-inr').value = currentRevenueInr;
   document.getElementById('sf-error').style.display = 'none';
 }
 
@@ -98,10 +109,18 @@ function closeSectorForm() {
 }
 
 document.getElementById('open-sector-settings').addEventListener('click', () => {
-  openSectorForm(summaryData?.company?.industry_sector, summaryData?.company?.annual_revenue_gbp_m);
+  openSectorForm(
+    summaryData?.company?.industry_sector,
+    summaryData?.company?.annual_revenue_gbp_m,
+    summaryData?.company?.annual_revenue_inr_cr
+  );
 });
 document.getElementById('change-sector-btn').addEventListener('click', () => {
-  openSectorForm(summaryData?.company?.industry_sector, summaryData?.company?.annual_revenue_gbp_m);
+  openSectorForm(
+    summaryData?.company?.industry_sector,
+    summaryData?.company?.annual_revenue_gbp_m,
+    summaryData?.company?.annual_revenue_inr_cr
+  );
 });
 document.getElementById('sf-cancel-btn').addEventListener('click', closeSectorForm);
 
@@ -120,8 +139,15 @@ document.getElementById('sf-save-btn').addEventListener('click', async () => {
   const btn = document.getElementById('sf-save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
 
+  const jurisdiction = summaryData?.company?.jurisdiction || 'UK';
   const body = { industry_sector: sector };
-  if (revenue && !isNaN(parseFloat(revenue))) body.annual_revenue_gbp_m = parseFloat(revenue);
+  if (jurisdiction === 'IN') {
+    const revenueInr = document.getElementById('sf-revenue-inr').value;
+    if (revenueInr && !isNaN(parseFloat(revenueInr))) body.annual_revenue_inr_cr = parseFloat(revenueInr);
+  } else {
+    const revenue = document.getElementById('sf-revenue').value;
+    if (revenue && !isNaN(parseFloat(revenue))) body.annual_revenue_gbp_m = parseFloat(revenue);
+  }
 
   const res = await api('PATCH', '/api/company/sector', body);
   btn.disabled = false; btn.textContent = 'Save';
@@ -361,6 +387,43 @@ function renderRegulatory(company, baselineTotal) {
   `).join('');
 }
 
+// ── Benchmark data methodology disclosure ─────────────────────────────────────
+function renderDisclosure(statuses) {
+  const el = document.getElementById('bm-disclosure');
+  if (!el) return;
+
+  const hasCeaDerived = statuses.includes('cea_derived');
+  const hasPending    = statuses.includes('pending_verification');
+
+  if (!hasCeaDerived && !hasPending) {
+    el.style.display = 'none';
+    el.innerHTML = '';
+    return;
+  }
+
+  const notes = [];
+  if (hasCeaDerived) {
+    notes.push(
+      `<div class="bm-disclosure-note bm-disclosure-cea">` +
+      `<strong>Scope 2 benchmarks for India</strong> are derived from UK sector benchmarks ` +
+      `adjusted for the CEA V21.0 grid emission factor ` +
+      `(0.7117 tCO₂/MWh, FY 2024–25).` +
+      `</div>`
+    );
+  }
+  if (hasPending) {
+    notes.push(
+      `<div class="bm-disclosure-note bm-disclosure-pending">` +
+      `<strong>Scope 1 and Scope 3 benchmarks for India are not yet available.</strong> ` +
+      `Contact us for current sector estimates.` +
+      `</div>`
+    );
+  }
+
+  el.innerHTML = `<div class="bm-disclosure-wrap">${notes.join('')}</div>`;
+  el.style.display = '';
+}
+
 // ── Main render ───────────────────────────────────────────────────────────────
 function renderAll() {
   if (!summaryData || !breakdownData) return;
@@ -479,6 +542,9 @@ function renderAll() {
 
   // Panel 4 — Regulatory context
   renderRegulatory(company, baselineTotal);
+
+  // Methodology disclosure (shown for cea_derived / pending_verification rows)
+  renderDisclosure(dataStatuses);
 }
 
 // ── Load data ─────────────────────────────────────────────────────────────────
@@ -522,6 +588,11 @@ async function loadData() {
 
   summaryData   = sumJson;
   breakdownData = brkJson;
+  // Merge data_statuses from both responses (summary and breakdown may differ)
+  dataStatuses = [...new Set([
+    ...(sumJson.data_statuses  || []),
+    ...(brkJson.data_statuses  || []),
+  ])];
 
   document.getElementById('no-data-year').textContent = sumJson.year;
   renderAll();
