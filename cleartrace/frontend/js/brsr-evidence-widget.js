@@ -44,7 +44,7 @@ function mountEvidenceWidget(containerEl, submissionId, fieldRef, options = {}) 
         <input type="file" class="ev-file-input" style="display:none"
                accept=".pdf,.xlsx,.xls,.csv,.jpg,.jpeg,.png">
         <div class="ev-progress" style="display:none">
-          <div class="ev-progress-bar"></div>
+          <div class="ev-progress-track"><div class="ev-progress-bar"></div></div>
           <span class="ev-progress-label">Uploading…</span>
         </div>
       ` : ''}

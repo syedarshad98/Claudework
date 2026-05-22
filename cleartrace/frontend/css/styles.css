@@ -3670,3 +3670,98 @@ textarea.form-input {
   .sa-field-row { grid-template-columns: 1fr; gap: 4px; }
   .sa-field-label { padding-top: 0; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   BRSR P6 — Principle 6 Environment form
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* Orange BRSR Core badge (distinct from Section A green badge) */
+.p6-core-badge {
+  font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  background: var(--warn-light); color: var(--warn);
+  padding: 2px 8px; border-radius: 4px; white-space: nowrap;
+}
+
+/* Unit hint next to field label */
+.p6-unit-hint { font-size: 11px; color: var(--muted); font-weight: 400; }
+
+/* Calculated / readonly field display */
+.p6-calc-input { background: var(--surface2); color: var(--text); min-width: 160px; }
+.p6-calc-hint  { font-size: 11px; color: var(--muted); font-style: italic; }
+.p6-readonly-value { font-size: 13px; color: var(--muted); padding-top: 5px; font-style: italic; }
+
+/* Revenue warning banner */
+.p6-revenue-warning {
+  background: var(--warn-light); color: var(--warn);
+  border: 1px solid var(--warn); border-radius: var(--radius);
+  padding: 10px 16px; margin-bottom: 16px;
+  font-size: 13px; font-weight: 500;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.p6-revenue-link { color: var(--warn); font-weight: 700; text-decoration: underline; }
+
+/* Specialist tables (water withdrawal, air emissions, waste) */
+.p6-spec-wrap   { width: 100%; }
+.p6-spec-scroll { overflow-x: auto; }
+.p6-spec-table  { border-collapse: collapse; font-size: 13px; min-width: 400px; width: 100%; }
+.p6-spec-th {
+  padding: 7px 10px; text-align: left; font-weight: 600;
+  font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--muted); background: var(--surface2);
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.p6-spec-label-col { min-width: 200px; }
+.p6-spec-label { padding: 7px 10px; font-size: 13px; border-bottom: 1px solid var(--border); }
+.p6-spec-bold  { font-weight: 600; background: var(--surface2); }
+.p6-spec-td    { padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.p6-spec-input {
+  padding: 4px 7px; border: 1px solid var(--border); border-radius: 5px;
+  font-size: 12px; background: var(--surface); width: 100%; min-width: 90px;
+}
+.p6-spec-input:focus { outline: none; border-color: var(--accent); }
+
+/* Evidence widget slot inside BRSR Core panels */
+.p6-evidence-slot {
+  margin: 12px 20px 8px;
+  padding: 12px 16px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* Evidence widget internals */
+.ev-widget { display: flex; flex-direction: column; gap: 8px; }
+.ev-attach-btn { font-size: 12px; align-self: flex-start; }
+.ev-progress       { display: flex; align-items: center; gap: 8px; }
+.ev-progress-track { flex: 1; max-width: 200px; height: 4px; background: var(--dim); border-radius: 2px; overflow: hidden; }
+.ev-progress-bar   { height: 100%; width: 0%; background: var(--accent); border-radius: 2px; transition: width .15s; }
+.ev-progress-label { font-size: 11px; color: var(--muted); }
+.ev-file-list { list-style: none; display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; }
+.ev-file-item {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 5px 8px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px; font-size: 12px;
+}
+.ev-file-icon  { font-size: 14px; flex-shrink: 0; }
+.ev-file-name  { font-weight: 500; flex: 1; min-width: 80px; word-break: break-all; }
+.ev-file-size  { color: var(--muted); white-space: nowrap; }
+.ev-file-link  { color: var(--accent2); text-decoration: underline; white-space: nowrap; }
+.ev-delete-btn {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  padding: 1px 6px; font-size: 11px; color: var(--muted); cursor: pointer;
+}
+.ev-delete-btn:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
+.ev-loading, .ev-empty { color: var(--muted); font-size: 12px; font-style: italic; padding: 4px 0; }
+
+/* Leadership section */
+.p6-leadership-section { margin-bottom: 20px; }
+.p6-leadership-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 18px; background: var(--surface2);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer; font-weight: 600; font-size: 13px; color: var(--muted);
+  user-select: none;
+}
+.p6-leadership-header:hover { background: var(--dim); }
+.p6-leadership-body { display: flex; flex-direction: column; margin-top: 4px; }
+.p6-leadership-body--collapsed { display: none; }

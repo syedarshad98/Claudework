@@ -3,6 +3,8 @@ const router           = express.Router();
 const db               = require('../db/database');
 const requireRole      = require('../middleware/roles');
 const SECTION_A_FIELDS = require('../lib/brsr-section-a-fields');
+const P6_FIELDS        = require('../lib/brsr-p6-fields');
+const { CEA_FACTORS }  = require('../db/emission_factors');
 
 // ── Lazy migration ────────────────────────────────────────────────────────────
 let migrated = false;
@@ -246,6 +248,169 @@ router.post('/submission/:id/status', requireRole('admin', 'editor'), async (req
   } catch (err) {
     console.error('POST /api/brsr/submission/status error:', err.message);
     res.status(500).json({ error: 'Failed to update status' });
+  }
+});
+
+// ── P6 helpers ────────────────────────────────────────────────────────────────
+
+function allP6FieldKeys() {
+  return P6_FIELDS.flatMap(cat => cat.fields.map(f => f.key));
+}
+
+// Map P6 field keys → typed columns in brsr_p6_environment.
+// All other keys go into the disclosures JSONB column.
+const P6_COLUMN_MAP = {
+  scope1_current:                      'ghg_scope1_tco2e',
+  scope2_current:                      'ghg_scope2_tco2e',
+  scope3_current:                      'ghg_scope3_tco2e',
+  water_consumption_current:           'total_water_consumed_m3',
+  ghg_intensity_per_rupee_current:     'ghg_intensity_per_crore_inr',
+  energy_intensity_per_rupee_current:  'energy_intensity_per_crore_inr',
+  water_intensity_per_rupee_current:   'water_intensity_per_crore_inr',
+  waste_intensity_per_rupee_current:   'waste_intensity_per_crore_inr',
+};
+
+function mergeP6Fields(savedRow) {
+  const disclosures = savedRow?.disclosures || {};
+  return P6_FIELDS.map(cat => ({
+    ...cat,
+    fields: cat.fields.map(f => {
+      let value = null;
+      if (savedRow) {
+        const col = P6_COLUMN_MAP[f.key];
+        value = col ? (savedRow[col] ?? null) : (disclosures[f.key] ?? null);
+      }
+      return { ...f, value };
+    }),
+  }));
+}
+
+async function ensureP6Row(companyId, submissionId, financialYear, userId) {
+  await db.query(
+    `INSERT INTO brsr_p6_environment (company_id, submission_id, financial_year, entered_by)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (company_id, financial_year) DO NOTHING`,
+    [companyId, submissionId, financialYear, userId]
+  );
+}
+
+// ── GET /api/brsr/p6/:id ──────────────────────────────────────────────────────
+// Returns merged P6 categories + annual revenue (for intensity calc) + company.
+router.get('/p6/:id', async (req, res) => {
+  await ensureMigrated();
+  const submissionId = parseInt(req.params.id, 10);
+  if (isNaN(submissionId)) return res.status(400).json({ error: 'Invalid submission id' });
+
+  try {
+    const subRes = await db.query(
+      `SELECT id, financial_year, status
+         FROM brsr_submissions
+        WHERE id = $1 AND company_id = $2`,
+      [submissionId, req.companyId]
+    );
+    if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
+    const submission = subRes.rows[0];
+
+    await ensureP6Row(req.companyId, submissionId, submission.financial_year, req.userId);
+
+    const [p6Res, compRes, saRes] = await Promise.all([
+      db.query(
+        `SELECT * FROM brsr_p6_environment WHERE submission_id = $1 AND company_id = $2`,
+        [submissionId, req.companyId]
+      ),
+      db.query(`SELECT name, jurisdiction FROM companies WHERE id = $1`, [req.companyId]),
+      db.query(
+        `SELECT turnover_inr_cr FROM brsr_section_a WHERE submission_id = $1 AND company_id = $2`,
+        [submissionId, req.companyId]
+      ),
+    ]);
+
+    res.json({
+      submission,
+      categories:          mergeP6Fields(p6Res.rows[0] || null),
+      company:             { name: compRes.rows[0]?.name, jurisdiction: compRes.rows[0]?.jurisdiction },
+      annual_revenue_inr_cr: saRes.rows[0]?.turnover_inr_cr ?? null,
+    });
+  } catch (err) {
+    console.error('GET /api/brsr/p6 error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch P6 data' });
+  }
+});
+
+// ── PUT /api/brsr/p6/:id ──────────────────────────────────────────────────────
+// Upsert a single P6 field. Body: { key, value }
+// When key is scope2_current or scope2_previous, also stamps emission_factor_source.
+router.put('/p6/:id', requireRole('admin', 'editor'), async (req, res) => {
+  await ensureMigrated();
+  const submissionId = parseInt(req.params.id, 10);
+  if (isNaN(submissionId)) return res.status(400).json({ error: 'Invalid submission id' });
+
+  const { key } = req.body;
+  const value = req.body.value ?? null;
+
+  if (!allP6FieldKeys().includes(key)) {
+    return res.status(400).json({ error: `Unknown P6 field key: ${key}` });
+  }
+
+  try {
+    const subRes = await db.query(
+      `SELECT status, financial_year FROM brsr_submissions WHERE id = $1 AND company_id = $2`,
+      [submissionId, req.companyId]
+    );
+    if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
+    if (subRes.rows[0].status === 'locked') {
+      return res.status(403).json({ error: 'Submission is locked and cannot be edited' });
+    }
+
+    await ensureP6Row(req.companyId, submissionId, subRes.rows[0].financial_year, req.userId);
+
+    const col = P6_COLUMN_MAP[key];
+    if (col) {
+      await db.query(
+        `UPDATE brsr_p6_environment SET "${col}" = $1, updated_at = NOW()
+          WHERE submission_id = $2 AND company_id = $3`,
+        [value, submissionId, req.companyId]
+      );
+    } else {
+      const jsonValue = JSON.stringify(value ?? null);
+      await db.query(
+        `UPDATE brsr_p6_environment
+            SET disclosures = jsonb_set(COALESCE(disclosures, '{}'), $1, $2::jsonb, true),
+                updated_at  = NOW()
+          WHERE submission_id = $3 AND company_id = $4`,
+        [[key], jsonValue, submissionId, req.companyId]
+      );
+    }
+
+    // Auto-stamp emission factor source whenever Scope 2 is saved
+    if (key === 'scope2_current' || key === 'scope2_previous') {
+      const compRes = await db.query(
+        `SELECT jurisdiction FROM companies WHERE id = $1`, [req.companyId]
+      );
+      const jurisdiction = compRes.rows[0]?.jurisdiction || 'UK';
+
+      let efSource;
+      if (jurisdiction === 'IN') {
+        const latestKey = CEA_FACTORS.latest;
+        const ver       = CEA_FACTORS.versions[latestKey];
+        efSource = `CEA ${latestKey} — FY ${ver.fy} (${ver.gridEF} tCO₂/MWh)`;
+      } else {
+        efSource = 'DEFRA 2023 (0.20493 kg CO₂e/kWh)';
+      }
+
+      await db.query(
+        `UPDATE brsr_p6_environment
+            SET disclosures = jsonb_set(COALESCE(disclosures, '{}'), '{emission_factor_source}', $1::jsonb, true),
+                updated_at  = NOW()
+          WHERE submission_id = $2 AND company_id = $3`,
+        [JSON.stringify(efSource), submissionId, req.companyId]
+      );
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('PUT /api/brsr/p6 error:', err.message);
+    res.status(500).json({ error: 'Failed to save P6 field' });
   }
 });
 
