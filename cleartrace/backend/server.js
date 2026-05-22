@@ -57,6 +57,8 @@ const db = require('./db/database');
 // Migrations that must exist before any request is served.
 // All files use IF NOT EXISTS so they are safe to re-run on every boot.
 const STARTUP_MIGRATIONS = [
+  'schema.sql',
+  'brsr_migration.sql',
   'demo_migration.sql',
 ];
 
