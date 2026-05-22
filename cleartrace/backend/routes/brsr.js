@@ -4,6 +4,7 @@ const db                             = require('../db/database');
 const requireRole                    = require('../middleware/roles');
 const SECTION_A_FIELDS               = require('../lib/brsr-section-a-fields');
 const P6_FIELDS                      = require('../lib/brsr-p6-fields');
+const P3_FIELDS                      = require('../lib/brsr-p3-fields');
 const { SECTION_B_FIELDS }           = require('../lib/brsr-section-b-fields');
 const { CEA_FACTORS }                = require('../db/emission_factors');
 
@@ -17,6 +18,8 @@ async function ensureMigrated() {
   await db.query(sql);
   const sqlB = fs.readFileSync(path.join(__dirname, '../db/brsr_section_b_migration.sql'), 'utf8');
   await db.query(sqlB);
+  const sqlP3 = fs.readFileSync(path.join(__dirname, '../db/brsr_p3_migration.sql'), 'utf8');
+  await db.query(sqlP3);
   migrated = true;
 }
 
@@ -414,6 +417,151 @@ router.put('/p6/:id', requireRole('admin', 'editor'), async (req, res) => {
   } catch (err) {
     console.error('PUT /api/brsr/p6 error:', err.message);
     res.status(500).json({ error: 'Failed to save P6 field' });
+  }
+});
+
+// ── P3 helpers ────────────────────────────────────────────────────────────────
+
+function allP3FieldKeys() {
+  return P3_FIELDS.flatMap(cat => cat.fields.map(f => f.key));
+}
+
+// Typed scalar columns in brsr_p3_employees.
+// All other keys (specialist_table / dynamic_table JSONB) are named JSONB columns
+// whose column name equals the field key — stored directly, not via a catch-all JSONB.
+const P3_COLUMN_MAP = {
+  e3_accessibility:             'e3_accessibility',
+  e4_equal_opportunity:         'e4_equal_opportunity',
+  e4_policy_url:                'e4_policy_url',
+  e10_ohs_implemented:          'e10_ohs_implemented',
+  e10_ohs_coverage:             'e10_ohs_coverage',
+  e10_hazard_processes:         'e10_hazard_processes',
+  e10_worker_reporting:         'e10_worker_reporting',
+  e10_medical_access:           'e10_medical_access',
+  e12_safe_workplace:           'e12_safe_workplace',
+  e14_health_safety_pct:        'e14_health_safety_pct',
+  e14_working_conditions_pct:   'e14_working_conditions_pct',
+  e15_corrective_actions:       'e15_corrective_actions',
+  l1_life_insurance_employees:  'l1_life_insurance_employees',
+  l1_life_insurance_workers:    'l1_life_insurance_workers',
+  l2_statutory_dues:            'l2_statutory_dues',
+  l4_transition_assistance:     'l4_transition_assistance',
+  l5_health_safety_vc_pct:      'l5_health_safety_vc_pct',
+  l5_working_conditions_vc_pct: 'l5_working_conditions_vc_pct',
+  l6_corrective_actions:        'l6_corrective_actions',
+};
+
+// Left-join P3 field definitions with saved row values.
+// Typed scalar columns via COLUMN_MAP; JSONB fields read by field key directly.
+function mergeP3Fields(savedRow) {
+  return P3_FIELDS.map(cat => ({
+    ...cat,
+    fields: cat.fields.map(f => {
+      let value = null;
+      if (savedRow) {
+        const col = P3_COLUMN_MAP[f.key];
+        value = col ? (savedRow[col] ?? null) : (savedRow[f.key] ?? null);
+      }
+      return { ...f, value };
+    }),
+  }));
+}
+
+async function ensureP3Row(companyId, submissionId, financialYear, userId) {
+  await db.query(
+    `INSERT INTO brsr_p3_employees (company_id, submission_id, financial_year, entered_by)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (company_id, financial_year) DO NOTHING`,
+    [companyId, submissionId, financialYear, userId]
+  );
+}
+
+// ── GET /api/brsr/p3/:id ──────────────────────────────────────────────────────
+// Returns merged P3 categories (definitions + saved values).
+router.get('/p3/:id', async (req, res) => {
+  await ensureMigrated();
+  const submissionId = parseInt(req.params.id, 10);
+  if (isNaN(submissionId)) return res.status(400).json({ error: 'Invalid submission id' });
+
+  try {
+    const subRes = await db.query(
+      `SELECT id, financial_year, status
+         FROM brsr_submissions
+        WHERE id = $1 AND company_id = $2`,
+      [submissionId, req.companyId]
+    );
+    if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
+    const submission = subRes.rows[0];
+
+    await ensureP3Row(req.companyId, submissionId, submission.financial_year, req.userId);
+
+    const p3Res = await db.query(
+      `SELECT * FROM brsr_p3_employees
+        WHERE submission_id = $1 AND company_id = $2`,
+      [submissionId, req.companyId]
+    );
+
+    res.json({
+      submission,
+      categories: mergeP3Fields(p3Res.rows[0] || null),
+    });
+  } catch (err) {
+    console.error('GET /api/brsr/p3 error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch P3 data' });
+  }
+});
+
+// ── PUT /api/brsr/p3/:id ──────────────────────────────────────────────────────
+// Upsert a single P3 field. Body: { key, value }
+// Typed scalar columns updated directly; JSONB fields stored by column name.
+// Rejects if submission.status = 'locked'.
+router.put('/p3/:id', requireRole('admin', 'editor'), async (req, res) => {
+  await ensureMigrated();
+  const submissionId = parseInt(req.params.id, 10);
+  if (isNaN(submissionId)) return res.status(400).json({ error: 'Invalid submission id' });
+
+  const { key } = req.body;
+  const value = req.body.value ?? null;
+
+  if (!allP3FieldKeys().includes(key)) {
+    return res.status(400).json({ error: `Unknown P3 field key: ${key}` });
+  }
+
+  try {
+    const subRes = await db.query(
+      `SELECT status, financial_year FROM brsr_submissions
+        WHERE id = $1 AND company_id = $2`,
+      [submissionId, req.companyId]
+    );
+    if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
+    if (subRes.rows[0].status === 'locked') {
+      return res.status(403).json({ error: 'Submission is locked and cannot be edited' });
+    }
+
+    await ensureP3Row(req.companyId, submissionId, subRes.rows[0].financial_year, req.userId);
+
+    const col = P3_COLUMN_MAP[key];
+    if (col) {
+      // Scalar typed column
+      await db.query(
+        `UPDATE brsr_p3_employees SET "${col}" = $1, updated_at = NOW()
+          WHERE submission_id = $2 AND company_id = $3`,
+        [value, submissionId, req.companyId]
+      );
+    } else {
+      // Named JSONB column — column name equals field key (validated above)
+      const jsonValue = JSON.stringify(value ?? null);
+      await db.query(
+        `UPDATE brsr_p3_employees SET "${key}" = $1::jsonb, updated_at = NOW()
+          WHERE submission_id = $2 AND company_id = $3`,
+        [jsonValue, submissionId, req.companyId]
+      );
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('PUT /api/brsr/p3 error:', err.message);
+    res.status(500).json({ error: 'Failed to save P3 field' });
   }
 });
 

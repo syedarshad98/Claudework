@@ -3862,3 +3862,10 @@ textarea.form-input {
 .sa-pg-input--text { min-width: 90px; }
 .sa-pg-input:focus { outline: none; border-color: var(--accent); }
 .sa-pg-wrap { overflow-x: auto; }
+
+/* ── Principle 3 — calc column cells ────────────────────────────────────────── */
+.p3-calc-td   { background: var(--surface2); }
+.p3-calc-cell { font-size: 12px; font-family: var(--font-mono); color: var(--accent2); white-space: nowrap; }
+.p3-calc-header { background: var(--surface2); color: var(--muted); }
+.p6-spec-select { padding: 3px 5px; border: 1px solid var(--border); border-radius: 4px;
+  background: var(--surface); color: var(--text); font-size: 11px; font-family: var(--font-mono); }

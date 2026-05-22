@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ClearTrace — Audit Log</title>
+  <title>ClearTrace — BRSR Principle 3</title>
   <link rel="stylesheet" href="css/styles.css">
   <script src="js/demo-guard.js"></script>
 </head>
@@ -23,7 +23,7 @@
 
     <div class="nav-section">
       <div class="nav-label">Overview</div>
-      <div class="nav-item" data-href="/">            <span class="icon">📊</span> Dashboard</div>
+      <div class="nav-item" data-href="/"><span class="icon">📊</span> Dashboard</div>
       <div class="nav-item" data-href="/targets.html"><span class="icon">🎯</span> Targets &amp; Goals</div>
       <div class="nav-item" data-href="/benchmarking.html"><span class="icon">📈</span> Benchmarking</div>
       <div class="nav-item" data-href="/recommendations.html"><span class="icon">💡</span> Recommendations</div>
@@ -46,13 +46,13 @@
       <div class="nav-label">India BRSR</div>
       <div class="nav-item" data-href="/brsr-section-a.html"><span class="icon">📋</span> Section A</div>
       <div class="nav-item" data-href="/brsr-section-b.html"><span class="icon">📊</span> Section B</div>
-      <div class="nav-item" data-href="/brsr-p3.html"><span class="icon">👥</span> Principle 3</div>
+      <div class="nav-item active" data-href="/brsr-p3.html"><span class="icon">👥</span> Principle 3</div>
       <div class="nav-item" data-href="/brsr-p6.html"><span class="icon">🌿</span> Principle 6</div>
     </div>
 
     <div class="nav-section">
       <div class="nav-label">Compliance</div>
-      <div class="nav-item active" data-href="/audit.html">      <span class="icon">🔍</span> Audit Log</div>
+      <div class="nav-item" data-href="/audit.html"><span class="icon">🔍</span> Audit Log</div>
       <div class="nav-item" data-href="/validation.html"><span class="icon">⚠️</span> Data Validation</div>
     </div>
 
@@ -78,78 +78,36 @@
 
     <div class="topbar">
       <div>
-        <div class="page-title">Audit Log</div>
-        <div class="page-sub" id="page-sub">All data actions for your organisation</div>
+        <div class="page-title">BRSR — Principle 3</div>
+        <div class="page-sub">Employee Wellbeing</div>
       </div>
-      <div class="topbar-right">
-        <a href="/validation.html" class="btn btn-outline">⚠️ Validation</a>
-      </div>
-    </div>
-
-    <!-- Filters -->
-    <div class="card al-filters">
-      <div class="al-filter-row">
-        <div class="ob-field">
-          <label>Action type</label>
-          <select id="f-action">
-            <option value="">All actions</option>
-            <option value="create">Create</option>
-            <option value="edit">Edit</option>
-            <option value="delete">Delete</option>
-            <option value="approve">Approve</option>
-            <option value="lock">Lock</option>
-            <option value="unlock">Unlock</option>
-          </select>
-        </div>
-        <div class="ob-field">
-          <label>User email</label>
-          <input type="text" id="f-email" placeholder="Search by email…">
-        </div>
-        <div class="ob-field">
-          <label>From date</label>
-          <input type="date" id="f-from">
-        </div>
-        <div class="ob-field">
-          <label>To date</label>
-          <input type="date" id="f-to">
-        </div>
-        <div class="ob-field" style="justify-content:flex-end">
-          <label>&nbsp;</label>
-          <button class="btn btn-primary" id="apply-filters-btn">Apply</button>
-        </div>
+      <div class="topbar-right" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <select class="sa-fy-select" id="fy-select"></select>
+        <span id="status-badge" class="sa-status-badge"></span>
+        <span id="save-status" class="sa-save-status" style="display:none"></span>
+        <button class="btn btn-outline" id="edit-btn"   style="display:none">Edit</button>
+        <button class="btn btn-primary" id="save-btn"   style="display:none">Save All</button>
+        <button class="btn btn-primary" id="review-btn" style="display:none">Submit for Review</button>
       </div>
     </div>
 
-    <!-- Results -->
-    <div class="card" style="padding:0;overflow:hidden">
-      <div class="al-table-wrap">
-        <table class="al-table" id="audit-table">
-          <thead>
-            <tr>
-              <th>Timestamp</th>
-              <th>User</th>
-              <th>Action</th>
-              <th>Record</th>
-              <th>Changes</th>
-              <th>IP</th>
-            </tr>
-          </thead>
-          <tbody id="audit-tbody">
-            <tr><td colspan="6" class="al-empty">Loading…</td></tr>
-          </tbody>
-        </table>
+    <!-- Completion progress bar -->
+    <div class="sa-completion-wrap" id="completion-wrap" style="display:none">
+      <div class="sa-completion-track">
+        <div class="sa-completion-fill" id="completion-bar" style="width:0%"></div>
       </div>
-
-      <!-- Pagination -->
-      <div class="al-pagination" id="al-pagination">
-        <button class="btn btn-outline al-page-btn" id="page-prev">← Prev</button>
-        <span class="al-page-info" id="page-info">—</span>
-        <button class="btn btn-outline al-page-btn" id="page-next">Next →</button>
-      </div>
+      <span class="sa-completion-pct" id="completion-pct">0% complete</span>
     </div>
+
+    <!-- Toast notifications -->
+    <div id="sa-toast-container" class="sa-toast-container"></div>
+
+    <!-- P3 category panels rendered by JS -->
+    <div id="p3-panels"></div>
 
   </main>
 </div>
-<script src="js/audit.js"></script>
+
+<script src="js/brsr-p3.js"></script>
 </body>
 </html>
