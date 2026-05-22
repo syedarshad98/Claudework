@@ -3,6 +3,11 @@
 -- Follows existing schema patterns: SERIAL PKs, INTEGER FKs, no RLS, idempotent.
 -- Sections B and P1–P5, P7–P9 come in a later migration.
 
+-- Supabase Storage: bucket 'brsr-evidence' must exist before evidence vault uploads work.
+-- Create via: Supabase Dashboard → Storage → New Bucket → name: brsr-evidence, Public: OFF
+-- Or via Supabase CLI: supabase storage buckets create brsr-evidence --private
+-- Path convention: {company_id}/brsr/{submission_id}/{field_ref}/{original_filename}
+
 -- ── updated_at helper ────────────────────────────────────────────────────────
 -- Single function shared by all BRSR tables.
 
