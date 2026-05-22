@@ -1,10 +1,11 @@
-const express          = require('express');
-const router           = express.Router();
-const db               = require('../db/database');
-const requireRole      = require('../middleware/roles');
-const SECTION_A_FIELDS = require('../lib/brsr-section-a-fields');
-const P6_FIELDS        = require('../lib/brsr-p6-fields');
-const { CEA_FACTORS }  = require('../db/emission_factors');
+const express                        = require('express');
+const router                         = express.Router();
+const db                             = require('../db/database');
+const requireRole                    = require('../middleware/roles');
+const SECTION_A_FIELDS               = require('../lib/brsr-section-a-fields');
+const P6_FIELDS                      = require('../lib/brsr-p6-fields');
+const { SECTION_B_FIELDS }           = require('../lib/brsr-section-b-fields');
+const { CEA_FACTORS }                = require('../db/emission_factors');
 
 // ── Lazy migration ────────────────────────────────────────────────────────────
 let migrated = false;
@@ -14,6 +15,8 @@ async function ensureMigrated() {
   const path = require('path');
   const sql  = fs.readFileSync(path.join(__dirname, '../db/brsr_migration.sql'), 'utf8');
   await db.query(sql);
+  const sqlB = fs.readFileSync(path.join(__dirname, '../db/brsr_section_b_migration.sql'), 'utf8');
+  await db.query(sqlB);
   migrated = true;
 }
 
@@ -411,6 +414,136 @@ router.put('/p6/:id', requireRole('admin', 'editor'), async (req, res) => {
   } catch (err) {
     console.error('PUT /api/brsr/p6 error:', err.message);
     res.status(500).json({ error: 'Failed to save P6 field' });
+  }
+});
+
+// ── Section B helpers ─────────────────────────────────────────────────────────
+
+function allSectionBFieldKeys() {
+  return SECTION_B_FIELDS.flatMap(cat => cat.fields.map(f => f.key));
+}
+
+// Keys that map to typed columns in brsr_section_b.
+// All other keys (principle_grid fields) go into the policy_grid JSONB column.
+const SECTION_B_COLUMN_MAP = {
+  director_statement:      'director_statement',
+  highest_authority:       'highest_authority',
+  board_committee:         'board_committee',
+  board_committee_details: 'board_committee_details',
+};
+
+// Left-join Section B field definitions with saved row values.
+function mergeSectionBFields(savedRow) {
+  const policyGrid = savedRow?.policy_grid || {};
+  return SECTION_B_FIELDS.map(cat => ({
+    ...cat,
+    fields: cat.fields.map(f => {
+      let value = null;
+      if (savedRow) {
+        const col = SECTION_B_COLUMN_MAP[f.key];
+        value = col ? (savedRow[col] ?? null) : (policyGrid[f.key] ?? null);
+      }
+      return { ...f, value };
+    }),
+  }));
+}
+
+async function ensureSectionBRow(companyId, submissionId, financialYear, userId) {
+  await db.query(
+    `INSERT INTO brsr_section_b (company_id, submission_id, financial_year, entered_by)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (company_id, financial_year) DO NOTHING`,
+    [companyId, submissionId, financialYear, userId]
+  );
+}
+
+// ── GET /api/brsr/section-b/:id ───────────────────────────────────────────────
+// :id = brsr_submissions.id
+// Returns merged Section B categories (definitions + saved values).
+router.get('/section-b/:id', async (req, res) => {
+  await ensureMigrated();
+  const submissionId = parseInt(req.params.id, 10);
+  if (isNaN(submissionId)) return res.status(400).json({ error: 'Invalid submission id' });
+
+  try {
+    const subRes = await db.query(
+      `SELECT id, financial_year, status
+         FROM brsr_submissions
+        WHERE id = $1 AND company_id = $2`,
+      [submissionId, req.companyId]
+    );
+    if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
+    const submission = subRes.rows[0];
+
+    await ensureSectionBRow(req.companyId, submissionId, submission.financial_year, req.userId);
+
+    const sbRes = await db.query(
+      `SELECT * FROM brsr_section_b
+        WHERE submission_id = $1 AND company_id = $2`,
+      [submissionId, req.companyId]
+    );
+
+    res.json({
+      submission,
+      categories: mergeSectionBFields(sbRes.rows[0] || null),
+    });
+  } catch (err) {
+    console.error('GET /api/brsr/section-b error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch Section B' });
+  }
+});
+
+// ── PUT /api/brsr/section-b/:id ───────────────────────────────────────────────
+// Upsert a single field. Body: { key, value }
+// Typed columns go directly; principle_grid and all others go into policy_grid JSONB.
+// Rejects if submission.status = 'locked'.
+router.put('/section-b/:id', requireRole('admin', 'editor'), async (req, res) => {
+  await ensureMigrated();
+  const submissionId = parseInt(req.params.id, 10);
+  if (isNaN(submissionId)) return res.status(400).json({ error: 'Invalid submission id' });
+
+  const { key } = req.body;
+  const value = req.body.value ?? null;
+
+  if (!allSectionBFieldKeys().includes(key)) {
+    return res.status(400).json({ error: `Unknown Section B field key: ${key}` });
+  }
+
+  try {
+    const subRes = await db.query(
+      `SELECT status, financial_year FROM brsr_submissions
+        WHERE id = $1 AND company_id = $2`,
+      [submissionId, req.companyId]
+    );
+    if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
+    if (subRes.rows[0].status === 'locked') {
+      return res.status(403).json({ error: 'Submission is locked and cannot be edited' });
+    }
+
+    await ensureSectionBRow(req.companyId, submissionId, subRes.rows[0].financial_year, req.userId);
+
+    const col = SECTION_B_COLUMN_MAP[key];
+    if (col) {
+      await db.query(
+        `UPDATE brsr_section_b SET "${col}" = $1, updated_at = NOW()
+          WHERE submission_id = $2 AND company_id = $3`,
+        [value, submissionId, req.companyId]
+      );
+    } else {
+      const jsonValue = JSON.stringify(value ?? null);
+      await db.query(
+        `UPDATE brsr_section_b
+            SET policy_grid = jsonb_set(COALESCE(policy_grid, '{}'), $1, $2::jsonb, true),
+                updated_at  = NOW()
+          WHERE submission_id = $3 AND company_id = $4`,
+        [[key], jsonValue, submissionId, req.companyId]
+      );
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('PUT /api/brsr/section-b error:', err.message);
+    res.status(500).json({ error: 'Failed to save Section B field' });
   }
 });
 

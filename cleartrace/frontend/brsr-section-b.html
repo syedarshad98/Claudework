@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ClearTrace — Reporting</title>
+  <title>ClearTrace — BRSR Section B</title>
   <link rel="stylesheet" href="css/styles.css">
   <script src="js/demo-guard.js"></script>
 </head>
@@ -32,7 +32,7 @@
     <div class="nav-section">
       <div class="nav-label">Manage</div>
       <div class="nav-item" data-href="/environment.html"><span class="icon">🌿</span> Environment</div>
-      <div class="nav-item active" data-href="/reporting.html"><span class="icon">📄</span> Reporting</div>
+      <div class="nav-item" data-href="/reporting.html"><span class="icon">📄</span> Reporting</div>
       <div class="nav-item" data-href="/data.html"><span class="icon">🗄️</span> Data</div>
     </div>
 
@@ -45,7 +45,7 @@
     <div class="nav-section">
       <div class="nav-label">India BRSR</div>
       <div class="nav-item" data-href="/brsr-section-a.html"><span class="icon">📋</span> Section A</div>
-      <div class="nav-item" data-href="/brsr-section-b.html"><span class="icon">📊</span> Section B</div>
+      <div class="nav-item active" data-href="/brsr-section-b.html"><span class="icon">📊</span> Section B</div>
       <div class="nav-item" data-href="/brsr-p6.html"><span class="icon">🌿</span> Principle 6</div>
     </div>
 
@@ -77,70 +77,36 @@
 
     <div class="topbar">
       <div>
-        <div class="page-title">Reporting</div>
-        <div class="page-sub">Frameworks · Reports · Submissions</div>
+        <div class="page-title">BRSR — Section B</div>
+        <div class="page-sub">Management and Process Disclosures</div>
+      </div>
+      <div class="topbar-right" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <select class="sa-fy-select" id="fy-select"></select>
+        <span id="status-badge" class="sa-status-badge"></span>
+        <span id="save-status" class="sa-save-status" style="display:none"></span>
+        <button class="btn btn-outline" id="edit-btn"   style="display:none">Edit</button>
+        <button class="btn btn-primary" id="save-btn"   style="display:none">Save All</button>
+        <button class="btn btn-primary" id="review-btn" style="display:none">Submit for Review</button>
       </div>
     </div>
 
-    <div class="rp-hub-grid">
-
-      <!-- Card 1: Framework Alignment -->
-      <div class="card rp-hub-card">
-        <div class="rp-hub-icon">📋</div>
-        <div class="rp-hub-title">Framework Alignment</div>
-        <div class="rp-hub-desc">Track your GRI, TCFD and SASB reporting status against required disclosures.</div>
-        <div class="rp-fw-status" id="rp-fw-status">
-          <div class="rp-fw-row">
-            <span class="rp-fw-name">GRI</span>
-            <span class="rp-fw-badge rp-fw-loading">Loading…</span>
-          </div>
-          <div class="rp-fw-row">
-            <span class="rp-fw-name">TCFD</span>
-            <span class="rp-fw-badge rp-fw-loading">Loading…</span>
-          </div>
-          <div class="rp-fw-row">
-            <span class="rp-fw-name">SASB</span>
-            <span class="rp-fw-badge rp-fw-loading">Loading…</span>
-          </div>
-        </div>
-        <a href="/benchmarking.html" class="btn btn-outline" style="font-size:13px;margin-top:12px;text-align:center">View full details →</a>
+    <!-- Completion progress bar -->
+    <div class="sa-completion-wrap" id="completion-wrap" style="display:none">
+      <div class="sa-completion-track">
+        <div class="sa-completion-fill" id="completion-bar" style="width:0%"></div>
       </div>
-
-      <!-- Card 2: Generate Report -->
-      <div class="card rp-hub-card">
-        <div class="rp-hub-icon">📄</div>
-        <div class="rp-hub-title">Generate Report</div>
-        <div class="rp-hub-desc">Download a full ESG summary PDF including emissions, frameworks, water, waste, social and governance data.</div>
-        <button class="btn btn-primary rp-generate-btn" id="rp-generate-btn">↓ Generate PDF Report</button>
-        <div class="rp-generate-status" id="rp-generate-status"></div>
-      </div>
-
-      <!-- Card 3: Audit & Submissions -->
-      <div class="card rp-hub-card">
-        <div class="rp-hub-icon">📬</div>
-        <div class="rp-hub-title">Audit &amp; Submissions</div>
-        <div class="rp-hub-desc">Review your full audit log and resolve outstanding data validation flags.</div>
-        <div class="rp-audit-stats" id="rp-audit-stats">
-          <div class="rp-stat-row">
-            <span class="rp-stat-label">Audit log entries</span>
-            <span class="rp-stat-val" id="rp-audit-count">—</span>
-          </div>
-          <div class="rp-stat-row">
-            <span class="rp-stat-label">Validation flags</span>
-            <span class="rp-stat-val warn" id="rp-validation-count">—</span>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:12px">
-          <a href="/audit.html" class="btn btn-outline" style="font-size:12px;flex:1;text-align:center">Audit Log →</a>
-          <a href="/validation.html" class="btn btn-outline" style="font-size:12px;flex:1;text-align:center">Validation →</a>
-        </div>
-      </div>
-
+      <span class="sa-completion-pct" id="completion-pct">0% complete</span>
     </div>
+
+    <!-- Toast notifications -->
+    <div id="sa-toast-container" class="sa-toast-container"></div>
+
+    <!-- Section B category panels rendered by JS -->
+    <div id="sb-panels"></div>
 
   </main>
 </div>
 
-<script src="js/reporting.js"></script>
+<script src="js/brsr-section-b.js"></script>
 </body>
 </html>
