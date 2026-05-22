@@ -20,6 +20,55 @@ app.use('/api/auth', require('./routes/auth'));
 const { DEFRA_FACTORS } = require('./db/emission_factors');
 app.get('/api/emission-factors', (_req, res) => res.json(DEFRA_FACTORS));
 
+// ── Temporary: Supabase Storage connectivity smoke test ───────────────────────
+// DELETE this route before production. Intentionally auth-free for diagnostics.
+app.get('/api/brsr/test-storage', async (req, res) => {
+  const result = {};
+
+  // Step 1 — initialise client
+  let sb;
+  try {
+    sb = require('./lib/supabase')();
+    result.step1 = 'ok';
+  } catch (err) {
+    result.step1 = err.message;
+    return res.json(result);
+  }
+
+  // Step 2 — upload a small buffer
+  try {
+    const buf = Buffer.from('BRSR test');
+    const { error } = await sb.storage
+      .from('brsr-evidence')
+      .upload('test/test-file.txt', buf, { contentType: 'text/plain', upsert: true });
+    result.step2 = error ? error.message : 'ok';
+  } catch (err) {
+    result.step2 = err.message;
+  }
+
+  // Step 3 — generate a signed URL (60-second expiry — enough to click)
+  try {
+    const { data, error } = await sb.storage
+      .from('brsr-evidence')
+      .createSignedUrl('test/test-file.txt', 60);
+    result.step3 = error ? error.message : (data?.signedUrl || 'no url returned');
+  } catch (err) {
+    result.step3 = err.message;
+  }
+
+  // Step 4 — delete the test file
+  try {
+    const { error } = await sb.storage
+      .from('brsr-evidence')
+      .remove(['test/test-file.txt']);
+    result.step4 = error ? error.message : 'ok';
+  } catch (err) {
+    result.step4 = err.message;
+  }
+
+  res.json(result);
+});
+
 // Protected routes — JWT required
 const auth      = require('./middleware/auth');
 const demoGuard = require('./middleware/demoGuard');
