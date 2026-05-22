@@ -24,7 +24,7 @@ router.get('/status', async (req, res) => {
       `SELECT name, industry, country, employee_count,
               financial_year_start, reduction_target_pct,
               target_year, alignment_standard, onboarding_complete,
-              industry_sector, annual_revenue_gbp_m,
+              industry_sector, annual_revenue_gbp_m, jurisdiction,
               COALESCE(is_demo, FALSE) AS is_demo
          FROM companies WHERE id = $1`,
       [req.companyId]
@@ -51,6 +51,7 @@ router.get('/status', async (req, res) => {
         employeeCount:       company.employee_count,
         industrySector:      company.industry_sector      || null,
         annualRevenueGbpM:   company.annual_revenue_gbp_m || null,
+        jurisdiction:        company.jurisdiction          || 'UK',
       },
       reporting: {
         financialYearStart: company.financial_year_start,

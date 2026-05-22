@@ -332,10 +332,20 @@
                 <label class="form-label">Period</label>
                 <input type="month" class="form-input" id="f-period" required>
               </div>
-              <!-- DEFRA badge (shown for standard categories) -->
+              <!-- DEFRA/CEA badge (shown for standard categories) -->
               <div class="form-group" id="defra-ef-group" style="display:none">
-                <label class="form-label">Emission Factor</label>
+                <label class="form-label">
+                  Emission Factor
+                  <span class="ef-tooltip-wrap" id="ef-cea-tooltip" style="display:none">
+                    <span class="ef-tooltip-icon">i</span>
+                    <span class="ef-tooltip-text">CEA factors apply to grid electricity only. Scope 1 fuel combustion and Scope 3 factors are fuel chemistry-based and apply globally.</span>
+                  </span>
+                </label>
                 <div class="defra-ef-badge" id="defra-ef-badge"></div>
+                <select class="ef-source-selector" id="ef-source-selector" style="display:none">
+                  <option value="CEA">CEA V21.0 — FY 2024-25 (0.7117 tCO₂/MWh) — recommended for India</option>
+                  <option value="DEFRA">DEFRA 2023 (0.20493 tCO₂/MWh) — UK grid</option>
+                </select>
               </div>
               <!-- Manual EF input (shown only for custom categories) -->
               <div class="form-group" id="custom-ef-group">

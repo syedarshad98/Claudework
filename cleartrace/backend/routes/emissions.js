@@ -80,7 +80,10 @@ router.get('/', async (req, res) => {
 // ── POST /api/emissions ───────────────────────────────────────────────────────
 router.post('/', requireRole('admin', 'editor'), async (req, res) => {
   await ensureMigrated();
-  const { category, scope, amount, unit, period, emission_factor, notes } = req.body;
+  const {
+    category, scope, amount, unit, period, emission_factor, notes,
+    factor_source: reqFactorSource, factor_jurisdiction: reqFactorJurisdiction,
+  } = req.body;
 
   if (!category || scope == null || amount == null || !unit || !period) {
     return res.status(400).json({ error: 'category, scope, amount, unit and period are required' });
@@ -102,7 +105,14 @@ router.post('/', requireRole('admin', 'editor'), async (req, res) => {
   let ef;
   let factorSource = null;
   let factorJurisdiction = null;
-  if (factorResult && !factorResult.custom && factorResult.factor != null) {
+
+  // Frontend may send an explicit factor_source (e.g. user switched selector from CEA→DEFRA
+  // for an Indian company). When provided alongside emission_factor, use it directly.
+  if (reqFactorSource && emission_factor != null) {
+    ef = parseFloat(emission_factor);
+    factorSource = reqFactorSource;
+    factorJurisdiction = reqFactorJurisdiction || jurisdiction;
+  } else if (factorResult && !factorResult.custom && factorResult.factor != null) {
     ef = factorResult.factor;
     factorSource = factorResult.source || 'DEFRA 2023';
     factorJurisdiction = factorResult.jurisdiction || 'UK';

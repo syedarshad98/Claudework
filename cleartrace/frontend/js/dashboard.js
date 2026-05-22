@@ -407,6 +407,9 @@ async function loadOnboardingData() {
   if (!res || !res.ok) return;
   const d = await res.json();
 
+  // ── Jurisdiction — drives CEA vs DEFRA default in the entry form ────────
+  if (d.profile?.jurisdiction) companyJurisdiction = d.profile.jurisdiction;
+
   // ── Financial year label in topbar ───────────────────────────────────────
   const fyStart = d.reporting?.financialYearStart || 1;
   const months  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -476,6 +479,9 @@ const now = new Date();
 document.getElementById('f-period').value =
   `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
+// Company jurisdiction resolved from /api/onboarding/status — drives CEA vs DEFRA default.
+let companyJurisdiction = 'UK';
+
 // ── Emission factors ───────────────────────────────────────────────────────
 // Mirrors cleartrace/backend/db/emission_factors.js — keep in sync.
 // factor = kg CO₂e per unit. custom:true means no standard factor — user supplies.
@@ -526,53 +532,65 @@ const CEA_FACTORS = {
 
 const GRID_ELECTRICITY_CATEGORIES = new Set(['Grid Electricity (UK)', 'Grid Electricity']);
 
-function applyEmissionFactor(category, jurisdiction = 'UK', ceaVersion = 'V21.0') {
-  const defraGroup  = document.getElementById('defra-ef-group');
-  const customGroup = document.getElementById('custom-ef-group');
-  const badge       = document.getElementById('defra-ef-badge');
+function setFormUnit(unit) {
+  const sel = document.getElementById('f-unit');
+  for (const opt of sel.options) { if (opt.value === unit) { sel.value = unit; break; } }
+}
 
-  // CEA path: Indian jurisdiction + grid electricity category
-  if (jurisdiction === 'IN' && GRID_ELECTRICITY_CATEGORIES.has(category)) {
-    const ver = CEA_FACTORS.versions[ceaVersion] || CEA_FACTORS.versions[CEA_FACTORS.latest];
-    const resolvedVersion = CEA_FACTORS.versions[ceaVersion] ? ceaVersion : CEA_FACTORS.latest;
-    document.getElementById('f-scope').value = '2';
-    const unitSel = document.getElementById('f-unit');
-    for (const opt of unitSel.options) {
-      if (opt.value === 'kWh') { unitSel.value = 'kWh'; break; }
-    }
+function updateGridElecBadge() {
+  const badge    = document.getElementById('defra-ef-badge');
+  const selector = document.getElementById('ef-source-selector');
+  const source   = selector ? selector.value : (companyJurisdiction === 'IN' ? 'CEA' : 'DEFRA');
+
+  if (source === 'CEA') {
+    const ver = CEA_FACTORS.versions[CEA_FACTORS.latest];
     badge.innerHTML =
       `<span>&#x2705; <strong>${ver.gridEF}</strong> tCO₂/MWh</span>` +
-      `<span class="defra-source">CEA ${resolvedVersion} — FY ${ver.fy} (${ver.gridEF} tCO₂/MWh)</span>`;
+      `<span class="defra-source">CEA ${CEA_FACTORS.latest} — FY ${ver.fy}</span>`;
+  } else {
+    const f = DEFRA_FACTORS['Grid Electricity (UK)'];
+    badge.innerHTML =
+      `<span>&#x2705; <strong>${f.factor}</strong> kg CO₂e / ${f.unit}</span>` +
+      `<span class="defra-source">DEFRA 2023</span>`;
+  }
+}
+
+function applyEmissionFactor(category) {
+  const defraGroup  = document.getElementById('defra-ef-group');
+  const customGroup = document.getElementById('custom-ef-group');
+  const selector    = document.getElementById('ef-source-selector');
+  const ceaTooltip  = document.getElementById('ef-cea-tooltip');
+
+  const isGridElec = GRID_ELECTRICITY_CATEGORIES.has(category);
+
+  if (selector)   selector.style.display  = isGridElec ? '' : 'none';
+  if (ceaTooltip) ceaTooltip.style.display = (isGridElec && companyJurisdiction === 'IN') ? '' : 'none';
+
+  if (isGridElec) {
+    if (selector) selector.value = (companyJurisdiction === 'IN') ? 'CEA' : 'DEFRA';
+    document.getElementById('f-scope').value = '2';
+    setFormUnit('kWh');
+    updateGridElecBadge();
     defraGroup.style.display  = '';
     customGroup.style.display = 'none';
     return;
   }
 
   const entry = DEFRA_FACTORS[category];
-
   if (!entry) {
-    // Unknown category — show manual EF input
     defraGroup.style.display  = 'none';
     customGroup.style.display = '';
     return;
   }
 
-  // Auto-set scope
   document.getElementById('f-scope').value = String(entry.scope);
-
-  // Auto-set unit (select the matching option)
-  const unitSel = document.getElementById('f-unit');
-  for (const opt of unitSel.options) {
-    if (opt.value === entry.unit) { unitSel.value = entry.unit; break; }
-  }
+  setFormUnit(entry.unit);
 
   if (entry.custom) {
-    // Custom category — show manual EF input with unit hint
     defraGroup.style.display  = 'none';
     customGroup.style.display = '';
   } else {
-    // Standard DEFRA category — show badge, hide manual input
-    badge.innerHTML =
+    document.getElementById('defra-ef-badge').innerHTML =
       `<span>&#x2705; <strong>${entry.factor}</strong> kg CO₂e / ${entry.unit}</span>` +
       `<span class="defra-source">DEFRA 2023</span>`;
     defraGroup.style.display  = '';
@@ -587,6 +605,11 @@ document.getElementById('f-category').addEventListener('change', (e) => {
   applyEmissionFactor(e.target.value);
 });
 
+// Factor source selector — live badge update when user switches CEA ↔ DEFRA
+document.getElementById('ef-source-selector').addEventListener('change', () => {
+  updateGridElecBadge();
+});
+
 document.getElementById('entry-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const fb  = document.getElementById('entry-feedback');
@@ -597,13 +620,34 @@ document.getElementById('entry-form').addEventListener('submit', async (e) => {
   btn.disabled    = true;
 
   try {
-    const category = document.getElementById('f-category').value;
-    const defra    = DEFRA_FACTORS[category];
-    // For custom categories, use the manual EF input; for DEFRA categories,
-    // omit the field so the backend applies the authoritative DEFRA factor.
-    const efValue  = (defra && !defra.custom)
-      ? undefined
-      : (parseFloat(document.getElementById('f-ef').value) || 1.0);
+    const category    = document.getElementById('f-category').value;
+    const defraEntry  = DEFRA_FACTORS[category];
+    const isGridElec  = GRID_ELECTRICITY_CATEGORIES.has(category);
+    const selector    = document.getElementById('ef-source-selector');
+
+    let efExtras = {};
+    if (isGridElec && selector && selector.style.display !== 'none') {
+      // Always send an explicit factor + source for grid electricity so the backend
+      // uses exactly what the user selected rather than auto-detecting from jurisdiction.
+      if (selector.value === 'CEA') {
+        const ver = CEA_FACTORS.versions[CEA_FACTORS.latest];
+        efExtras = {
+          emission_factor:     ver.gridEF,
+          factor_source:       `CEA ${CEA_FACTORS.latest} — FY ${ver.fy}`,
+          factor_jurisdiction: 'IN',
+        };
+      } else {
+        const f = DEFRA_FACTORS['Grid Electricity (UK)'];
+        efExtras = {
+          emission_factor:     f.factor,
+          factor_source:       'DEFRA 2023',
+          factor_jurisdiction: 'UK',
+        };
+      }
+    } else if (!defraEntry || defraEntry.custom) {
+      efExtras = { emission_factor: parseFloat(document.getElementById('f-ef').value) || 1.0 };
+    }
+    // For non-Grid non-custom DEFRA categories, omit emission_factor — backend applies its own.
 
     const payload = {
       category,
@@ -611,8 +655,8 @@ document.getElementById('entry-form').addEventListener('submit', async (e) => {
       amount: parseFloat(document.getElementById('f-amount').value),
       unit:   document.getElementById('f-unit').value,
       period: document.getElementById('f-period').value,
+      ...efExtras,
     };
-    if (efValue !== undefined) payload.emission_factor = efValue;
 
     const res  = await api('/api/emissions', {
       method:  'POST',
@@ -625,10 +669,14 @@ document.getElementById('entry-form').addEventListener('submit', async (e) => {
       fb.textContent = data.error || 'Failed to save';
       fb.className   = 'form-feedback error';
     } else {
-      const defraEntry = DEFRA_FACTORS[category];
-      const efLabel = (defraEntry && !defraEntry.custom)
-        ? `DEFRA 2023 · ${defraEntry.factor} kg CO₂e/${defraEntry.unit}`
-        : `EF ${(payload.emission_factor || 1.0)} kg CO₂e/unit`;
+      let efLabel;
+      if (isGridElec && efExtras.factor_source) {
+        efLabel = `${efExtras.factor_source} · ${efExtras.emission_factor} kg CO₂e/kWh`;
+      } else if (defraEntry && !defraEntry.custom) {
+        efLabel = `DEFRA 2023 · ${defraEntry.factor} kg CO₂e/${defraEntry.unit}`;
+      } else {
+        efLabel = `EF ${(payload.emission_factor || 1.0)} kg CO₂e/unit`;
+      }
       fb.textContent = `✓ Entry saved — ${fmt(parseFloat(data.co2e_tonnes), 4)} tCO₂e  [${efLabel}]`;
       fb.className   = 'form-feedback success';
       e.target.reset();
