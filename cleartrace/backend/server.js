@@ -42,6 +42,7 @@ app.use('/api/governance',   auth, demoGuard, require('./routes/governance'));
 app.use('/api/water',        auth, demoGuard, require('./routes/water'));
 app.use('/api/waste',        auth, demoGuard, require('./routes/waste'));
 app.use('/api/recommendations', auth, require('./routes/recommendations'));
+app.use('/api/brsr',            auth, demoGuard, require('./routes/brsr'));
 
 // SPA fallback — serve index.html for any unmatched route
 app.get('*', (req, res) => {
