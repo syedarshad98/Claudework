@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ClearTrace — Environment</title>
+  <title>ClearTrace — BRSR Principle 5</title>
   <link rel="stylesheet" href="css/styles.css">
   <script src="js/demo-guard.js"></script>
 </head>
@@ -31,7 +31,7 @@
 
     <div class="nav-section">
       <div class="nav-label">Manage</div>
-      <div class="nav-item active" data-href="/environment.html"><span class="icon">🌿</span> Environment</div>
+      <div class="nav-item" data-href="/environment.html"><span class="icon">🌿</span> Environment</div>
       <div class="nav-item" data-href="/reporting.html"><span class="icon">📄</span> Reporting</div>
       <div class="nav-item" data-href="/data.html"><span class="icon">🗄️</span> Data</div>
     </div>
@@ -47,7 +47,7 @@
       <div class="nav-item" data-href="/brsr-section-a.html"><span class="icon">📋</span> Section A</div>
       <div class="nav-item" data-href="/brsr-section-b.html"><span class="icon">📊</span> Section B</div>
       <div class="nav-item" data-href="/brsr-p3.html"><span class="icon">👥</span> Principle 3</div>
-      <div class="nav-item" data-href="/brsr-p5.html"><span class="icon">⚖️</span> Principle 5</div>
+      <div class="nav-item active" data-href="/brsr-p5.html"><span class="icon">⚖️</span> Principle 5</div>
       <div class="nav-item" data-href="/brsr-p6.html"><span class="icon">🌿</span> Principle 6</div>
     </div>
 
@@ -79,81 +79,37 @@
 
     <div class="topbar">
       <div>
-        <div class="page-title">Environment</div>
-        <div class="page-sub">Emissions · Water · Waste</div>
+        <div class="page-title">BRSR — Principle 5</div>
+        <div class="page-sub">Human Rights</div>
       </div>
-      <div class="topbar-right" style="display:flex;gap:10px;align-items:center">
-        <select class="period-select" id="period-select"></select>
-        <button class="btn btn-outline" id="env-edit-btn" style="display:none">Edit</button>
-        <button class="btn btn-primary" id="env-save-btn" style="display:none">Save All</button>
-      </div>
-    </div>
-
-    <!-- Tab bar -->
-    <div class="env-tabs">
-      <button class="env-tab active" data-tab="emissions">🌡️ Emissions</button>
-      <button class="env-tab" data-tab="water">💧 Water</button>
-      <button class="env-tab" data-tab="waste">♻️ Waste</button>
-    </div>
-
-    <!-- EMISSIONS TAB -->
-    <div id="env-tab-emissions" class="env-tab-panel">
-      <!-- KPI cards row -->
-      <div class="env-kpi-row" id="env-emissions-kpis">
-        <div class="env-kpi-card">
-          <div class="env-kpi-label">Scope 1 — Direct</div>
-          <div class="env-kpi-val" id="env-s1-val">—</div>
-          <div class="env-kpi-unit">tCO₂e</div>
-          <div class="env-kpi-trend" id="env-s1-trend"></div>
-        </div>
-        <div class="env-kpi-card">
-          <div class="env-kpi-label">Scope 2 — Energy</div>
-          <div class="env-kpi-val" id="env-s2-val">—</div>
-          <div class="env-kpi-unit">tCO₂e</div>
-          <div class="env-kpi-trend" id="env-s2-trend"></div>
-        </div>
-        <div class="env-kpi-card">
-          <div class="env-kpi-label">Scope 3 — Value Chain</div>
-          <div class="env-kpi-val" id="env-s3-val">—</div>
-          <div class="env-kpi-unit">tCO₂e</div>
-          <div class="env-kpi-trend" id="env-s3-trend"></div>
-        </div>
-      </div>
-      <!-- Trend chart -->
-      <div class="card" style="margin-top:16px">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Monthly Emissions Trend</div>
-            <div class="card-sub">tCO₂e · Scope 1 + 2 + 3 · 12-month rolling</div>
-          </div>
-        </div>
-        <div class="chart-container">
-          <div class="trend-chart-wrap" id="env-trend-wrap">
-            <div style="height:200px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px">Loading…</div>
-          </div>
-          <div class="trend-tooltip" id="env-trend-tooltip"></div>
-        </div>
-      </div>
-      <div style="margin-top:12px">
-        <a href="/" class="btn btn-outline" style="font-size:13px">+ Add emissions data →</a>
+      <div class="topbar-right" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <select class="sa-fy-select" id="fy-select"></select>
+        <span id="status-badge" class="sa-status-badge"></span>
+        <span id="save-status" class="sa-save-status" style="display:none"></span>
+        <button class="btn btn-outline" id="edit-btn"   style="display:none">Edit</button>
+        <button class="btn btn-primary" id="save-btn"   style="display:none">Save All</button>
+        <button class="btn btn-primary" id="review-btn" style="display:none">Submit for Review</button>
       </div>
     </div>
 
-    <!-- WATER TAB -->
-    <div id="env-tab-water" class="env-tab-panel" style="display:none">
-      <div id="env-water-panels"></div>
-      <div id="env-water-toast-container" class="sc-toast-container"></div>
+    <!-- Completion progress bar -->
+    <div class="sa-completion-wrap" id="completion-wrap" style="display:none">
+      <div class="sa-completion-track">
+        <div class="sa-completion-fill" id="completion-bar" style="width:0%"></div>
+      </div>
+      <span class="sa-completion-pct" id="completion-pct">0% complete</span>
     </div>
 
-    <!-- WASTE TAB -->
-    <div id="env-tab-waste" class="env-tab-panel" style="display:none">
-      <div id="env-waste-panels"></div>
-      <div id="env-waste-toast-container" class="sc-toast-container"></div>
-    </div>
+    <!-- Toast notifications -->
+    <div id="sa-toast-container" class="sa-toast-container"></div>
+
+    <!-- P5 category panels rendered by JS -->
+    <div id="p5-panels"></div>
 
   </main>
 </div>
 
-<script src="js/environment.js"></script>
+<script src="js/brsr-evidence-widget.js"></script>
+<script src="js/brsr-p5.js"></script>
 </body>
 </html>

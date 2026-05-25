@@ -5,6 +5,7 @@ const requireRole                    = require('../middleware/roles');
 const SECTION_A_FIELDS               = require('../lib/brsr-section-a-fields');
 const P6_FIELDS                      = require('../lib/brsr-p6-fields');
 const P3_FIELDS                      = require('../lib/brsr-p3-fields');
+const P5_FIELDS                      = require('../lib/brsr-p5-fields');
 const { SECTION_B_FIELDS }           = require('../lib/brsr-section-b-fields');
 const { CEA_FACTORS }                = require('../db/emission_factors');
 
@@ -20,6 +21,8 @@ async function ensureMigrated() {
   await db.query(sqlB);
   const sqlP3 = fs.readFileSync(path.join(__dirname, '../db/brsr_p3_migration.sql'), 'utf8');
   await db.query(sqlP3);
+  const sqlP5 = fs.readFileSync(path.join(__dirname, '../db/brsr_p5_migration.sql'), 'utf8');
+  await db.query(sqlP5);
   migrated = true;
 }
 
@@ -562,6 +565,145 @@ router.put('/p3/:id', requireRole('admin', 'editor'), async (req, res) => {
   } catch (err) {
     console.error('PUT /api/brsr/p3 error:', err.message);
     res.status(500).json({ error: 'Failed to save P3 field' });
+  }
+});
+
+// ── P5 helpers ────────────────────────────────────────────────────────────────
+
+function allP5FieldKeys() {
+  return P5_FIELDS.flatMap(cat => cat.fields.map(f => f.key));
+}
+
+// Typed scalar columns in brsr_p5_humanrights.
+// All other keys (specialist_table / dynamic_table JSONB) are named JSONB columns
+// whose column name equals the field key — stored directly.
+const P5_COLUMN_MAP = {
+  e4_focal_point:              'e4_focal_point',
+  e5_grievance_mechanism:      'e5_grievance_mechanism',
+  e7_adverse_consequences:     'e7_adverse_consequences',
+  e8_hr_agreements:            'e8_hr_agreements',
+  e9_child_labour_pct:         'e9_child_labour_pct',
+  e9_forced_labour_pct:        'e9_forced_labour_pct',
+  e9_sexual_harassment_pct:    'e9_sexual_harassment_pct',
+  e9_discrimination_pct:       'e9_discrimination_pct',
+  e9_wages_pct:                'e9_wages_pct',
+  e9_others_pct:               'e9_others_pct',
+  e10_corrective_actions:      'e10_corrective_actions',
+  l1_business_process_changes: 'l1_business_process_changes',
+  l2_hr_due_diligence:         'l2_hr_due_diligence',
+  l3_accessibility_visitors:   'l3_accessibility_visitors',
+  l5_vc_corrective_actions:    'l5_vc_corrective_actions',
+};
+
+// Left-join P5 field definitions with saved row values.
+// Typed scalar columns via COLUMN_MAP; JSONB fields read by field key directly.
+function mergeP5Fields(savedRow) {
+  return P5_FIELDS.map(cat => ({
+    ...cat,
+    fields: cat.fields.map(f => {
+      let value = null;
+      if (savedRow) {
+        const col = P5_COLUMN_MAP[f.key];
+        value = col ? (savedRow[col] ?? null) : (savedRow[f.key] ?? null);
+      }
+      return { ...f, value };
+    }),
+  }));
+}
+
+async function ensureP5Row(companyId, submissionId, financialYear, userId) {
+  await db.query(
+    `INSERT INTO brsr_p5_humanrights (company_id, submission_id, financial_year, entered_by)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (submission_id) DO NOTHING`,
+    [companyId, submissionId, financialYear, userId]
+  );
+}
+
+// ── GET /api/brsr/p5/:id ──────────────────────────────────────────────────────
+// Returns merged P5 categories (definitions + saved values).
+router.get('/p5/:id', async (req, res) => {
+  await ensureMigrated();
+  const submissionId = parseInt(req.params.id, 10);
+  if (isNaN(submissionId)) return res.status(400).json({ error: 'Invalid submission id' });
+
+  try {
+    const subRes = await db.query(
+      `SELECT id, financial_year, status
+         FROM brsr_submissions
+        WHERE id = $1 AND company_id = $2`,
+      [submissionId, req.companyId]
+    );
+    if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
+    const submission = subRes.rows[0];
+
+    await ensureP5Row(req.companyId, submissionId, submission.financial_year, req.userId);
+
+    const p5Res = await db.query(
+      `SELECT * FROM brsr_p5_humanrights
+        WHERE submission_id = $1 AND company_id = $2`,
+      [submissionId, req.companyId]
+    );
+
+    res.json({
+      submission,
+      categories: mergeP5Fields(p5Res.rows[0] || null),
+    });
+  } catch (err) {
+    console.error('GET /api/brsr/p5 error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch P5 data' });
+  }
+});
+
+// ── PUT /api/brsr/p5/:id ──────────────────────────────────────────────────────
+// Upsert a single P5 field. Body: { key, value }
+// Typed scalar columns updated directly; JSONB fields stored by column name.
+// Rejects if submission.status = 'locked'.
+router.put('/p5/:id', requireRole('admin', 'editor'), async (req, res) => {
+  await ensureMigrated();
+  const submissionId = parseInt(req.params.id, 10);
+  if (isNaN(submissionId)) return res.status(400).json({ error: 'Invalid submission id' });
+
+  const { key } = req.body;
+  const value = req.body.value ?? null;
+
+  if (!allP5FieldKeys().includes(key)) {
+    return res.status(400).json({ error: `Unknown P5 field key: ${key}` });
+  }
+
+  try {
+    const subRes = await db.query(
+      `SELECT status, financial_year FROM brsr_submissions
+        WHERE id = $1 AND company_id = $2`,
+      [submissionId, req.companyId]
+    );
+    if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
+    if (subRes.rows[0].status === 'locked') {
+      return res.status(403).json({ error: 'Submission is locked and cannot be edited' });
+    }
+
+    await ensureP5Row(req.companyId, submissionId, subRes.rows[0].financial_year, req.userId);
+
+    const col = P5_COLUMN_MAP[key];
+    if (col) {
+      await db.query(
+        `UPDATE brsr_p5_humanrights SET "${col}" = $1, updated_at = NOW()
+          WHERE submission_id = $2 AND company_id = $3`,
+        [value, submissionId, req.companyId]
+      );
+    } else {
+      const jsonValue = JSON.stringify(value ?? null);
+      await db.query(
+        `UPDATE brsr_p5_humanrights SET "${key}" = $1::jsonb, updated_at = NOW()
+          WHERE submission_id = $2 AND company_id = $3`,
+        [jsonValue, submissionId, req.companyId]
+      );
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('PUT /api/brsr/p5 error:', err.message);
+    res.status(500).json({ error: 'Failed to save P5 field' });
   }
 });
 
