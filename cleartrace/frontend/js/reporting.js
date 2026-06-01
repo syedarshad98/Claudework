@@ -112,6 +112,46 @@ async function loadAuditStats() {
   } catch (_) { /* non-critical */ }
 }
 
+// ── BRSR Report button ────────────────────────────────────────────────────────
+document.getElementById('brsr-generate-btn').addEventListener('click', async () => {
+  const btn    = document.getElementById('brsr-generate-btn');
+  const status = document.getElementById('brsr-generate-status');
+  const fy     = document.getElementById('brsr-fy-select').value;
+  const orig   = btn.textContent;
+  btn.textContent = '⏳ Generating BRSR report…';
+  btn.disabled    = true;
+  status.textContent = '';
+  status.className   = 'rp-generate-status';
+
+  try {
+    // Step 1: get or create the submission for the selected FY
+    const subRes = await api('GET', `/api/brsr/submission?fy=${encodeURIComponent(fy)}`);
+    if (!subRes || !subRes.ok) throw new Error('Could not load BRSR submission');
+    const { submission } = await subRes.json();
+    if (!submission || !submission.id) throw new Error('No submission found for selected FY');
+
+    // Step 2: download the PDF
+    const pdfRes = await fetch(`/api/brsr/report/${submission.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!pdfRes || !pdfRes.ok) throw new Error('Server error generating BRSR PDF');
+    const blob = await pdfRes.blob();
+    const a = Object.assign(document.createElement('a'), {
+      href:     URL.createObjectURL(blob),
+      download: `BRSR_Report_${fy}.pdf`,
+    });
+    a.click();
+    URL.revokeObjectURL(a.href);
+    status.textContent = '✓ Downloaded';
+  } catch (err) {
+    status.textContent = `Could not generate BRSR report — ${err.message}`;
+    status.className   = 'rp-generate-status error';
+  } finally {
+    btn.textContent = orig;
+    btn.disabled    = false;
+  }
+});
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadFrameworks();
 loadAuditStats();

@@ -1763,4 +1763,194 @@ router.put('/p9/:id', requireRole('admin', 'editor'), async (req, res) => {
   }
 });
 
+// ── GET /api/brsr/report/:submissionId ───────────────────────────────────────
+// Streams a SEBI-compliant BRSR PDF for the given submission.
+router.get('/report/:submissionId', requireRole('admin', 'editor'), async (req, res) => {
+  await ensureMigrated();
+  const submissionId = parseInt(req.params.submissionId, 10);
+  if (isNaN(submissionId)) return res.status(400).json({ error: 'Invalid submission id' });
+
+  try {
+    const PDFDocument = require('pdfkit');
+    const { COLORS, addPageNumber, drawSectionHeader, checkPageBreak } = require('../lib/brsr-pdf-helpers');
+    const sections = require('../lib/brsr-pdf-sections');
+
+    // ── Verify ownership ──────────────────────────────────────────────────────
+    const subCheck = await db.query(
+      'SELECT * FROM brsr_submissions WHERE id=$1 AND company_id=$2',
+      [submissionId, req.companyId]
+    );
+    if (!subCheck.rows.length) return res.status(404).json({ error: 'Not found' });
+    const sub = subCheck.rows[0];
+
+    // ── Fetch all 11 data tables + company in parallel ────────────────────────
+    const [secA, secB, p1, p2, p3, p4, p5, p6, p7, p8, p9, company] = await Promise.all([
+      db.query('SELECT * FROM brsr_section_a      WHERE submission_id=$1', [submissionId]),
+      db.query('SELECT * FROM brsr_section_b      WHERE submission_id=$1', [submissionId]),
+      db.query('SELECT * FROM brsr_p1_ethics      WHERE submission_id=$1', [submissionId]),
+      db.query('SELECT * FROM brsr_p2_products    WHERE submission_id=$1', [submissionId]),
+      db.query('SELECT * FROM brsr_p3_employees   WHERE submission_id=$1', [submissionId]),
+      db.query('SELECT * FROM brsr_p4_stakeholders WHERE submission_id=$1', [submissionId]),
+      db.query('SELECT * FROM brsr_p5_humanrights WHERE submission_id=$1', [submissionId]),
+      db.query('SELECT * FROM brsr_p6_environment WHERE submission_id=$1', [submissionId]),
+      db.query('SELECT * FROM brsr_p7_policy      WHERE submission_id=$1', [submissionId]),
+      db.query('SELECT * FROM brsr_p8_growth      WHERE submission_id=$1', [submissionId]),
+      db.query('SELECT * FROM brsr_p9_consumers   WHERE submission_id=$1', [submissionId]),
+      db.query('SELECT name, jurisdiction FROM companies WHERE id=$1', [req.companyId]),
+    ]);
+
+    const companyName = company.rows[0]?.name || 'Unknown Company';
+    const fy          = sub.financial_year;
+
+    // ── Determine assurance status from Section A ─────────────────────────────
+    const reportingBoundary  = (secA.rows[0]?.disclosures || {}).reporting_boundary_note || 'Standalone';
+    const assuranceStatus    = 'Third-party assurance not recorded';
+
+    // ── PDF setup ─────────────────────────────────────────────────────────────
+    const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true });
+    const pageWidth    = doc.page.width;
+    const margin       = 40;
+    const contentWidth = pageWidth - margin * 2;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    const safeName = companyName.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
+    res.setHeader('Content-Disposition',
+      `attachment; filename="BRSR_${safeName}_${fy}.pdf"`);
+    doc.pipe(res);
+
+    // ── Cover page (page 1) ───────────────────────────────────────────────────
+    const coverBannerH = 120;
+    doc.rect(margin, margin, contentWidth, coverBannerH).fill(COLORS.navy);
+    doc.fillColor(COLORS.white).font('Helvetica-Bold').fontSize(13)
+       .text('BUSINESS RESPONSIBILITY & SUSTAINABILITY REPORT', margin + 12, margin + 16, {
+         width: contentWidth - 24, align: 'center',
+       });
+    doc.fillColor(COLORS.lightBlue).font('Helvetica').fontSize(8)
+       .text(
+         'Submitted as per SEBI Circular SEBI/HO/CFD/CFD-SEC-2/P/CIR/2023/122 dated July 12, 2023',
+         margin + 12, margin + 44, { width: contentWidth - 24, align: 'center' }
+       );
+
+    let cy = margin + coverBannerH + 32;
+
+    doc.fillColor(COLORS.navy).font('Helvetica-Bold').fontSize(22)
+       .text(companyName, margin, cy, { width: contentWidth, align: 'center' });
+    cy += 30;
+
+    doc.fillColor(COLORS.midBlue).font('Helvetica-Bold').fontSize(14)
+       .text(`Financial Year: ${fy}`, margin, cy, { width: contentWidth, align: 'center' });
+    cy += 28;
+
+    const infoItems = [
+      ['Reporting Boundary', reportingBoundary],
+      ['Assurance Status', assuranceStatus],
+      ['Report Generated', new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })],
+    ];
+    const fieldW = Math.floor(contentWidth / 2);
+    for (const [label, value] of infoItems) {
+      cy = checkPageBreak(doc, cy, 22, margin);
+      doc.rect(margin, cy, contentWidth, 22).fill(COLORS.lightGray);
+      doc.fillColor(COLORS.gray).font('Helvetica-Bold').fontSize(9)
+         .text(label + ':', margin + 8, cy + 6, { width: fieldW - 16 });
+      doc.fillColor(COLORS.black).font('Helvetica').fontSize(9)
+         .text(String(value), margin + fieldW, cy + 6, { width: fieldW - 8 });
+      cy += 24;
+    }
+
+    // ── TOC page (page 2) ─────────────────────────────────────────────────────
+    doc.addPage();
+    const tocPageIndex = doc.bufferedPageRange().count - 1; // 0-based index of TOC page
+
+    doc.rect(margin, margin, contentWidth, 22).fill(COLORS.navy);
+    doc.fillColor(COLORS.white).font('Helvetica-Bold').fontSize(11)
+       .text('TABLE OF CONTENTS', margin + 8, margin + 6, { width: contentWidth - 16 });
+
+    // Placeholder — will be filled in after rendering all sections
+    const tocSections = [
+      { title: 'Section A — General Disclosures',            key: 'secA' },
+      { title: 'Section B — Management and Process Disclosures', key: 'secB' },
+      { title: 'Principle 1 — Ethics, Transparency & Accountability', key: 'p1' },
+      { title: 'Principle 2 — Sustainable Products & Services',       key: 'p2' },
+      { title: 'Principle 3 — Employee Well-being',                   key: 'p3' },
+      { title: 'Principle 4 — Stakeholder Responsiveness',            key: 'p4' },
+      { title: 'Principle 5 — Human Rights',                         key: 'p5' },
+      { title: 'Principle 6 — Environment',                          key: 'p6' },
+      { title: 'Principle 7 — Policy Advocacy',                      key: 'p7' },
+      { title: 'Principle 8 — Inclusive Growth',                     key: 'p8' },
+      { title: 'Principle 9 — Consumer Responsibility',              key: 'p9' },
+    ];
+    // We'll write the actual TOC entries with page numbers after rendering
+
+    // ── Body pages — render each section ─────────────────────────────────────
+    const sectionPages = {};
+
+    function startSection(key) {
+      doc.addPage();
+      sectionPages[key] = doc.bufferedPageRange().count; // 1-based page number
+    }
+
+    startSection('secA');
+    sections.renderSectionA(doc, secA.rows[0] || {}, margin, pageWidth, margin);
+
+    startSection('secB');
+    sections.renderSectionB(doc, secB.rows[0] || {}, margin, pageWidth, margin);
+
+    startSection('p1');
+    sections.renderP1(doc, p1.rows[0] || {}, margin, pageWidth, margin);
+
+    startSection('p2');
+    sections.renderP2(doc, p2.rows[0] || {}, margin, pageWidth, margin);
+
+    startSection('p3');
+    sections.renderP3(doc, p3.rows[0] || {}, margin, pageWidth, margin);
+
+    startSection('p4');
+    sections.renderP4(doc, p4.rows[0] || {}, margin, pageWidth, margin);
+
+    startSection('p5');
+    sections.renderP5(doc, p5.rows[0] || {}, margin, pageWidth, margin);
+
+    startSection('p6');
+    sections.renderP6(doc, p6.rows[0] || {}, margin, pageWidth, margin);
+
+    startSection('p7');
+    sections.renderP7(doc, p7.rows[0] || {}, margin, pageWidth, margin);
+
+    startSection('p8');
+    sections.renderP8(doc, p8.rows[0] || {}, margin, pageWidth, margin);
+
+    startSection('p9');
+    sections.renderP9(doc, p9.rows[0] || {}, margin, pageWidth, margin);
+
+    // ── Fill in TOC page with real page numbers ───────────────────────────────
+    doc.switchToPage(tocPageIndex);
+    let tocY = margin + 30;
+    for (let i = 0; i < tocSections.length; i++) {
+      const sec     = tocSections[i];
+      const pageNum = sectionPages[sec.key] || '—';
+      const fill    = i % 2 === 0 ? COLORS.lightGray : COLORS.white;
+      doc.rect(margin, tocY, contentWidth, 18).fill(fill);
+      doc.fillColor(COLORS.black).font('Helvetica').fontSize(8.5)
+         .text(sec.title, margin + 8, tocY + 5, { width: contentWidth * 0.8 });
+      doc.fillColor(COLORS.midBlue).font('Helvetica-Bold').fontSize(8.5)
+         .text(String(pageNum), margin, tocY + 5, { width: contentWidth - 8, align: 'right' });
+      tocY += 20;
+    }
+
+    // ── Stamp page numbers on every page ─────────────────────────────────────
+    const range = doc.bufferedPageRange();
+    for (let i = 0; i < range.count; i++) {
+      doc.switchToPage(range.start + i);
+      addPageNumber(doc, i + 1, pageWidth, margin);
+    }
+
+    doc.end();
+  } catch (err) {
+    console.error('BRSR report generation error:', err.message, err.stack);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to generate BRSR report' });
+    }
+  }
+});
+
 module.exports = router;
