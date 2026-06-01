@@ -111,10 +111,11 @@ let autoSaveTimer     = null;
 
 // ── Status badge ──────────────────────────────────────────────────────────────
 const STATUS_LABELS = {
-  draft:      { label: 'Draft',      cls: 'sa-status-draft' },
-  in_review:  { label: 'In Review',  cls: 'sa-status-review' },
-  locked:     { label: 'Locked',     cls: 'sa-status-locked' },
-  filed:      { label: 'Filed',      cls: 'sa-status-filed' },
+  draft:            { label: 'Draft',            cls: 'sa-status-draft'   },
+  in_review:        { label: 'In Review',         cls: 'sa-status-review'  },
+  locked:           { label: 'Locked',            cls: 'sa-status-locked'  },
+  unlock_requested: { label: 'Unlock Requested',  cls: 'sa-status-pending' },
+  filed:            { label: 'Filed',             cls: 'sa-status-filed'   },
 };
 
 function renderStatusBadge(status) {
@@ -759,6 +760,21 @@ function scheduleAutoSave() {
   autoSaveTimer = setTimeout(saveAll, 800);
 }
 
+// ── Lock banner callback ──────────────────────────────────────────────────────
+function onLockStatusChange(newStatus) {
+  renderStatusBadge(newStatus);
+  const shouldLock = newStatus === 'locked' || newStatus === 'unlock_requested';
+  if (shouldLock) {
+    if (editMode) { clearTimeout(autoSaveTimer); editMode = false; }
+    renderPanels(false);
+    document.getElementById('edit-btn').style.display    = 'none';
+    document.getElementById('save-btn').style.display    = 'none';
+    document.getElementById('save-status').style.display = 'none';
+  } else {
+    if (CAN_EDIT) document.getElementById('edit-btn').style.display = '';
+  }
+}
+
 // ── Load data ─────────────────────────────────────────────────────────────────
 async function loadSubmission(fy) {
   const res = await api('GET', `/api/brsr/submission?fy=${fy}`);
@@ -789,7 +805,7 @@ async function init(fy) {
   if (!submission) return;
   await reloadSectionA();
 
-  const isLocked = submission.status === 'locked' || submission.status === 'filed';
+  const isLocked = submission.status === 'locked' || submission.status === 'unlock_requested' || submission.status === 'filed';
 
   if (CAN_EDIT && !isLocked) {
     document.getElementById('edit-btn').style.display = '';
@@ -812,6 +828,11 @@ async function init(fy) {
       for (const p of prePops) await api('PUT', `/api/brsr/section-a/${submissionId}`, p);
       await reloadSectionA();
     }
+  }
+
+  const bannerEl = document.getElementById('lock-banner');
+  if (bannerEl && window.mountLockBanner) {
+    await window.mountLockBanner(bannerEl, submissionId, MY_ROLE, onLockStatusChange);
   }
 }
 

@@ -81,10 +81,11 @@ let autoSaveTimer     = null;
 let _isLocked         = false;
 
 const STATUS_LABELS = {
-  draft:     { label: 'Draft',     cls: 'sa-status-draft'  },
-  in_review: { label: 'In Review', cls: 'sa-status-review' },
-  locked:    { label: 'Locked',    cls: 'sa-status-locked' },
-  filed:     { label: 'Filed',     cls: 'sa-status-filed'  },
+  draft:            { label: 'Draft',            cls: 'sa-status-draft'   },
+  in_review:        { label: 'In Review',         cls: 'sa-status-review'  },
+  locked:           { label: 'Locked',            cls: 'sa-status-locked'  },
+  unlock_requested: { label: 'Unlock Requested',  cls: 'sa-status-pending' },
+  filed:            { label: 'Filed',             cls: 'sa-status-filed'   },
 };
 function renderStatusBadge(status) {
   const s  = STATUS_LABELS[status] || { label: status, cls: '' };
@@ -500,6 +501,20 @@ function scheduleAutoSave() {
   autoSaveTimer = setTimeout(saveAll, 800);
 }
 
+function onLockStatusChange(newStatus) {
+  _isLocked = newStatus === 'locked' || newStatus === 'unlock_requested';
+  renderStatusBadge(newStatus);
+  if (_isLocked) {
+    if (editMode) { clearTimeout(autoSaveTimer); editMode = false; }
+    renderPanels(false);
+    document.getElementById('edit-btn').style.display    = 'none';
+    document.getElementById('save-btn').style.display    = 'none';
+    document.getElementById('save-status').style.display = 'none';
+  } else {
+    if (CAN_EDIT) document.getElementById('edit-btn').style.display = '';
+  }
+}
+
 async function loadSubmission(fy) {
   const res = await api('GET', `/api/brsr/submission?fy=${fy}`);
   if (!res || !res.ok) { showToast('Failed to load submission', 'error'); return false; }
@@ -526,7 +541,7 @@ async function init(fy) {
   const submission = await loadSubmission(fy);
   if (!submission) return;
 
-  _isLocked = submission.status === 'locked' || submission.status === 'filed';
+  _isLocked = submission.status === 'locked' || submission.status === 'unlock_requested' || submission.status === 'filed';
 
   await reloadP8();
 
@@ -538,6 +553,11 @@ async function init(fy) {
     document.getElementById('save-btn').style.display = 'none';
   }
   document.getElementById('save-status').style.display = 'none';
+
+  const bannerEl = document.getElementById('lock-banner');
+  if (bannerEl && window.mountLockBanner) {
+    await window.mountLockBanner(bannerEl, submissionId, MY_ROLE, onLockStatusChange);
+  }
 }
 
 document.getElementById('edit-btn')?.addEventListener('click', () => {

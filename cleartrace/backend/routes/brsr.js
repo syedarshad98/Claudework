@@ -31,6 +31,8 @@ async function ensureMigrated() {
   await db.query(sqlP5);
   const sqlP1P9 = fs.readFileSync(path.join(__dirname, '../db/brsr_p1_p9_migration.sql'), 'utf8');
   await db.query(sqlP1P9);
+  const sqlLock = fs.readFileSync(path.join(__dirname, '../db/brsr_lock_migration.sql'), 'utf8');
+  await db.query(sqlLock);
   migrated = true;
 }
 
@@ -128,6 +130,7 @@ router.get('/submission', async (req, res) => {
       submission:  subRes.rows[0],
       company:     { name: compRes.rows[0]?.name, jurisdiction: compRes.rows[0]?.jurisdiction },
       user:        { email: req.userEmail },
+      role:        req.role,
     });
   } catch (err) {
     console.error('GET /api/brsr/submission error:', err.message);
@@ -194,8 +197,8 @@ router.put('/section-a/:id', requireRole('admin', 'editor'), async (req, res) =>
       [submissionId, req.companyId]
     );
     if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
-    if (subRes.rows[0].status === 'locked') {
-      return res.status(403).json({ error: 'Submission is locked and cannot be edited' });
+    if (subRes.rows[0].status === 'locked' || subRes.rows[0].status === 'unlock_requested') {
+      return res.status(403).json({ error: 'Submission is locked' });
     }
 
     await ensureSectionARow(req.companyId, submissionId, subRes.rows[0].financial_year, req.userId);
@@ -265,6 +268,259 @@ router.post('/submission/:id/status', requireRole('admin', 'editor'), async (req
   } catch (err) {
     console.error('POST /api/brsr/submission/status error:', err.message);
     res.status(500).json({ error: 'Failed to update status' });
+  }
+});
+
+// ── POST /api/brsr/submission/:id/lock ────────────────────────────────────────
+// Sets submission.status = 'locked', upserts brsr_period_locks, writes audit log.
+router.post('/submission/:id/lock', requireRole('admin', 'editor'), async (req, res) => {
+  await ensureMigrated();
+  const submissionId = parseInt(req.params.id, 10);
+  if (isNaN(submissionId)) return res.status(400).json({ error: 'Invalid submission id' });
+
+  const { reason } = req.body;
+
+  try {
+    const subRes = await db.query(
+      `SELECT status FROM brsr_submissions WHERE id = $1 AND company_id = $2`,
+      [submissionId, req.companyId]
+    );
+    if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
+
+    await db.query(
+      `UPDATE brsr_submissions SET status = 'locked', updated_at = NOW() WHERE id = $1`,
+      [submissionId]
+    );
+
+    await db.query(
+      `INSERT INTO brsr_period_locks
+         (company_id, submission_id, action, actioned_by, actioned_at,
+          locked_at, locked_by, lock_reason,
+          unlock_requested_at, unlock_requested_by, unlock_request_reason)
+       VALUES ($1, $2, 'lock', $3, NOW(), NOW(), $3, $4, NULL, NULL, NULL)
+       ON CONFLICT (submission_id) DO UPDATE SET
+         locked_at             = NOW(),
+         locked_by             = EXCLUDED.locked_by,
+         lock_reason           = EXCLUDED.lock_reason,
+         unlock_requested_at   = NULL,
+         unlock_requested_by   = NULL,
+         unlock_request_reason = NULL,
+         action                = 'lock',
+         actioned_by           = EXCLUDED.locked_by,
+         actioned_at           = NOW()`,
+      [req.companyId, submissionId, req.userId, reason || null]
+    );
+
+    await db.query(
+      `INSERT INTO brsr_lock_audit (submission_id, action, performed_by, reason)
+       VALUES ($1, 'locked', $2, $3)`,
+      [submissionId, req.userId, reason || null]
+    );
+
+    const updatedSub = await db.query(
+      `SELECT id, financial_year, status, submitted_by, submitted_at FROM brsr_submissions WHERE id = $1`,
+      [submissionId]
+    );
+
+    res.json({ ok: true, submission: updatedSub.rows[0] });
+  } catch (err) {
+    console.error('POST /api/brsr/submission/lock error:', err.message);
+    res.status(500).json({ error: 'Failed to lock submission' });
+  }
+});
+
+// ── POST /api/brsr/submission/:id/unlock-request ──────────────────────────────
+// Transitions locked → unlock_requested. Editors and admins can request.
+router.post('/submission/:id/unlock-request', requireRole('admin', 'editor'), async (req, res) => {
+  await ensureMigrated();
+  const submissionId = parseInt(req.params.id, 10);
+  if (isNaN(submissionId)) return res.status(400).json({ error: 'Invalid submission id' });
+
+  const { reason } = req.body;
+
+  try {
+    const subRes = await db.query(
+      `SELECT status FROM brsr_submissions WHERE id = $1 AND company_id = $2`,
+      [submissionId, req.companyId]
+    );
+    if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
+    if (subRes.rows[0].status !== 'locked') {
+      return res.status(400).json({ error: `Cannot request unlock from status '${subRes.rows[0].status}'` });
+    }
+
+    await db.query(
+      `UPDATE brsr_submissions SET status = 'unlock_requested', updated_at = NOW() WHERE id = $1`,
+      [submissionId]
+    );
+
+    await db.query(
+      `UPDATE brsr_period_locks
+          SET unlock_requested_at   = NOW(),
+              unlock_requested_by   = $1,
+              unlock_request_reason = $2
+        WHERE submission_id = $3`,
+      [req.userId, reason || null, submissionId]
+    );
+
+    await db.query(
+      `INSERT INTO brsr_lock_audit (submission_id, action, performed_by, reason)
+       VALUES ($1, 'unlock_requested', $2, $3)`,
+      [submissionId, req.userId, reason || null]
+    );
+
+    const updatedSub = await db.query(
+      `SELECT id, financial_year, status, submitted_by, submitted_at FROM brsr_submissions WHERE id = $1`,
+      [submissionId]
+    );
+
+    res.json({ ok: true, submission: updatedSub.rows[0] });
+  } catch (err) {
+    console.error('POST /api/brsr/submission/unlock-request error:', err.message);
+    res.status(500).json({ error: 'Failed to request unlock' });
+  }
+});
+
+// ── POST /api/brsr/submission/:id/unlock-approve ─────────────────────────────
+// Admin only. Transitions unlock_requested → in_review, deletes lock record.
+router.post('/submission/:id/unlock-approve', requireRole('admin'), async (req, res) => {
+  await ensureMigrated();
+  const submissionId = parseInt(req.params.id, 10);
+  if (isNaN(submissionId)) return res.status(400).json({ error: 'Invalid submission id' });
+
+  try {
+    const subRes = await db.query(
+      `SELECT status FROM brsr_submissions WHERE id = $1 AND company_id = $2`,
+      [submissionId, req.companyId]
+    );
+    if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
+    if (subRes.rows[0].status !== 'unlock_requested') {
+      return res.status(400).json({ error: `Cannot approve unlock from status '${subRes.rows[0].status}'` });
+    }
+
+    await db.query(
+      `UPDATE brsr_submissions SET status = 'in_review', updated_at = NOW() WHERE id = $1`,
+      [submissionId]
+    );
+
+    await db.query(
+      `DELETE FROM brsr_period_locks WHERE submission_id = $1`,
+      [submissionId]
+    );
+
+    await db.query(
+      `INSERT INTO brsr_lock_audit (submission_id, action, performed_by)
+       VALUES ($1, 'unlock_approved', $2)`,
+      [submissionId, req.userId]
+    );
+
+    const updatedSub = await db.query(
+      `SELECT id, financial_year, status, submitted_by, submitted_at FROM brsr_submissions WHERE id = $1`,
+      [submissionId]
+    );
+
+    res.json({ ok: true, submission: updatedSub.rows[0] });
+  } catch (err) {
+    console.error('POST /api/brsr/submission/unlock-approve error:', err.message);
+    res.status(500).json({ error: 'Failed to approve unlock' });
+  }
+});
+
+// ── POST /api/brsr/submission/:id/unlock-reject ──────────────────────────────
+// Admin only. Transitions unlock_requested → locked, clears request fields.
+router.post('/submission/:id/unlock-reject', requireRole('admin'), async (req, res) => {
+  await ensureMigrated();
+  const submissionId = parseInt(req.params.id, 10);
+  if (isNaN(submissionId)) return res.status(400).json({ error: 'Invalid submission id' });
+
+  const { notes } = req.body;
+
+  try {
+    const subRes = await db.query(
+      `SELECT status FROM brsr_submissions WHERE id = $1 AND company_id = $2`,
+      [submissionId, req.companyId]
+    );
+    if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
+    if (subRes.rows[0].status !== 'unlock_requested') {
+      return res.status(400).json({ error: `Cannot reject unlock from status '${subRes.rows[0].status}'` });
+    }
+
+    await db.query(
+      `UPDATE brsr_submissions SET status = 'locked', updated_at = NOW() WHERE id = $1`,
+      [submissionId]
+    );
+
+    await db.query(
+      `UPDATE brsr_period_locks
+          SET unlock_requested_at   = NULL,
+              unlock_requested_by   = NULL,
+              unlock_request_reason = NULL
+        WHERE submission_id = $1`,
+      [submissionId]
+    );
+
+    await db.query(
+      `INSERT INTO brsr_lock_audit (submission_id, action, performed_by, notes)
+       VALUES ($1, 'unlock_rejected', $2, $3)`,
+      [submissionId, req.userId, notes || null]
+    );
+
+    const updatedSub = await db.query(
+      `SELECT id, financial_year, status, submitted_by, submitted_at FROM brsr_submissions WHERE id = $1`,
+      [submissionId]
+    );
+
+    res.json({ ok: true, submission: updatedSub.rows[0] });
+  } catch (err) {
+    console.error('POST /api/brsr/submission/unlock-reject error:', err.message);
+    res.status(500).json({ error: 'Failed to reject unlock' });
+  }
+});
+
+// ── GET /api/brsr/submission/:id/lock-status ─────────────────────────────────
+// Returns current lock record, last 10 audit entries, and display names.
+router.get('/submission/:id/lock-status', requireRole('admin', 'editor', 'viewer'), async (req, res) => {
+  await ensureMigrated();
+  const submissionId = parseInt(req.params.id, 10);
+  if (isNaN(submissionId)) return res.status(400).json({ error: 'Invalid submission id' });
+
+  try {
+    const subRes = await db.query(
+      `SELECT id FROM brsr_submissions WHERE id = $1 AND company_id = $2`,
+      [submissionId, req.companyId]
+    );
+    if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
+
+    const [lockRes, auditRes] = await Promise.all([
+      db.query(
+        `SELECT pl.*, ul.name AS locker_name, ur.name AS requester_name
+           FROM brsr_period_locks pl
+           LEFT JOIN users ul ON ul.id = pl.locked_by
+           LEFT JOIN users ur ON ur.id = pl.unlock_requested_by
+          WHERE pl.submission_id = $1`,
+        [submissionId]
+      ),
+      db.query(
+        `SELECT la.*, u.name AS performed_by_name
+           FROM brsr_lock_audit la
+           LEFT JOIN users u ON u.id = la.performed_by
+          WHERE la.submission_id = $1
+          ORDER BY la.performed_at DESC
+          LIMIT 10`,
+        [submissionId]
+      ),
+    ]);
+
+    const lock = lockRes.rows[0] || null;
+
+    res.json({
+      lock,
+      audit:          auditRes.rows,
+      locker_name:    lock?.locker_name    || null,
+      requester_name: lock?.requester_name || null,
+    });
+  } catch (err) {
+    console.error('GET /api/brsr/submission/lock-status error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch lock status' });
   }
 });
 
@@ -375,8 +631,8 @@ router.put('/p6/:id', requireRole('admin', 'editor'), async (req, res) => {
       [submissionId, req.companyId]
     );
     if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
-    if (subRes.rows[0].status === 'locked') {
-      return res.status(403).json({ error: 'Submission is locked and cannot be edited' });
+    if (subRes.rows[0].status === 'locked' || subRes.rows[0].status === 'unlock_requested') {
+      return res.status(403).json({ error: 'Submission is locked' });
     }
 
     await ensureP6Row(req.companyId, submissionId, subRes.rows[0].financial_year, req.userId);
@@ -545,8 +801,8 @@ router.put('/p3/:id', requireRole('admin', 'editor'), async (req, res) => {
       [submissionId, req.companyId]
     );
     if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
-    if (subRes.rows[0].status === 'locked') {
-      return res.status(403).json({ error: 'Submission is locked and cannot be edited' });
+    if (subRes.rows[0].status === 'locked' || subRes.rows[0].status === 'unlock_requested') {
+      return res.status(403).json({ error: 'Submission is locked' });
     }
 
     await ensureP3Row(req.companyId, submissionId, subRes.rows[0].financial_year, req.userId);
@@ -686,8 +942,8 @@ router.put('/p5/:id', requireRole('admin', 'editor'), async (req, res) => {
       [submissionId, req.companyId]
     );
     if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
-    if (subRes.rows[0].status === 'locked') {
-      return res.status(403).json({ error: 'Submission is locked and cannot be edited' });
+    if (subRes.rows[0].status === 'locked' || subRes.rows[0].status === 'unlock_requested') {
+      return res.status(403).json({ error: 'Submission is locked' });
     }
 
     await ensureP5Row(req.companyId, submissionId, subRes.rows[0].financial_year, req.userId);
@@ -814,8 +1070,8 @@ router.put('/section-b/:id', requireRole('admin', 'editor'), async (req, res) =>
       [submissionId, req.companyId]
     );
     if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
-    if (subRes.rows[0].status === 'locked') {
-      return res.status(403).json({ error: 'Submission is locked and cannot be edited' });
+    if (subRes.rows[0].status === 'locked' || subRes.rows[0].status === 'unlock_requested') {
+      return res.status(403).json({ error: 'Submission is locked' });
     }
 
     await ensureSectionBRow(req.companyId, submissionId, subRes.rows[0].financial_year, req.userId);
@@ -926,8 +1182,8 @@ router.put('/p1/:id', requireRole('admin', 'editor'), async (req, res) => {
       [submissionId, req.companyId]
     );
     if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
-    if (subRes.rows[0].status === 'locked') {
-      return res.status(403).json({ error: 'Submission is locked and cannot be edited' });
+    if (subRes.rows[0].status === 'locked' || subRes.rows[0].status === 'unlock_requested') {
+      return res.status(403).json({ error: 'Submission is locked' });
     }
 
     await ensureP1Row(req.companyId, submissionId, subRes.rows[0].financial_year, req.userId);
@@ -1037,8 +1293,8 @@ router.put('/p2/:id', requireRole('admin', 'editor'), async (req, res) => {
       [submissionId, req.companyId]
     );
     if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
-    if (subRes.rows[0].status === 'locked') {
-      return res.status(403).json({ error: 'Submission is locked and cannot be edited' });
+    if (subRes.rows[0].status === 'locked' || subRes.rows[0].status === 'unlock_requested') {
+      return res.status(403).json({ error: 'Submission is locked' });
     }
 
     await ensureP2Row(req.companyId, submissionId, subRes.rows[0].financial_year, req.userId);
@@ -1147,8 +1403,8 @@ router.put('/p4/:id', requireRole('admin', 'editor'), async (req, res) => {
       [submissionId, req.companyId]
     );
     if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
-    if (subRes.rows[0].status === 'locked') {
-      return res.status(403).json({ error: 'Submission is locked and cannot be edited' });
+    if (subRes.rows[0].status === 'locked' || subRes.rows[0].status === 'unlock_requested') {
+      return res.status(403).json({ error: 'Submission is locked' });
     }
 
     await ensureP4Row(req.companyId, submissionId, subRes.rows[0].financial_year, req.userId);
@@ -1254,8 +1510,8 @@ router.put('/p7/:id', requireRole('admin', 'editor'), async (req, res) => {
       [submissionId, req.companyId]
     );
     if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
-    if (subRes.rows[0].status === 'locked') {
-      return res.status(403).json({ error: 'Submission is locked and cannot be edited' });
+    if (subRes.rows[0].status === 'locked' || subRes.rows[0].status === 'unlock_requested') {
+      return res.status(403).json({ error: 'Submission is locked' });
     }
 
     await ensureP7Row(req.companyId, submissionId, subRes.rows[0].financial_year, req.userId);
@@ -1364,8 +1620,8 @@ router.put('/p8/:id', requireRole('admin', 'editor'), async (req, res) => {
       [submissionId, req.companyId]
     );
     if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
-    if (subRes.rows[0].status === 'locked') {
-      return res.status(403).json({ error: 'Submission is locked and cannot be edited' });
+    if (subRes.rows[0].status === 'locked' || subRes.rows[0].status === 'unlock_requested') {
+      return res.status(403).json({ error: 'Submission is locked' });
     }
 
     await ensureP8Row(req.companyId, submissionId, subRes.rows[0].financial_year, req.userId);
@@ -1478,8 +1734,8 @@ router.put('/p9/:id', requireRole('admin', 'editor'), async (req, res) => {
       [submissionId, req.companyId]
     );
     if (!subRes.rows.length) return res.status(404).json({ error: 'Submission not found' });
-    if (subRes.rows[0].status === 'locked') {
-      return res.status(403).json({ error: 'Submission is locked and cannot be edited' });
+    if (subRes.rows[0].status === 'locked' || subRes.rows[0].status === 'unlock_requested') {
+      return res.status(403).json({ error: 'Submission is locked' });
     }
 
     await ensureP9Row(req.companyId, submissionId, subRes.rows[0].financial_year, req.userId);
