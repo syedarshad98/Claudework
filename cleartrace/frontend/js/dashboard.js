@@ -511,6 +511,19 @@ const DEFRA_FACTORS = {
   'Waste (Composted)':                   { factor: 0.01100, unit: 'kg',    scope: 3 },
   'Water Supply':                        { factor: 0.14900, unit: 'm³',    scope: 3 },
   'Water Treatment':                     { factor: 0.27200, unit: 'm³',    scope: 3 },
+  'Purchased Goods & Services':          { factor: null,    unit: 'kg',    scope: 3, custom: true },
+  'Capital Goods':                       { factor: null,    unit: 'unit',  scope: 3, custom: true },
+  'Fuel & Energy Related Activities':    { factor: null,    unit: 'kWh',   scope: 3, custom: true },
+  'Upstream Transport & Distribution':   { factor: null,    unit: 'km',    scope: 3, custom: true },
+  'Waste Generated in Operations':       { factor: null,    unit: 'kg',    scope: 3, custom: true },
+  'Upstream Leased Assets':              { factor: null,    unit: 'kWh',   scope: 3, custom: true },
+  'Downstream Transport & Distribution': { factor: null,    unit: 'km',    scope: 3, custom: true },
+  'Processing of Sold Products':         { factor: null,    unit: 'kg',    scope: 3, custom: true },
+  'Use of Sold Products':                { factor: null,    unit: 'unit',  scope: 3, custom: true },
+  'End-of-Life Treatment of Sold Products': { factor: null, unit: 'kg',    scope: 3, custom: true },
+  'Downstream Leased Assets':            { factor: null,    unit: 'kWh',   scope: 3, custom: true },
+  'Franchises':                          { factor: null,    unit: 'unit',  scope: 3, custom: true },
+  'Investments':                         { factor: null,    unit: 'unit',  scope: 3, custom: true },
   'Purchased Goods':                     { factor: null,    unit: 'kg',    scope: 3, custom: true },
   'Upstream Transport':                  { factor: null,    unit: 'km',    scope: 3, custom: true },
   'Other Scope 3':                       { factor: null,    unit: 'kg',    scope: 3, custom: true },
@@ -530,6 +543,19 @@ const CEA_FACTORS = {
   applicability: 'India grid-connected electricity (location-based, GHG Protocol Scope 2)',
 };
 
+// UAE (DEWA) grid factor — mirrors cleartrace/backend/db/emission_factors.js — keep in sync.
+// Verified for Dubai (DEWA) only.
+const UAE_FACTORS = {
+  versions: {
+    'DEWA-2023': { fy: '2023', published: '2024', gridEF: 0.4041, utility: 'DEWA (Dubai)' },
+  },
+  latest: 'DEWA-2023',
+  source: 'Dubai Electricity & Water Authority (DEWA) Grid Emission Factor',
+  scope: 2,
+  unit: 'tCO2e/MWh',
+  applicability: 'UAE grid-connected electricity — verified for Dubai (DEWA) only.',
+};
+
 const GRID_ELECTRICITY_CATEGORIES = new Set(['Grid Electricity (UK)', 'Grid Electricity']);
 
 function setFormUnit(unit) {
@@ -540,13 +566,19 @@ function setFormUnit(unit) {
 function updateGridElecBadge() {
   const badge    = document.getElementById('defra-ef-badge');
   const selector = document.getElementById('ef-source-selector');
-  const source   = selector ? selector.value : (companyJurisdiction === 'IN' ? 'CEA' : 'DEFRA');
+  const defaultSource = companyJurisdiction === 'IN' ? 'CEA' : (companyJurisdiction === 'AE' ? 'AE' : 'DEFRA');
+  const source   = selector ? selector.value : defaultSource;
 
   if (source === 'CEA') {
     const ver = CEA_FACTORS.versions[CEA_FACTORS.latest];
     badge.innerHTML =
       `<span>&#x2705; <strong>${ver.gridEF}</strong> tCO₂/MWh</span>` +
       `<span class="defra-source">CEA ${CEA_FACTORS.latest} — FY ${ver.fy}</span>`;
+  } else if (source === 'AE') {
+    const ver = UAE_FACTORS.versions[UAE_FACTORS.latest];
+    badge.innerHTML =
+      `<span>&#x2705; <strong>${ver.gridEF}</strong> tCO₂e/MWh</span>` +
+      `<span class="defra-source">${ver.utility} Grid Emission Factor — FY ${ver.fy}</span>`;
   } else {
     const f = DEFRA_FACTORS['Grid Electricity (UK)'];
     badge.innerHTML =
@@ -564,10 +596,10 @@ function applyEmissionFactor(category) {
   const isGridElec = GRID_ELECTRICITY_CATEGORIES.has(category);
 
   if (selector)   selector.style.display  = isGridElec ? '' : 'none';
-  if (ceaTooltip) ceaTooltip.style.display = (isGridElec && companyJurisdiction === 'IN') ? '' : 'none';
+  if (ceaTooltip) ceaTooltip.style.display = (isGridElec && (companyJurisdiction === 'IN' || companyJurisdiction === 'AE')) ? '' : 'none';
 
   if (isGridElec) {
-    if (selector) selector.value = (companyJurisdiction === 'IN') ? 'CEA' : 'DEFRA';
+    if (selector) selector.value = (companyJurisdiction === 'IN') ? 'CEA' : (companyJurisdiction === 'AE') ? 'AE' : 'DEFRA';
     document.getElementById('f-scope').value = '2';
     setFormUnit('kWh');
     updateGridElecBadge();
@@ -635,6 +667,13 @@ document.getElementById('entry-form').addEventListener('submit', async (e) => {
           emission_factor:     ver.gridEF,
           factor_source:       `CEA ${CEA_FACTORS.latest} — FY ${ver.fy}`,
           factor_jurisdiction: 'IN',
+        };
+      } else if (selector.value === 'AE') {
+        const ver = UAE_FACTORS.versions[UAE_FACTORS.latest];
+        efExtras = {
+          emission_factor:     ver.gridEF,
+          factor_source:       `${ver.utility} Grid Emission Factor — FY ${ver.fy}`,
+          factor_jurisdiction: 'AE',
         };
       } else {
         const f = DEFRA_FACTORS['Grid Electricity (UK)'];
