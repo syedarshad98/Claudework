@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpsCommand — Manufacturing Intelligence</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="shell">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo">
+      <div class="logo-mark">
+        <svg viewBox="0 0 20 20" fill="none">
+          <rect x="2"  y="10" width="4" height="8"  fill="#0a0c10" rx="1"/>
+          <rect x="8"  y="6"  width="4" height="12" fill="#0a0c10" rx="1"/>
+          <rect x="14" y="2"  width="4" height="16" fill="#0a0c10" rx="1"/>
+        </svg>
+      </div>
+      <div class="logo-text">Ops<span>Command</span></div>
+    </div>
+    <div class="header-center">
+      NEXFORD MANUFACTURING GROUP &nbsp;·&nbsp; PLANT A — DETROIT<br>
+      <span style="color:#3a4458">Shift: Day &nbsp;·&nbsp; Week 12, Q1 2026</span>
+    </div>
+    <div class="live-badge">
+      <div class="live-dot"></div>
+      LIVE DATA
+    </div>
+  </header>
+
+  <!-- TICKER -->
+  <div class="ticker-bar">
+    <div class="ticker-label">Alerts</div>
+    <div class="ticker-divider"></div>
+    <div class="ticker-scroll" id="ticker-scroll">
+      <!-- Populated by dashboard.js via SSE + /api/alerts -->
+    </div>
+  </div>
+
+  <!-- KPI STRIP -->
+  <div class="kpi-strip">
+    <div class="kpi green">
+      <div class="kpi-label">Units Produced Today</div>
+      <div class="kpi-value" id="kpi-units">—</div>
+      <div class="kpi-delta" id="kpi-units-delta">&nbsp;</div>
+    </div>
+    <div class="kpi blue">
+      <div class="kpi-label">Machine Uptime</div>
+      <div class="kpi-value" id="kpi-uptime">—</div>
+      <div class="kpi-delta" id="kpi-uptime-delta">&nbsp;</div>
+    </div>
+    <div class="kpi warn">
+      <div class="kpi-label">Defect Rate</div>
+      <div class="kpi-value" id="kpi-defect">—</div>
+      <div class="kpi-delta" id="kpi-defect-delta">&nbsp;</div>
+    </div>
+    <div class="kpi danger">
+      <div class="kpi-label">Inventory Alerts</div>
+      <div class="kpi-value" id="kpi-inv">—</div>
+      <div class="kpi-delta" id="kpi-inv-delta">&nbsp;</div>
+    </div>
+    <div class="kpi purple">
+      <div class="kpi-label">Open Work Orders</div>
+      <div class="kpi-value" id="kpi-wo">—</div>
+      <div class="kpi-delta" id="kpi-wo-delta">&nbsp;</div>
+    </div>
+  </div>
+
+  <!-- MAIN GRID -->
+  <div class="main-grid">
+
+    <!-- Production Chart -->
+    <div class="card">
+      <div class="card-title">
+        Production Output — Hourly
+        <span class="tag tag-green" id="prod-tag">On Track</span>
+      </div>
+      <div class="card-sub">Units/hr across all lines · Today vs Yesterday</div>
+      <div class="chart-wrap" id="chart-wrap">
+        <!-- SVG injected by dashboard.js -->
+      </div>
+    </div>
+
+    <!-- Machine Status -->
+    <div class="card">
+      <div class="card-title">
+        Machine Status
+        <span class="tag tag-warn" id="machine-tag">— Offline</span>
+      </div>
+      <div class="card-sub" id="machine-sub">Real-time uptime · — machines monitored</div>
+      <div class="machine-grid" id="machine-grid">
+        <!-- Populated by dashboard.js -->
+      </div>
+    </div>
+
+    <!-- Work Orders -->
+    <div class="card">
+      <div class="card-title">Work Orders</div>
+      <div class="card-sub" id="wo-sub">Active · — open orders</div>
+      <div class="wo-list" id="wo-list">
+        <!-- Populated by dashboard.js -->
+      </div>
+    </div>
+
+  </div>
+
+  <!-- BOTTOM ROW -->
+  <div class="bottom-grid">
+
+    <!-- Inventory -->
+    <div class="card">
+      <div class="card-title">
+        Inventory &amp; Raw Materials
+        <span class="tag tag-danger" id="inv-tag">— Alerts</span>
+      </div>
+      <div class="card-sub">Stock levels vs reorder threshold</div>
+      <div class="inv-list" id="inv-list">
+        <!-- Populated by dashboard.js -->
+      </div>
+    </div>
+
+    <!-- Quality Control -->
+    <div class="card">
+      <div class="card-title">
+        Quality Control
+        <span class="tag tag-green" id="quality-tag">Within Threshold</span>
+      </div>
+      <div class="card-sub">Defect breakdown · Current shift</div>
+      <div class="quality-wrap" id="quality-wrap">
+        <!-- Populated by dashboard.js -->
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script src="js/dashboard.js"></script>
+</body>
+</html>
