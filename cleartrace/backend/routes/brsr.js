@@ -13,9 +13,9 @@ const P7_FIELDS                      = require('../lib/brsr-p7-fields');
 const P8_FIELDS                      = require('../lib/brsr-p8-fields');
 const P9_FIELDS                      = require('../lib/brsr-p9-fields');
 const { SECTION_B_FIELDS }           = require('../lib/brsr-section-b-fields');
-const { CEA_FACTORS }                = require('../db/emission_factors');
+const { CEA_FACTORS, UAE_FACTORS }   = require('../db/emission_factors');
 
-// ── Lazy migration ────────────────────────────────────────────────────────────
+// ââ Lazy migration ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 let migrated = false;
 async function ensureMigrated() {
   if (migrated) return;
@@ -36,14 +36,14 @@ async function ensureMigrated() {
   migrated = true;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ââ Helpers âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 // Flatten all field keys for whitelist validation
 function allFieldKeys() {
   return SECTION_A_FIELDS.flatMap(cat => cat.fields.map(f => f.key));
 }
 
-// Map field key → typed column in brsr_section_a.
+// Map field key â typed column in brsr_section_a.
 // Keys absent from this map are stored in the disclosures JSONB column.
 const COLUMN_MAP = {
   cin:                   'cin',
@@ -75,7 +75,7 @@ function mergeFields(savedRow) {
   }));
 }
 
-// Current Indian financial year: April–March
+// Current Indian financial year: AprilâMarch
 function currentIndianFY() {
   const now = new Date();
   const y   = now.getFullYear();
@@ -95,7 +95,7 @@ async function ensureSectionARow(companyId, submissionId, financialYear, userId)
   );
 }
 
-// ── GET /api/brsr/submission?fy=YYYY-YY ──────────────────────────────────────
+// ââ GET /api/brsr/submission?fy=YYYY-YY ââââââââââââââââââââââââââââââââââââââ
 // Get or auto-create a draft submission for the current company + FY.
 // Returns the submission record plus company name and user email for pre-population.
 router.get('/submission', async (req, res) => {
@@ -138,7 +138,7 @@ router.get('/submission', async (req, res) => {
   }
 });
 
-// ── GET /api/brsr/section-a/:id ───────────────────────────────────────────────
+// ââ GET /api/brsr/section-a/:id âââââââââââââââââââââââââââââââââââââââââââââââ
 // :id = brsr_submissions.id
 // Returns merged categories (definitions + saved values) for the form to render.
 router.get('/section-a/:id', async (req, res) => {
@@ -174,7 +174,7 @@ router.get('/section-a/:id', async (req, res) => {
   }
 });
 
-// ── PUT /api/brsr/section-a/:id ───────────────────────────────────────────────
+// ââ PUT /api/brsr/section-a/:id âââââââââââââââââââââââââââââââââââââââââââââââ
 // Upsert a single field. Body: { key, value }
 // JSONB field types (dynamic_table, matrix, multiselect) have their value
 // JSON-encoded before storage. Rejects if submission.status = 'locked'.
@@ -229,8 +229,8 @@ router.put('/section-a/:id', requireRole('admin', 'editor'), async (req, res) =>
   }
 });
 
-// ── POST /api/brsr/submission/:id/status ─────────────────────────────────────
-// Allowed transition: draft → in_review only.
+// ââ POST /api/brsr/submission/:id/status âââââââââââââââââââââââââââââââââââââ
+// Allowed transition: draft â in_review only.
 router.post('/submission/:id/status', requireRole('admin', 'editor'), async (req, res) => {
   await ensureMigrated();
   const submissionId = parseInt(req.params.id, 10);
@@ -238,7 +238,7 @@ router.post('/submission/:id/status', requireRole('admin', 'editor'), async (req
 
   const { status } = req.body;
   if (status !== 'in_review') {
-    return res.status(400).json({ error: 'Only draft → in_review transition is supported via this endpoint' });
+    return res.status(400).json({ error: 'Only draft â in_review transition is supported via this endpoint' });
   }
 
   try {
@@ -271,7 +271,7 @@ router.post('/submission/:id/status', requireRole('admin', 'editor'), async (req
   }
 });
 
-// ── POST /api/brsr/submission/:id/lock ────────────────────────────────────────
+// ââ POST /api/brsr/submission/:id/lock ââââââââââââââââââââââââââââââââââââââââ
 // Sets submission.status = 'locked', upserts brsr_period_locks, writes audit log.
 router.post('/submission/:id/lock', requireRole('admin', 'editor'), async (req, res) => {
   await ensureMigrated();
@@ -329,8 +329,8 @@ router.post('/submission/:id/lock', requireRole('admin', 'editor'), async (req, 
   }
 });
 
-// ── POST /api/brsr/submission/:id/unlock-request ──────────────────────────────
-// Transitions locked → unlock_requested. Editors and admins can request.
+// ââ POST /api/brsr/submission/:id/unlock-request ââââââââââââââââââââââââââââââ
+// Transitions locked â unlock_requested. Editors and admins can request.
 router.post('/submission/:id/unlock-request', requireRole('admin', 'editor'), async (req, res) => {
   await ensureMigrated();
   const submissionId = parseInt(req.params.id, 10);
@@ -380,8 +380,8 @@ router.post('/submission/:id/unlock-request', requireRole('admin', 'editor'), as
   }
 });
 
-// ── POST /api/brsr/submission/:id/unlock-approve ─────────────────────────────
-// Admin only. Transitions unlock_requested → in_review, deletes lock record.
+// ââ POST /api/brsr/submission/:id/unlock-approve âââââââââââââââââââââââââââââ
+// Admin only. Transitions unlock_requested â in_review, deletes lock record.
 router.post('/submission/:id/unlock-approve', requireRole('admin'), async (req, res) => {
   await ensureMigrated();
   const submissionId = parseInt(req.params.id, 10);
@@ -425,8 +425,8 @@ router.post('/submission/:id/unlock-approve', requireRole('admin'), async (req, 
   }
 });
 
-// ── POST /api/brsr/submission/:id/unlock-reject ──────────────────────────────
-// Admin only. Transitions unlock_requested → locked, clears request fields.
+// ââ POST /api/brsr/submission/:id/unlock-reject ââââââââââââââââââââââââââââââ
+// Admin only. Transitions unlock_requested â locked, clears request fields.
 router.post('/submission/:id/unlock-reject', requireRole('admin'), async (req, res) => {
   await ensureMigrated();
   const submissionId = parseInt(req.params.id, 10);
@@ -476,7 +476,7 @@ router.post('/submission/:id/unlock-reject', requireRole('admin'), async (req, r
   }
 });
 
-// ── GET /api/brsr/submission/:id/lock-status ─────────────────────────────────
+// ââ GET /api/brsr/submission/:id/lock-status âââââââââââââââââââââââââââââââââ
 // Returns current lock record, last 10 audit entries, and display names.
 router.get('/submission/:id/lock-status', requireRole('admin', 'editor', 'viewer'), async (req, res) => {
   await ensureMigrated();
@@ -524,13 +524,13 @@ router.get('/submission/:id/lock-status', requireRole('admin', 'editor', 'viewer
   }
 });
 
-// ── P6 helpers ────────────────────────────────────────────────────────────────
+// ââ P6 helpers ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 function allP6FieldKeys() {
   return P6_FIELDS.flatMap(cat => cat.fields.map(f => f.key));
 }
 
-// Map P6 field keys → typed columns in brsr_p6_environment.
+// Map P6 field keys â typed columns in brsr_p6_environment.
 // All other keys go into the disclosures JSONB column.
 const P6_COLUMN_MAP = {
   scope1_current:                      'ghg_scope1_tco2e',
@@ -567,7 +567,7 @@ async function ensureP6Row(companyId, submissionId, financialYear, userId) {
   );
 }
 
-// ── GET /api/brsr/p6/:id ──────────────────────────────────────────────────────
+// ââ GET /api/brsr/p6/:id ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 // Returns merged P6 categories + annual revenue (for intensity calc) + company.
 router.get('/p6/:id', async (req, res) => {
   await ensureMigrated();
@@ -610,7 +610,7 @@ router.get('/p6/:id', async (req, res) => {
   }
 });
 
-// ── PUT /api/brsr/p6/:id ──────────────────────────────────────────────────────
+// ââ PUT /api/brsr/p6/:id ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 // Upsert a single P6 field. Body: { key, value }
 // When key is scope2_current or scope2_previous, also stamps emission_factor_source.
 router.put('/p6/:id', requireRole('admin', 'editor'), async (req, res) => {
@@ -666,9 +666,13 @@ router.put('/p6/:id', requireRole('admin', 'editor'), async (req, res) => {
       if (jurisdiction === 'IN') {
         const latestKey = CEA_FACTORS.latest;
         const ver       = CEA_FACTORS.versions[latestKey];
-        efSource = `CEA ${latestKey} — FY ${ver.fy} (${ver.gridEF} tCO₂/MWh)`;
+        efSource = `CEA ${latestKey} â FY ${ver.fy} (${ver.gridEF} tCOâ/MWh)`;
+      } else if (jurisdiction === 'AE') {
+        const latestKey = UAE_FACTORS.latest;
+        const ver       = UAE_FACTORS.versions[latestKey];
+        efSource = `${ver.utility} Grid Emission Factor â FY ${ver.fy} (${ver.gridEF} tCOâe/MWh)`;
       } else {
-        efSource = 'DEFRA 2023 (0.20493 kg CO₂e/kWh)';
+        efSource = 'DEFRA 2023 (0.20493 kg COâe/kWh)';
       }
 
       await db.query(
@@ -687,7 +691,7 @@ router.put('/p6/:id', requireRole('admin', 'editor'), async (req, res) => {
   }
 });
 
-// ── P3 helpers ────────────────────────────────────────────────────────────────
+// ââ P3 helpers ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 function allP3FieldKeys() {
   return P3_FIELDS.flatMap(cat => cat.fields.map(f => f.key));
@@ -695,7 +699,7 @@ function allP3FieldKeys() {
 
 // Typed scalar columns in brsr_p3_employees.
 // All other keys (specialist_table / dynamic_table JSONB) are named JSONB columns
-// whose column name equals the field key — stored directly, not via a catch-all JSONB.
+// whose column name equals the field key â stored directly, not via a catch-all JSONB.
 const P3_COLUMN_MAP = {
   e3_accessibility:             'e3_accessibility',
   e4_equal_opportunity:         'e4_equal_opportunity',
@@ -743,7 +747,7 @@ async function ensureP3Row(companyId, submissionId, financialYear, userId) {
   );
 }
 
-// ── GET /api/brsr/p3/:id ──────────────────────────────────────────────────────
+// ââ GET /api/brsr/p3/:id ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 // Returns merged P3 categories (definitions + saved values).
 router.get('/p3/:id', async (req, res) => {
   await ensureMigrated();
@@ -778,7 +782,7 @@ router.get('/p3/:id', async (req, res) => {
   }
 });
 
-// ── PUT /api/brsr/p3/:id ──────────────────────────────────────────────────────
+// ââ PUT /api/brsr/p3/:id ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 // Upsert a single P3 field. Body: { key, value }
 // Typed scalar columns updated directly; JSONB fields stored by column name.
 // Rejects if submission.status = 'locked'.
@@ -816,7 +820,7 @@ router.put('/p3/:id', requireRole('admin', 'editor'), async (req, res) => {
         [value, submissionId, req.companyId]
       );
     } else {
-      // Named JSONB column — column name equals field key (validated above)
+      // Named JSONB column â column name equals field key (validated above)
       const jsonValue = JSON.stringify(value ?? null);
       await db.query(
         `UPDATE brsr_p3_employees SET "${key}" = $1::jsonb, updated_at = NOW()
@@ -832,7 +836,7 @@ router.put('/p3/:id', requireRole('admin', 'editor'), async (req, res) => {
   }
 });
 
-// ── P5 helpers ────────────────────────────────────────────────────────────────
+// ââ P5 helpers ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 function allP5FieldKeys() {
   return P5_FIELDS.flatMap(cat => cat.fields.map(f => f.key));
@@ -840,7 +844,7 @@ function allP5FieldKeys() {
 
 // Typed scalar columns in brsr_p5_humanrights.
 // All other keys (specialist_table / dynamic_table JSONB) are named JSONB columns
-// whose column name equals the field key — stored directly.
+// whose column name equals the field key â stored directly.
 const P5_COLUMN_MAP = {
   e4_focal_point:              'e4_focal_point',
   e5_grievance_mechanism:      'e5_grievance_mechanism',
@@ -884,7 +888,7 @@ async function ensureP5Row(companyId, submissionId, financialYear, userId) {
   );
 }
 
-// ── GET /api/brsr/p5/:id ──────────────────────────────────────────────────────
+// ââ GET /api/brsr/p5/:id ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 // Returns merged P5 categories (definitions + saved values).
 router.get('/p5/:id', async (req, res) => {
   await ensureMigrated();
@@ -919,7 +923,7 @@ router.get('/p5/:id', async (req, res) => {
   }
 });
 
-// ── PUT /api/brsr/p5/:id ──────────────────────────────────────────────────────
+// ââ PUT /api/brsr/p5/:id ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 // Upsert a single P5 field. Body: { key, value }
 // Typed scalar columns updated directly; JSONB fields stored by column name.
 // Rejects if submission.status = 'locked'.
@@ -971,7 +975,7 @@ router.put('/p5/:id', requireRole('admin', 'editor'), async (req, res) => {
   }
 });
 
-// ── Section B helpers ─────────────────────────────────────────────────────────
+// ââ Section B helpers âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 function allSectionBFieldKeys() {
   return SECTION_B_FIELDS.flatMap(cat => cat.fields.map(f => f.key));
@@ -1011,7 +1015,7 @@ async function ensureSectionBRow(companyId, submissionId, financialYear, userId)
   );
 }
 
-// ── GET /api/brsr/section-b/:id ───────────────────────────────────────────────
+// ââ GET /api/brsr/section-b/:id âââââââââââââââââââââââââââââââââââââââââââââââ
 // :id = brsr_submissions.id
 // Returns merged Section B categories (definitions + saved values).
 router.get('/section-b/:id', async (req, res) => {
@@ -1047,7 +1051,7 @@ router.get('/section-b/:id', async (req, res) => {
   }
 });
 
-// ── PUT /api/brsr/section-b/:id ───────────────────────────────────────────────
+// ââ PUT /api/brsr/section-b/:id âââââââââââââââââââââââââââââââââââââââââââââââ
 // Upsert a single field. Body: { key, value }
 // Typed columns go directly; principle_grid and all others go into policy_grid JSONB.
 // Rejects if submission.status = 'locked'.
@@ -1101,7 +1105,7 @@ router.put('/section-b/:id', requireRole('admin', 'editor'), async (req, res) =>
   }
 });
 
-// ── P1 helpers ────────────────────────────────────────────────────────────────
+// ââ P1 helpers ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 function allP1FieldKeys() {
   return P1_FIELDS.flatMap(cat => cat.fields.map(f => f.key));
@@ -1211,7 +1215,7 @@ router.put('/p1/:id', requireRole('admin', 'editor'), async (req, res) => {
   }
 });
 
-// ── P2 helpers ────────────────────────────────────────────────────────────────
+// ââ P2 helpers ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 function allP2FieldKeys() {
   return P2_FIELDS.flatMap(cat => cat.fields.map(f => f.key));
@@ -1322,7 +1326,7 @@ router.put('/p2/:id', requireRole('admin', 'editor'), async (req, res) => {
   }
 });
 
-// ── P4 helpers ────────────────────────────────────────────────────────────────
+// ââ P4 helpers ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 function allP4FieldKeys() {
   return P4_FIELDS.flatMap(cat => cat.fields.map(f => f.key));
@@ -1432,7 +1436,7 @@ router.put('/p4/:id', requireRole('admin', 'editor'), async (req, res) => {
   }
 });
 
-// ── P7 helpers ────────────────────────────────────────────────────────────────
+// ââ P7 helpers ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 function allP7FieldKeys() {
   return P7_FIELDS.flatMap(cat => cat.fields.map(f => f.key));
@@ -1539,7 +1543,7 @@ router.put('/p7/:id', requireRole('admin', 'editor'), async (req, res) => {
   }
 });
 
-// ── P8 helpers ────────────────────────────────────────────────────────────────
+// ââ P8 helpers ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 function allP8FieldKeys() {
   return P8_FIELDS.flatMap(cat => cat.fields.map(f => f.key));
@@ -1649,7 +1653,7 @@ router.put('/p8/:id', requireRole('admin', 'editor'), async (req, res) => {
   }
 });
 
-// ── P9 helpers ────────────────────────────────────────────────────────────────
+// ââ P9 helpers ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 function allP9FieldKeys() {
   return P9_FIELDS.flatMap(cat => cat.fields.map(f => f.key));
@@ -1763,7 +1767,7 @@ router.put('/p9/:id', requireRole('admin', 'editor'), async (req, res) => {
   }
 });
 
-// ── GET /api/brsr/report/:submissionId ───────────────────────────────────────
+// ââ GET /api/brsr/report/:submissionId âââââââââââââââââââââââââââââââââââââââ
 // Streams a SEBI-compliant BRSR PDF for the given submission.
 router.get('/report/:submissionId', requireRole('admin', 'editor'), async (req, res) => {
   await ensureMigrated();
@@ -1775,7 +1779,7 @@ router.get('/report/:submissionId', requireRole('admin', 'editor'), async (req, 
     const { COLORS, addPageNumber, drawSectionHeader, checkPageBreak } = require('../lib/brsr-pdf-helpers');
     const sections = require('../lib/brsr-pdf-sections');
 
-    // ── Verify ownership ──────────────────────────────────────────────────────
+    // ââ Verify ownership ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
     const subCheck = await db.query(
       'SELECT * FROM brsr_submissions WHERE id=$1 AND company_id=$2',
       [submissionId, req.companyId]
@@ -1783,7 +1787,7 @@ router.get('/report/:submissionId', requireRole('admin', 'editor'), async (req, 
     if (!subCheck.rows.length) return res.status(404).json({ error: 'Not found' });
     const sub = subCheck.rows[0];
 
-    // ── Fetch all 11 data tables + company in parallel ────────────────────────
+    // ââ Fetch all 11 data tables + company in parallel ââââââââââââââââââââââââ
     const [secA, secB, p1, p2, p3, p4, p5, p6, p7, p8, p9, company] = await Promise.all([
       db.query('SELECT * FROM brsr_section_a      WHERE submission_id=$1', [submissionId]),
       db.query('SELECT * FROM brsr_section_b      WHERE submission_id=$1', [submissionId]),
@@ -1802,11 +1806,11 @@ router.get('/report/:submissionId', requireRole('admin', 'editor'), async (req, 
     const companyName = company.rows[0]?.name || 'Unknown Company';
     const fy          = sub.financial_year;
 
-    // ── Determine assurance status from Section A ─────────────────────────────
+    // ââ Determine assurance status from Section A âââââââââââââââââââââââââââââ
     const reportingBoundary  = (secA.rows[0]?.disclosures || {}).reporting_boundary_note || 'Standalone';
     const assuranceStatus    = 'Third-party assurance not recorded';
 
-    // ── PDF setup ─────────────────────────────────────────────────────────────
+    // ââ PDF setup âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
     const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true });
     const pageWidth    = doc.page.width;
     const margin       = 40;
@@ -1818,7 +1822,7 @@ router.get('/report/:submissionId', requireRole('admin', 'editor'), async (req, 
       `attachment; filename="BRSR_${safeName}_${fy}.pdf"`);
     doc.pipe(res);
 
-    // ── Cover page (page 1) ───────────────────────────────────────────────────
+    // ââ Cover page (page 1) âââââââââââââââââââââââââââââââââââââââââââââââââââ
     const coverBannerH = 120;
     doc.rect(margin, margin, contentWidth, coverBannerH).fill(COLORS.navy);
     doc.fillColor(COLORS.white).font('Helvetica-Bold').fontSize(13)
@@ -1857,7 +1861,7 @@ router.get('/report/:submissionId', requireRole('admin', 'editor'), async (req, 
       cy += 24;
     }
 
-    // ── TOC page (page 2) ─────────────────────────────────────────────────────
+    // ââ TOC page (page 2) âââââââââââââââââââââââââââââââââââââââââââââââââââââ
     doc.addPage();
     const tocPageIndex = doc.bufferedPageRange().count - 1; // 0-based index of TOC page
 
@@ -1865,23 +1869,23 @@ router.get('/report/:submissionId', requireRole('admin', 'editor'), async (req, 
     doc.fillColor(COLORS.white).font('Helvetica-Bold').fontSize(11)
        .text('TABLE OF CONTENTS', margin + 8, margin + 6, { width: contentWidth - 16 });
 
-    // Placeholder — will be filled in after rendering all sections
+    // Placeholder â will be filled in after rendering all sections
     const tocSections = [
-      { title: 'Section A — General Disclosures',            key: 'secA' },
-      { title: 'Section B — Management and Process Disclosures', key: 'secB' },
-      { title: 'Principle 1 — Ethics, Transparency & Accountability', key: 'p1' },
-      { title: 'Principle 2 — Sustainable Products & Services',       key: 'p2' },
-      { title: 'Principle 3 — Employee Well-being',                   key: 'p3' },
-      { title: 'Principle 4 — Stakeholder Responsiveness',            key: 'p4' },
-      { title: 'Principle 5 — Human Rights',                         key: 'p5' },
-      { title: 'Principle 6 — Environment',                          key: 'p6' },
-      { title: 'Principle 7 — Policy Advocacy',                      key: 'p7' },
-      { title: 'Principle 8 — Inclusive Growth',                     key: 'p8' },
-      { title: 'Principle 9 — Consumer Responsibility',              key: 'p9' },
+      { title: 'Section A â General Disclosures',            key: 'secA' },
+      { title: 'Section B â Management and Process Disclosures', key: 'secB' },
+      { title: 'Principle 1 â Ethics, Transparency & Accountability', key: 'p1' },
+      { title: 'Principle 2 â Sustainable Products & Services',       key: 'p2' },
+      { title: 'Principle 3 â Employee Well-being',                   key: 'p3' },
+      { title: 'Principle 4 â Stakeholder Responsiveness',            key: 'p4' },
+      { title: 'Principle 5 â Human Rights',                         key: 'p5' },
+      { title: 'Principle 6 â Environment',                          key: 'p6' },
+      { title: 'Principle 7 â Policy Advocacy',                      key: 'p7' },
+      { title: 'Principle 8 â Inclusive Growth',                     key: 'p8' },
+      { title: 'Principle 9 â Consumer Responsibility',              key: 'p9' },
     ];
     // We'll write the actual TOC entries with page numbers after rendering
 
-    // ── Body pages — render each section ─────────────────────────────────────
+    // ââ Body pages â render each section âââââââââââââââââââââââââââââââââââââ
     const sectionPages = {};
 
     function startSection(key) {
@@ -1922,12 +1926,12 @@ router.get('/report/:submissionId', requireRole('admin', 'editor'), async (req, 
     startSection('p9');
     sections.renderP9(doc, p9.rows[0] || {}, margin, pageWidth, margin);
 
-    // ── Fill in TOC page with real page numbers ───────────────────────────────
+    // ââ Fill in TOC page with real page numbers âââââââââââââââââââââââââââââââ
     doc.switchToPage(tocPageIndex);
     let tocY = margin + 30;
     for (let i = 0; i < tocSections.length; i++) {
       const sec     = tocSections[i];
-      const pageNum = sectionPages[sec.key] || '—';
+      const pageNum = sectionPages[sec.key] || 'â';
       const fill    = i % 2 === 0 ? COLORS.lightGray : COLORS.white;
       doc.rect(margin, tocY, contentWidth, 18).fill(fill);
       doc.fillColor(COLORS.black).font('Helvetica').fontSize(8.5)
@@ -1937,7 +1941,7 @@ router.get('/report/:submissionId', requireRole('admin', 'editor'), async (req, 
       tocY += 20;
     }
 
-    // ── Stamp page numbers on every page ─────────────────────────────────────
+    // ââ Stamp page numbers on every page âââââââââââââââââââââââââââââââââââââ
     const range = doc.bufferedPageRange();
     for (let i = 0; i < range.count; i++) {
       doc.switchToPage(range.start + i);
