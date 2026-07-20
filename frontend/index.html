@@ -3,140 +3,489 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OpsCommand — Manufacturing Intelligence</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <title>ClearTrace — ESG Intelligence</title>
   <link rel="stylesheet" href="css/styles.css">
+  <script src="js/demo-guard.js"></script>
 </head>
 <body>
-<div class="shell">
+<div id="demo-banner" class="demo-banner" style="display:none">
+  <span class="demo-banner-icon">🔒</span>
+  Demo Account — changes are disabled. Login credentials: admin@verdantgroup.com / Demo1234!
+</div>
+<div class="layout">
 
-  <!-- HEADER -->
-  <header>
+  <!-- ── SIDEBAR ──────────────────────────────────────────────────────────── -->
+  <aside class="sidebar">
     <div class="logo">
-      <div class="logo-mark">
-        <svg viewBox="0 0 20 20" fill="none">
-          <rect x="2"  y="10" width="4" height="8"  fill="#0a0c10" rx="1"/>
-          <rect x="8"  y="6"  width="4" height="12" fill="#0a0c10" rx="1"/>
-          <rect x="14" y="2"  width="4" height="16" fill="#0a0c10" rx="1"/>
-        </svg>
+      <div class="logo-mark">🌿</div>
+      <div class="logo-text">Clear<span>Trace</span></div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Overview</div>
+      <div class="nav-item active" data-href="/"><span class="icon">📊</span> Dashboard</div>
+      <div class="nav-item" data-href="/targets.html"><span class="icon">🎯</span> Targets &amp; Goals</div>
+      <div class="nav-item" data-href="/benchmarking.html"><span class="icon">📈</span> Benchmarking</div>
+      <div class="nav-item" data-href="/recommendations.html"><span class="icon">💡</span> Recommendations</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Manage</div>
+      <div class="nav-item" data-href="/environment.html"><span class="icon">🌿</span> Environment</div>
+      <div class="nav-item" data-href="/reporting.html"><span class="icon">📄</span> Reporting</div>
+      <div class="nav-item" data-href="/data.html"><span class="icon">🗄️</span> Data</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">ESG</div>
+      <div class="nav-item" data-href="/social.html"><span class="icon">🤝</span> Social</div>
+      <div class="nav-item" data-href="/governance.html"><span class="icon">🏛️</span> Governance</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">India BRSR</div>
+      <div class="nav-item" data-href="/brsr-section-a.html"><span class="icon">📋</span> Section A</div>
+      <div class="nav-item" data-href="/brsr-section-b.html"><span class="icon">📊</span> Section B</div>
+      <div class="nav-item" data-href="/brsr-p1.html"><span class="icon">🤝</span> Principle 1</div>
+      <div class="nav-item" data-href="/brsr-p2.html"><span class="icon">♻️</span> Principle 2</div>
+      <div class="nav-item" data-href="/brsr-p3.html"><span class="icon">👥</span> Principle 3</div>
+      <div class="nav-item" data-href="/brsr-p4.html"><span class="icon">🗣️</span> Principle 4</div>
+      <div class="nav-item" data-href="/brsr-p5.html"><span class="icon">⚖️</span> Principle 5</div>
+      <div class="nav-item" data-href="/brsr-p6.html"><span class="icon">🌿</span> Principle 6</div>
+      <div class="nav-item" data-href="/brsr-p7.html"><span class="icon">📢</span> Principle 7</div>
+      <div class="nav-item" data-href="/brsr-p8.html"><span class="icon">🌱</span> Principle 8</div>
+      <div class="nav-item" data-href="/brsr-p9.html"><span class="icon">🛒</span> Principle 9</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Compliance</div>
+      <div class="nav-item" data-href="/audit.html"><span class="icon">🔍</span> Audit Log</div>
+      <div class="nav-item" data-href="/validation.html"><span class="icon">⚠️</span> Data Validation</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Organisation</div>
+      <div class="nav-item" data-href="/team.html"><span class="icon">👥</span> Team</div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="company-pill">
+        <div class="company-avatar" id="company-avatar">—</div>
+        <div>
+          <div class="company-name" id="sidebar-company">—</div>
+          <div class="company-plan" id="sidebar-plan">PRO PLAN · 2026</div>
+        </div>
       </div>
-      <div class="logo-text">Ops<span>Command</span></div>
+      <div class="logout-nav" id="logout-btn">
+        <span class="icon">↩</span> Sign Out
+      </div>
     </div>
-    <div class="header-center">
-      NEXFORD MANUFACTURING GROUP &nbsp;·&nbsp; PLANT A — DETROIT<br>
-      <span style="color:#3a4458">Shift: Day &nbsp;·&nbsp; Week 12, Q1 2026</span>
-    </div>
-    <div class="live-badge">
-      <div class="live-dot"></div>
-      LIVE DATA
-    </div>
-  </header>
+  </aside>
 
-  <!-- TICKER -->
-  <div class="ticker-bar">
-    <div class="ticker-label">Alerts</div>
-    <div class="ticker-divider"></div>
-    <div class="ticker-scroll" id="ticker-scroll">
-      <!-- Populated by dashboard.js via SSE + /api/alerts -->
-    </div>
-  </div>
+  <!-- ── MAIN CONTENT ──────────────────────────────────────────────────────── -->
+  <main class="main">
 
-  <!-- KPI STRIP -->
-  <div class="kpi-strip">
-    <div class="kpi green">
-      <div class="kpi-label">Units Produced Today</div>
-      <div class="kpi-value" id="kpi-units">—</div>
-      <div class="kpi-delta" id="kpi-units-delta">&nbsp;</div>
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <div>
+        <div class="page-title">ESG Dashboard</div>
+        <div class="page-sub" id="page-sub">Reporting period: —</div>
+      </div>
+      <div class="topbar-right">
+        <select class="period-select" id="period-select">
+          <option>FY 2026</option>
+          <option>FY 2025</option>
+          <option>Q1 2026</option>
+          <option>Q4 2025</option>
+        </select>
+        <button class="btn btn-outline" id="export-btn">↓ Export PDF</button>
+        <button class="btn btn-primary" id="add-data-btn">+ Add Data</button>
+      </div>
     </div>
-    <div class="kpi blue">
-      <div class="kpi-label">Machine Uptime</div>
-      <div class="kpi-value" id="kpi-uptime">—</div>
-      <div class="kpi-delta" id="kpi-uptime-delta">&nbsp;</div>
-    </div>
-    <div class="kpi warn">
-      <div class="kpi-label">Defect Rate</div>
-      <div class="kpi-value" id="kpi-defect">—</div>
-      <div class="kpi-delta" id="kpi-defect-delta">&nbsp;</div>
-    </div>
-    <div class="kpi danger">
-      <div class="kpi-label">Inventory Alerts</div>
-      <div class="kpi-value" id="kpi-inv">—</div>
-      <div class="kpi-delta" id="kpi-inv-delta">&nbsp;</div>
-    </div>
-    <div class="kpi purple">
-      <div class="kpi-label">Open Work Orders</div>
-      <div class="kpi-value" id="kpi-wo">—</div>
-      <div class="kpi-delta" id="kpi-wo-delta">&nbsp;</div>
-    </div>
-  </div>
 
-  <!-- MAIN GRID -->
-  <div class="main-grid">
+    <!-- VALIDATION WARNING BANNER -->
+    <div class="validation-banner" id="validation-banner" style="display:none"></div>
 
-    <!-- Production Chart -->
+    <!-- TARGET PROGRESS BANNER (shown when targets set in onboarding) -->
+    <div class="target-banner" id="target-banner" style="display:none"></div>
+
+    <!-- SCORE BANNER -->
+    <div class="score-banner">
+      <div class="score-left">
+        <div class="score-ring">
+          <svg viewBox="0 0 72 72" width="72" height="72">
+            <circle cx="36" cy="36" r="30" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="7"/>
+            <circle id="score-arc" cx="36" cy="36" r="30" fill="none" stroke="#4ade80" stroke-width="7"
+              stroke-dasharray="0 188.5" stroke-dashoffset="47" stroke-linecap="round"
+              transform="rotate(-90 36 36)"/>
+          </svg>
+          <div class="score-number">
+            <div class="score-val" id="score-val">—</div>
+            <div class="score-max">/100</div>
+          </div>
+        </div>
+        <div>
+          <div class="score-title">ESG Performance Score</div>
+          <div class="score-desc" id="score-desc">Loading…</div>
+          <div class="score-breakdown" id="score-breakdown" style="display:none"></div>
+        </div>
+      </div>
+      <div class="score-stats">
+        <div class="score-stat">
+          <div class="score-stat-val green" id="stat-yoy">—</div>
+          <div class="score-stat-label">vs last year</div>
+        </div>
+        <div class="score-stat">
+          <div class="score-stat-val" id="stat-total">—</div>
+          <div class="score-stat-label">tCO₂e total</div>
+        </div>
+        <div class="score-stat">
+          <div class="score-stat-val warn" id="stat-entries">—</div>
+          <div class="score-stat-label">data entries</div>
+        </div>
+        <div class="score-stat">
+          <div class="score-stat-val green" id="stat-framework">—</div>
+          <div class="score-stat-label">framework status</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPI STRIP -->
+    <div class="kpi-strip">
+      <div class="kpi">
+        <div class="kpi-top">
+          <div class="kpi-icon" style="background:#e8f5ef">⚡</div>
+          <div class="kpi-trend trend-none" id="kpi-energy-trend">&nbsp;</div>
+        </div>
+        <div class="kpi-value" id="kpi-energy">—</div>
+        <div class="kpi-unit">kWh</div>
+        <div class="kpi-label">Energy Consumption</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-top">
+          <div class="kpi-icon" style="background:#fff4e6">🔥</div>
+          <div class="kpi-trend trend-none" id="kpi-fuel-trend">&nbsp;</div>
+        </div>
+        <div class="kpi-value" id="kpi-fuel">—</div>
+        <div class="kpi-unit">litres</div>
+        <div class="kpi-label">Fuel Usage</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-top">
+          <div class="kpi-icon" style="background:#edf0fd">💧</div>
+          <div class="kpi-trend trend-none" id="kpi-water-trend">&nbsp;</div>
+        </div>
+        <div class="kpi-value" id="kpi-water">—</div>
+        <div class="kpi-unit">m³</div>
+        <div class="kpi-label">Water Usage</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-top">
+          <div class="kpi-icon" style="background:#fdecea">🗑️</div>
+          <div class="kpi-trend trend-none" id="kpi-waste-trend">&nbsp;</div>
+        </div>
+        <div class="kpi-value" id="kpi-waste">—</div>
+        <div class="kpi-unit">kg</div>
+        <div class="kpi-label">Waste Generated</div>
+      </div>
+    </div>
+
+    <!-- MAIN GRID: trend chart + donut -->
+    <div class="main-grid">
+
+      <!-- Emissions Trend -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Total Emissions Trend</div>
+            <div class="card-sub">Monthly tCO₂e · Scope 1 + 2 + 3</div>
+          </div>
+          <span class="tag tag-green" id="trend-tag">12-month rolling</span>
+        </div>
+        <div class="chart-container">
+          <div class="trend-chart-wrap" id="trend-chart-wrap">
+            <div style="height:200px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;font-family:var(--font-mono)">Loading…</div>
+          </div>
+          <div class="trend-tooltip" id="trend-tooltip"></div>
+        </div>
+      </div>
+
+      <!-- Donut breakdown -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Emissions Breakdown</div>
+            <div class="card-sub">By scope · all time</div>
+          </div>
+        </div>
+        <div class="donut-wrap">
+          <svg id="donut-svg" viewBox="0 0 160 160" width="160" height="160">
+            <circle cx="80" cy="80" r="58" fill="none" stroke="#f4f3ee" stroke-width="20"/>
+          </svg>
+          <div class="donut-center">
+            <div class="donut-total" id="donut-total">—</div>
+            <div class="donut-unit">tCO₂e</div>
+          </div>
+        </div>
+        <div class="donut-legend">
+          <div class="legend-row">
+            <div class="legend-dot" style="background:#1a6b4a"></div>
+            <div class="legend-name">Scope 1 — Direct</div>
+            <div class="legend-val" id="leg-s1">—</div>
+          </div>
+          <div class="legend-row">
+            <div class="legend-dot" style="background:#2d5be3"></div>
+            <div class="legend-name">Scope 2 — Energy</div>
+            <div class="legend-val" id="leg-s2">—</div>
+          </div>
+          <div class="legend-row">
+            <div class="legend-dot" style="background:#c47d1a"></div>
+            <div class="legend-name">Scope 3 — Value Chain</div>
+            <div class="legend-val" id="leg-s3">—</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- BOTTOM GRID: data entry + upload & frameworks -->
+    <div class="bottom-grid">
+
+      <!-- Data Entry Card -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Add Emissions Data</div>
+            <div class="card-sub">Manual entry or file upload</div>
+          </div>
+        </div>
+
+        <div class="form-tabs">
+          <button class="form-tab active" data-tab="manual">✏️ Manual Entry</button>
+          <button class="form-tab" data-tab="upload-tab">📂 Upload File</button>
+        </div>
+
+        <!-- Manual entry panel -->
+        <div id="panel-manual">
+          <div class="form-feedback" id="entry-feedback"></div>
+          <form id="entry-form">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Category</label>
+                <select class="form-select" id="f-category" required>
+                  <option value="">Select…</option>
+                  <optgroup label="Scope 1 — Direct">
+                    <option value="Natural Gas">Natural Gas</option>
+                    <option value="Diesel (Stationary)">Diesel (Stationary)</option>
+                    <option value="Petrol (Stationary)">Petrol (Stationary)</option>
+                    <option value="LPG">LPG</option>
+                    <option value="Company Car (Diesel)">Company Car (Diesel)</option>
+                    <option value="Company Car (Petrol)">Company Car (Petrol)</option>
+                    <option value="Company Car (Average)">Company Car (Average)</option>
+                    <option value="Refrigerants (R-134a)">Refrigerants (R-134a)</option>
+                    <option value="Refrigerants (R-410A)">Refrigerants (R-410A)</option>
+                  </optgroup>
+                  <optgroup label="Scope 2 — Energy">
+                    <option value="Grid Electricity (UK)">Grid Electricity (UK)</option>
+                    <option value="District Heating">District Heating</option>
+                  </optgroup>
+                  <optgroup label="Scope 3 — Value Chain">
+                    <option value="Business Travel (Car)">Business Travel (Car)</option>
+                    <option value="Business Travel (Rail)">Business Travel (Rail)</option>
+                    <option value="Business Travel (Short-haul Flight)">Business Travel (Short-haul Flight)</option>
+                    <option value="Business Travel (Long-haul Flight)">Business Travel (Long-haul Flight)</option>
+                    <option value="Employee Commuting (Car)">Employee Commuting (Car)</option>
+                    <option value="Employee Commuting (Rail)">Employee Commuting (Rail)</option>
+                    <option value="Waste (Landfill)">Waste (Landfill)</option>
+                    <option value="Waste (Recycled)">Waste (Recycled)</option>
+                    <option value="Waste (Composted)">Waste (Composted)</option>
+                    <option value="Water Supply">Water Supply</option>
+                    <option value="Water Treatment">Water Treatment</option>
+                    <option value="Purchased Goods & Services">Purchased Goods & Services (Cat. 1)</option>
+                    <option value="Capital Goods">Capital Goods (Cat. 2)</option>
+                    <option value="Fuel & Energy Related Activities">Fuel & Energy Related Activities (Cat. 3)</option>
+                    <option value="Upstream Transport & Distribution">Upstream Transport & Distribution (Cat. 4)</option>
+                    <option value="Waste Generated in Operations">Waste Generated in Operations (Cat. 5)</option>
+                    <option value="Upstream Leased Assets">Upstream Leased Assets (Cat. 8)</option>
+                    <option value="Downstream Transport & Distribution">Downstream Transport & Distribution (Cat. 9)</option>
+                    <option value="Processing of Sold Products">Processing of Sold Products (Cat. 10)</option>
+                    <option value="Use of Sold Products">Use of Sold Products (Cat. 11)</option>
+                    <option value="End-of-Life Treatment of Sold Products">End-of-Life Treatment of Sold Products (Cat. 12)</option>
+                    <option value="Downstream Leased Assets">Downstream Leased Assets (Cat. 13)</option>
+                    <option value="Franchises">Franchises (Cat. 14)</option>
+                    <option value="Investments">Investments (Cat. 15)</option>
+                    <option value="Purchased Goods">Purchased Goods (legacy)</option>
+                    <option value="Upstream Transport">Upstream Transport (legacy)</option>
+                    <option value="Other Scope 3">Other Scope 3</option>
+                  </optgroup>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Scope</label>
+                <select class="form-select" id="f-scope" required>
+                  <option value="">Select…</option>
+                  <option value="1">Scope 1 — Direct</option>
+                  <option value="2">Scope 2 — Energy</option>
+                  <option value="3">Scope 3 — Value Chain</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Amount</label>
+                <input type="number" class="form-input" id="f-amount" placeholder="e.g. 1 200" min="0" step="any" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Unit</label>
+                <select class="form-select" id="f-unit">
+                  <option value="kWh">kWh</option>
+                  <option value="litres">litres</option>
+                  <option value="m³">m³</option>
+                  <option value="kg">kg</option>
+                  <option value="tonnes">tonnes</option>
+                  <option value="km">km</option>
+                  <option value="GJ">GJ</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Period</label>
+                <input type="month" class="form-input" id="f-period" required>
+              </div>
+              <!-- DEFRA/CEA badge (shown for standard categories) -->
+              <div class="form-group" id="defra-ef-group" style="display:none">
+                <label class="form-label">
+                  Emission Factor
+                  <span class="ef-tooltip-wrap" id="ef-cea-tooltip" style="display:none">
+                    <span class="ef-tooltip-icon">i</span>
+                    <span class="ef-tooltip-text">CEA factors apply to grid electricity only. Scope 1 fuel combustion and Scope 3 factors are fuel chemistry-based and apply globally.</span>
+                  </span>
+                </label>
+                <div class="defra-ef-badge" id="defra-ef-badge"></div>
+                <select class="ef-source-selector" id="ef-source-selector" style="display:none">
+                  <option value="CEA">CEA V21.0 — FY 2024-25 (0.7117 tCO₂/MWh) — recommended for India</option>
+                  <option value="AE">DEWA Grid Emission Factor 2023 (0.4041 tCO₂e/MWh) — Dubai, UAE</option>
+                  <option value="DEFRA">DEFRA 2023 (0.20493 tCO₂/MWh) — UK grid</option>
+                </select>
+              </div>
+              <!-- Manual EF input (shown only for custom categories) -->
+              <div class="form-group" id="custom-ef-group">
+                <label class="form-label">Emission Factor (kg CO₂e / unit)</label>
+                <input type="number" class="form-input" id="f-ef" placeholder="e.g. 0.233" min="0" step="any" value="1.0">
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%;margin-top:4px" id="entry-submit-btn">
+              Calculate &amp; Save Entry
+            </button>
+          </form>
+        </div>
+
+        <!-- Upload panel (shown when Upload tab active) -->
+        <div id="panel-upload-tab" style="display:none">
+          <div class="upload-result" id="upload-result-inline"></div>
+          <div class="upload-zone" id="upload-zone-inline">
+            <div class="upload-icon">📊</div>
+            <div class="upload-title">Drop your file here</div>
+            <div class="upload-sub">or click to browse</div>
+            <div class="upload-formats">
+              <span class="format-badge">.xlsx</span>
+              <span class="format-badge">.csv</span>
+              <span class="format-badge">.xls</span>
+            </div>
+            <input type="file" id="upload-input-inline" class="upload-input" accept=".xlsx,.xls,.csv">
+          </div>
+          <div style="font-size:11px;color:var(--muted);font-family:var(--font-mono)">
+            Required columns: category, scope, amount, unit, period<br>
+            Optional: emission_factor, notes &nbsp;·&nbsp; Period format: YYYY-MM<br>
+            DEFRA 2023 factors applied automatically when emission_factor is omitted.<br>
+            <span style="color:var(--accent);cursor:pointer;text-decoration:underline" id="download-template">Download template ↓</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Upload (main) + Frameworks Card -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Upload Spreadsheet</div>
+            <div class="card-sub">Bulk import from Excel or CSV</div>
+          </div>
+          <span class="tag tag-blue" style="cursor:pointer" id="download-template-2">Template ↓</span>
+        </div>
+
+        <div class="upload-result" id="upload-result"></div>
+        <div class="upload-zone" id="upload-zone">
+          <div class="upload-icon">📊</div>
+          <div class="upload-title" id="upload-zone-title">Drop your file here</div>
+          <div class="upload-sub">or click to browse</div>
+          <div class="upload-formats">
+            <span class="format-badge">.xlsx</span>
+            <span class="format-badge">.csv</span>
+            <span class="format-badge">.xls</span>
+          </div>
+          <input type="file" id="upload-input" class="upload-input" accept=".xlsx,.xls,.csv">
+        </div>
+
+        <div style="margin-top:4px">
+          <div class="card-title" style="font-size:13px;margin-bottom:12px">Framework Alignment</div>
+          <div class="framework-grid" id="framework-grid">
+            <!-- Populated by dashboard.js -->
+            <div class="framework-item"><div class="framework-name">GRI</div><div class="framework-desc">Global Reporting Initiative</div><div class="framework-status status-pending">Loading…</div></div>
+            <div class="framework-item"><div class="framework-name">TCFD</div><div class="framework-desc">Climate Financial Disclosure</div><div class="framework-status status-pending">Loading…</div></div>
+            <div class="framework-item"><div class="framework-name">SASB</div><div class="framework-desc">Sustainability Accounting</div><div class="framework-status status-pending">Loading…</div></div>
+            <div class="framework-item"><div class="framework-name">Local Regs</div><div class="framework-desc">Jurisdiction compliance</div><div class="framework-status status-pending">Loading…</div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RECOMMENDED ACTIONS -->
     <div class="card">
-      <div class="card-title">
-        Production Output — Hourly
-        <span class="tag tag-green" id="prod-tag">On Track</span>
+      <div class="card-header">
+        <div>
+          <div class="card-title">Recommended Actions</div>
+          <div class="card-sub">Quick wins from your gap analysis</div>
+        </div>
+        <a href="/recommendations.html" class="rc-dash-link">View all →</a>
       </div>
-      <div class="card-sub">Units/hr across all lines · Today vs Yesterday</div>
-      <div class="chart-wrap" id="chart-wrap">
-        <!-- SVG injected by dashboard.js -->
+      <div id="rc-dash-panel">
+        <div class="rc-dash-loading">Loading…</div>
       </div>
     </div>
 
-    <!-- Machine Status -->
+    <!-- RECENT ENTRIES -->
     <div class="card">
-      <div class="card-title">
-        Machine Status
-        <span class="tag tag-warn" id="machine-tag">— Offline</span>
+      <div class="card-header">
+        <div>
+          <div class="card-title">Recent Entries</div>
+          <div class="card-sub">Latest emissions data logged for your organisation</div>
+        </div>
+        <span class="tag tag-blue" id="entries-count-tag">—</span>
       </div>
-      <div class="card-sub" id="machine-sub">Real-time uptime · — machines monitored</div>
-      <div class="machine-grid" id="machine-grid">
-        <!-- Populated by dashboard.js -->
-      </div>
-    </div>
-
-    <!-- Work Orders -->
-    <div class="card">
-      <div class="card-title">Work Orders</div>
-      <div class="card-sub" id="wo-sub">Active · — open orders</div>
-      <div class="wo-list" id="wo-list">
-        <!-- Populated by dashboard.js -->
-      </div>
-    </div>
-
-  </div>
-
-  <!-- BOTTOM ROW -->
-  <div class="bottom-grid">
-
-    <!-- Inventory -->
-    <div class="card">
-      <div class="card-title">
-        Inventory &amp; Raw Materials
-        <span class="tag tag-danger" id="inv-tag">— Alerts</span>
-      </div>
-      <div class="card-sub">Stock levels vs reorder threshold</div>
-      <div class="inv-list" id="inv-list">
-        <!-- Populated by dashboard.js -->
+      <div class="entries-table-wrap">
+        <table class="entries-table">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Scope</th>
+              <th>Amount</th>
+              <th>Unit</th>
+              <th>CO₂e (t)</th>
+              <th>Period</th>
+              <th>Source</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="entries-tbody">
+            <tr><td colspan="8" class="empty-state">Loading…</td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
-    <!-- Quality Control -->
-    <div class="card">
-      <div class="card-title">
-        Quality Control
-        <span class="tag tag-green" id="quality-tag">Within Threshold</span>
-      </div>
-      <div class="card-sub">Defect breakdown · Current shift</div>
-      <div class="quality-wrap" id="quality-wrap">
-        <!-- Populated by dashboard.js -->
-      </div>
-    </div>
-
-  </div>
-
+  </main>
 </div>
 
 <script src="js/dashboard.js"></script>
