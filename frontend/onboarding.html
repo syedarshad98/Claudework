@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClearTrace — Setup</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="ob-shell">
+
+  <!-- ── Left panel ───────────────────────────────────────────────────────── -->
+  <aside class="ob-sidebar">
+    <div class="ob-logo">
+      <div class="logo-mark">🌿</div>
+      <div class="logo-text">Clear<span>Trace</span></div>
+    </div>
+
+    <div class="ob-steps">
+      <div class="ob-step active" data-step="1">
+        <div class="ob-step-dot"><span>1</span></div>
+        <div class="ob-step-info">
+          <div class="ob-step-title">Company Profile</div>
+          <div class="ob-step-desc">Name, industry &amp; size</div>
+        </div>
+      </div>
+      <div class="ob-step" data-step="2">
+        <div class="ob-step-dot"><span>2</span></div>
+        <div class="ob-step-info">
+          <div class="ob-step-title">Reporting Setup</div>
+          <div class="ob-step-desc">Year, period &amp; frameworks</div>
+        </div>
+      </div>
+      <div class="ob-step" data-step="3">
+        <div class="ob-step-dot"><span>3</span></div>
+        <div class="ob-step-info">
+          <div class="ob-step-title">Baseline Emissions</div>
+          <div class="ob-step-desc">Prior year Scope 1, 2 &amp; 3</div>
+        </div>
+      </div>
+      <div class="ob-step" data-step="4">
+        <div class="ob-step-dot"><span>4</span></div>
+        <div class="ob-step-info">
+          <div class="ob-step-title">Targets</div>
+          <div class="ob-step-desc">Reduction goals &amp; standard</div>
+        </div>
+      </div>
+      <div class="ob-step" data-step="5">
+        <div class="ob-step-dot"><span>5</span></div>
+        <div class="ob-step-info">
+          <div class="ob-step-title">Team Invites</div>
+          <div class="ob-step-desc">Add colleagues</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ob-sidebar-footer">
+      <div class="ob-company-name" id="ob-company-name">—</div>
+      <div class="ob-skip" id="ob-skip-link">Skip setup for now →</div>
+    </div>
+  </aside>
+
+  <!-- ── Main wizard area ─────────────────────────────────────────────────── -->
+  <main class="ob-main">
+
+    <!-- progress bar -->
+    <div class="ob-progress">
+      <div class="ob-progress-bar" id="ob-progress-bar" style="width:20%"></div>
+    </div>
+
+    <!-- ── Step 1: Company Profile ──────────────────────────────────────── -->
+    <section class="ob-panel active" id="panel-1">
+      <div class="ob-panel-head">
+        <div class="ob-step-badge">Step 1 of 5</div>
+        <h1 class="ob-panel-title">Company Profile</h1>
+        <p class="ob-panel-desc">Let's start with the basics. You can update these details any time.</p>
+      </div>
+
+      <form class="ob-form" id="form-1" autocomplete="off">
+        <div class="form-row">
+          <div class="ob-field">
+            <label for="p1-name">Company Name <span class="required">*</span></label>
+            <input type="text" id="p1-name" placeholder="Acme Corp Ltd" required>
+          </div>
+          <div class="ob-field">
+            <label for="p1-industry">Industry</label>
+            <select id="p1-industry">
+              <option value="">Select industry</option>
+              <option>Manufacturing</option>
+              <option>Retail &amp; Consumer Goods</option>
+              <option>Technology</option>
+              <option>Finance &amp; Insurance</option>
+              <option>Healthcare</option>
+              <option>Construction &amp; Real Estate</option>
+              <option>Transport &amp; Logistics</option>
+              <option>Agriculture &amp; Food</option>
+              <option>Energy &amp; Utilities</option>
+              <option>Professional Services</option>
+              <option>Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="ob-field">
+            <label for="p1-country">Country</label>
+            <input type="text" id="p1-country" placeholder="United Arab Emirates">
+          </div>
+          <div class="ob-field">
+            <label for="p1-jurisdiction">Emission Factor Jurisdiction <span class="required">*</span></label>
+            <select id="p1-jurisdiction">
+              <option value="UK">United Kingdom (DEFRA)</option>
+              <option value="AE">United Arab Emirates (DEWA)</option>
+              <option value="IN">India (CEA)</option>
+            </select>
+            <small class="ob-field-hint">Determines which grid electricity &amp; water emission factors are applied. Only Dubai (DEWA) is currently verified for UAE — confirm before use for other emirates.</small>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="ob-field">
+            <label for="p1-employees">Employee Count</label>
+            <select id="p1-employees">
+              <option value="">Select range</option>
+              <option value="10">1 – 10</option>
+              <option value="50">11 – 50</option>
+              <option value="200">51 – 200</option>
+              <option value="500">201 – 500</option>
+              <option value="1000">501 – 1,000</option>
+              <option value="5000">1,001 – 5,000</option>
+              <option value="10000">5,001 – 10,000</option>
+              <option value="99999">10,000+</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="ob-field">
+            <label for="p1-sector">Industry Sector <span class="ob-field-hint">For benchmarking</span></label>
+            <select id="p1-sector">
+              <option value="">Select sector…</option>
+              <option>Construction</option>
+              <option>Healthcare</option>
+              <option>Hospitality</option>
+              <option>Manufacturing</option>
+              <option>Professional Services</option>
+              <option>Retail</option>
+              <option>Technology</option>
+              <option>Transport &amp; Logistics</option>
+            </select>
+          </div>
+          <div class="ob-field">
+            <label for="p1-revenue">Annual Revenue (£m) <span class="ob-field-hint">Optional — enables intensity benchmarks</span></label>
+            <input type="number" id="p1-revenue" min="0" step="0.1" placeholder="e.g. 8.5">
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <!-- ── Step 2: Reporting Setup ──────────────────────────────────────── -->
+    <section class="ob-panel" id="panel-2">
+      <div class="ob-panel-head">
+        <div class="ob-step-badge">Step 2 of 5</div>
+        <h1 class="ob-panel-title">Reporting Setup</h1>
+        <p class="ob-panel-desc">Configure your financial year and the frameworks you plan to align with.</p>
+      </div>
+
+      <form class="ob-form" id="form-2" autocomplete="off">
+        <div class="ob-field">
+          <label for="p2-fy">Financial Year Start</label>
+          <select id="p2-fy">
+            <option value="1">January (Jan – Dec)</option>
+            <option value="4">April (Apr – Mar)</option>
+            <option value="7">July (Jul – Jun)</option>
+            <option value="10">October (Oct – Sep)</option>
+          </select>
+        </div>
+
+        <div class="ob-field">
+          <label>Reporting Frameworks <span class="ob-field-hint">Select all you plan to align with</span></label>
+          <div class="ob-checkbox-grid">
+            <label class="ob-checkbox-card">
+              <input type="checkbox" name="framework" value="GRI">
+              <div class="ob-checkbox-inner">
+                <div class="ob-fw-name">GRI</div>
+                <div class="ob-fw-desc">Global Reporting Initiative — the most widely adopted standard</div>
+              </div>
+            </label>
+            <label class="ob-checkbox-card">
+              <input type="checkbox" name="framework" value="TCFD">
+              <div class="ob-checkbox-inner">
+                <div class="ob-fw-name">TCFD</div>
+                <div class="ob-fw-desc">Task Force on Climate-related Financial Disclosures</div>
+              </div>
+            </label>
+            <label class="ob-checkbox-card">
+              <input type="checkbox" name="framework" value="SASB">
+              <div class="ob-checkbox-inner">
+                <div class="ob-fw-name">SASB</div>
+                <div class="ob-fw-desc">Sustainability Accounting Standards Board</div>
+              </div>
+            </label>
+            <label class="ob-checkbox-card">
+              <input type="checkbox" name="framework" value="LOCAL">
+              <div class="ob-checkbox-inner">
+                <div class="ob-fw-name">Local / Regulatory</div>
+                <div class="ob-fw-desc">National or regional compliance requirements</div>
+              </div>
+            </label>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <!-- ── Step 3: Baseline Emissions ───────────────────────────────────── -->
+    <section class="ob-panel" id="panel-3">
+      <div class="ob-panel-head">
+        <div class="ob-step-badge">Step 3 of 5</div>
+        <h1 class="ob-panel-title">Baseline Emissions</h1>
+        <p class="ob-panel-desc">Enter your prior year totals to track progress. All fields are optional — you can add this later.</p>
+      </div>
+
+      <form class="ob-form" id="form-3" autocomplete="off">
+        <div class="ob-field">
+          <label for="p3-year">Baseline Year</label>
+          <select id="p3-year"></select>
+        </div>
+
+        <div class="ob-scope-cards">
+          <div class="ob-scope-card scope1">
+            <div class="ob-scope-header">
+              <div class="ob-scope-dot s1"></div>
+              <div>
+                <div class="ob-scope-name">Scope 1 — Direct</div>
+                <div class="ob-scope-hint">Fuel combustion, company vehicles, on-site processes</div>
+              </div>
+            </div>
+            <div class="ob-field mt-8">
+              <label for="p3-s1">Total CO₂e (tonnes)</label>
+              <input type="number" id="p3-s1" min="0" step="0.01" placeholder="e.g. 245.8">
+            </div>
+          </div>
+
+          <div class="ob-scope-card scope2">
+            <div class="ob-scope-header">
+              <div class="ob-scope-dot s2"></div>
+              <div>
+                <div class="ob-scope-name">Scope 2 — Energy</div>
+                <div class="ob-scope-hint">Purchased electricity, heat, cooling and steam</div>
+              </div>
+            </div>
+            <div class="ob-field mt-8">
+              <label for="p3-s2">Total CO₂e (tonnes)</label>
+              <input type="number" id="p3-s2" min="0" step="0.01" placeholder="e.g. 412.3">
+            </div>
+          </div>
+
+          <div class="ob-scope-card scope3">
+            <div class="ob-scope-header">
+              <div class="ob-scope-dot s3"></div>
+              <div>
+                <div class="ob-scope-name">Scope 3 — Value Chain</div>
+                <div class="ob-scope-hint">Supply chain, business travel, waste, product use</div>
+              </div>
+            </div>
+            <div class="ob-field mt-8">
+              <label for="p3-s3">Total CO₂e (tonnes)</label>
+              <input type="number" id="p3-s3" min="0" step="0.01" placeholder="e.g. 1,840.0">
+            </div>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <!-- ── Step 4: Targets ───────────────────────────────────────────────── -->
+    <section class="ob-panel" id="panel-4">
+      <div class="ob-panel-head">
+        <div class="ob-step-badge">Step 4 of 5</div>
+        <h1 class="ob-panel-title">Reduction Targets</h1>
+        <p class="ob-panel-desc">Set your emissions reduction ambition. You can refine these later.</p>
+      </div>
+
+      <form class="ob-form" id="form-4" autocomplete="off">
+        <div class="form-row">
+          <div class="ob-field">
+            <label for="p4-pct">Reduction Target</label>
+            <div class="ob-input-suffix">
+              <input type="number" id="p4-pct" min="1" max="100" step="1" placeholder="e.g. 50">
+              <span class="ob-suffix">%</span>
+            </div>
+          </div>
+          <div class="ob-field">
+            <label for="p4-year">Target Year</label>
+            <select id="p4-year">
+              <option value="">Select year</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="ob-field">
+          <label>Alignment Standard</label>
+          <div class="ob-radio-group">
+            <label class="ob-radio-card">
+              <input type="radio" name="standard" value="SBTi">
+              <div class="ob-radio-inner">
+                <div class="ob-radio-name">SBTi</div>
+                <div class="ob-radio-desc">Science Based Targets initiative — 1.5°C pathway</div>
+              </div>
+            </label>
+            <label class="ob-radio-card">
+              <input type="radio" name="standard" value="Paris 1.5°C">
+              <div class="ob-radio-inner">
+                <div class="ob-radio-name">Paris 1.5°C</div>
+                <div class="ob-radio-desc">Aligned with the Paris Agreement 1.5°C limit</div>
+              </div>
+            </label>
+            <label class="ob-radio-card">
+              <input type="radio" name="standard" value="Paris 2°C">
+              <div class="ob-radio-inner">
+                <div class="ob-radio-name">Paris 2°C</div>
+                <div class="ob-radio-desc">Aligned with the Paris Agreement 2°C limit</div>
+              </div>
+            </label>
+            <label class="ob-radio-card">
+              <input type="radio" name="standard" value="Custom">
+              <div class="ob-radio-inner">
+                <div class="ob-radio-name">Custom</div>
+                <div class="ob-radio-desc">Internal target not aligned to a formal standard</div>
+              </div>
+            </label>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <!-- ── Step 5: Team Invites ──────────────────────────────────────────── -->
+    <section class="ob-panel" id="panel-5">
+      <div class="ob-panel-head">
+        <div class="ob-step-badge">Step 5 of 5</div>
+        <h1 class="ob-panel-title">Invite Your Team</h1>
+        <p class="ob-panel-desc">Add colleagues who will help collect and manage ESG data. You can always invite more people later.</p>
+      </div>
+
+      <form class="ob-form" id="form-5" autocomplete="off">
+        <div class="ob-invite-list" id="invite-list">
+          <!-- rows injected by JS -->
+        </div>
+        <button type="button" class="ob-add-invite" id="add-invite-btn">+ Add another person</button>
+      </form>
+    </section>
+
+    <!-- ── Footer nav ────────────────────────────────────────────────────── -->
+    <div class="ob-footer">
+      <div class="ob-error" id="ob-error"></div>
+      <div class="ob-footer-actions">
+        <button class="btn btn-outline" id="ob-back-btn" style="visibility:hidden">← Back</button>
+        <button class="btn btn-primary" id="ob-next-btn">Continue →</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script src="js/onboarding.js"></script>
+</body>
+</html>
