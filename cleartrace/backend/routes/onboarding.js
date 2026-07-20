@@ -71,14 +71,17 @@ router.get('/status', async (req, res) => {
   }
 });
 
-// PUT /api/onboarding/profile  — Step 1
+// PUT /api/onboarding/profile  â Step 1
 router.put('/profile', async (req, res) => {
   await ensureMigrated();
-  const { name, industry, country, employeeCount } = req.body;
+  const { name, industry, country, employeeCount, jurisdiction } = req.body;
 
   if (!name || !name.trim()) {
     return res.status(400).json({ error: 'Company name is required' });
   }
+
+  const VALID_JURISDICTIONS = ['UK', 'IN', 'AE'];
+  const resolvedJurisdiction = VALID_JURISDICTIONS.includes(jurisdiction) ? jurisdiction : null;
 
   try {
     await db.query(
@@ -86,9 +89,10 @@ router.put('/profile', async (req, res) => {
           SET name           = $1,
               industry       = $2,
               country        = $3,
-              employee_count = $4
+              employee_count = $4,
+              jurisdiction    = COALESCE($6, jurisdiction)
         WHERE id = $5`,
-      [name.trim(), industry || null, country || null, employeeCount || null, req.companyId]
+      [name.trim(), industry || null, country || null, employeeCount || null, req.companyId, resolvedJurisdiction]
     );
     res.json({ ok: true });
   } catch (err) {
@@ -97,7 +101,7 @@ router.put('/profile', async (req, res) => {
   }
 });
 
-// PUT /api/onboarding/reporting  — Step 2
+// PUT /api/onboarding/reporting  â Step 2
 router.put('/reporting', async (req, res) => {
   await ensureMigrated();
   const { financialYearStart, frameworks } = req.body;
@@ -105,7 +109,7 @@ router.put('/reporting', async (req, res) => {
 
   const fyStart = parseInt(financialYearStart);
   if (isNaN(fyStart) || fyStart < 1 || fyStart > 12) {
-    return res.status(400).json({ error: 'financialYearStart must be 1–12' });
+    return res.status(400).json({ error: 'financialYearStart must be 1â12' });
   }
 
   const validFW = ['GRI', 'TCFD', 'SASB', 'LOCAL'];
@@ -137,7 +141,7 @@ router.put('/reporting', async (req, res) => {
   }
 });
 
-// PUT /api/onboarding/baseline  — Step 3 (optional)
+// PUT /api/onboarding/baseline  â Step 3 (optional)
 router.put('/baseline', async (req, res) => {
   await ensureMigrated();
   const { baseline, year } = req.body;
@@ -169,22 +173,22 @@ router.put('/baseline', async (req, res) => {
   }
 });
 
-// PUT /api/onboarding/targets  — Step 4
+// PUT /api/onboarding/targets  â Step 4
 router.put('/targets', async (req, res) => {
   await ensureMigrated();
   const { reductionTargetPct, targetYear, alignmentStandard } = req.body;
 
-  const validStandards = ['SBTi', 'Paris 1.5°C', 'Paris 2°C', 'Custom', 'None'];
+  const validStandards = ['SBTi', 'Paris 1.5Â°C', 'Paris 2Â°C', 'Custom', 'None'];
 
   const pct  = reductionTargetPct != null ? parseFloat(reductionTargetPct) : null;
   const yr   = targetYear         != null ? parseInt(targetYear)           : null;
   const std  = validStandards.includes(alignmentStandard) ? alignmentStandard : null;
 
   if (pct !== null && (pct < 0 || pct > 100)) {
-    return res.status(400).json({ error: 'reductionTargetPct must be 0–100' });
+    return res.status(400).json({ error: 'reductionTargetPct must be 0â100' });
   }
   if (yr !== null && (yr < 2024 || yr > 2100)) {
-    return res.status(400).json({ error: 'targetYear must be 2024–2100' });
+    return res.status(400).json({ error: 'targetYear must be 2024â2100' });
   }
 
   try {
@@ -203,7 +207,7 @@ router.put('/targets', async (req, res) => {
   }
 });
 
-// PUT /api/onboarding/invites  — Step 5
+// PUT /api/onboarding/invites  â Step 5
 router.put('/invites', async (req, res) => {
   await ensureMigrated();
   const { invites } = req.body;
@@ -234,7 +238,7 @@ router.put('/invites', async (req, res) => {
   }
 });
 
-// POST /api/onboarding/complete  — Mark onboarding done
+// POST /api/onboarding/complete  â Mark onboarding done
 router.post('/complete', async (req, res) => {
   await ensureMigrated();
   try {
