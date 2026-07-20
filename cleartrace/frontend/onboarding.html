@@ -103,8 +103,19 @@
         <div class="form-row">
           <div class="ob-field">
             <label for="p1-country">Country</label>
-            <input type="text" id="p1-country" placeholder="United Kingdom">
+            <input type="text" id="p1-country" placeholder="United Arab Emirates">
           </div>
+          <div class="ob-field">
+            <label for="p1-jurisdiction">Emission Factor Jurisdiction <span class="required">*</span></label>
+            <select id="p1-jurisdiction">
+              <option value="UK">United Kingdom (DEFRA)</option>
+              <option value="AE">United Arab Emirates (DEWA)</option>
+              <option value="IN">India (CEA)</option>
+            </select>
+            <small class="ob-field-hint">Determines which grid electricity &amp; water emission factors are applied. Only Dubai (DEWA) is currently verified for UAE — confirm before use for other emirates.</small>
+          </div>
+        </div>
+        <div class="form-row">
           <div class="ob-field">
             <label for="p1-employees">Employee Count</label>
             <select id="p1-employees">
