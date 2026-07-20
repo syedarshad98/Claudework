@@ -123,10 +123,11 @@ async function saveStep(step) {
   showError('');
 
   if (step === 1) {
-    const name      = document.getElementById('p1-name').value.trim();
-    const industry  = document.getElementById('p1-industry').value;
-    const country   = document.getElementById('p1-country').value.trim();
-    const employees = document.getElementById('p1-employees').value;
+    const name         = document.getElementById('p1-name').value.trim();
+    const industry     = document.getElementById('p1-industry').value;
+    const country      = document.getElementById('p1-country').value.trim();
+    const jurisdiction = document.getElementById('p1-jurisdiction').value;
+    const employees    = document.getElementById('p1-employees').value;
 
     if (!name) { showError('Company name is required.'); return false; }
 
@@ -134,7 +135,7 @@ async function saveStep(step) {
     const revenue = document.getElementById('p1-revenue')?.value || '';
 
     const res = await api('PUT', '/api/onboarding/profile', {
-      name, industry, country,
+      name, industry, country, jurisdiction,
       employeeCount: employees ? parseInt(employees) : null,
     });
     if (!res || !res.ok) {
@@ -311,9 +312,10 @@ async function prefill() {
 
   // Step 1
   if (d.profile.name)              document.getElementById('p1-name').value     = d.profile.name;
-  if (d.profile.industry)          document.getElementById('p1-industry').value  = d.profile.industry;
-  if (d.profile.country)           document.getElementById('p1-country').value   = d.profile.country;
-  if (d.profile.employeeCount)     document.getElementById('p1-employees').value = d.profile.employeeCount;
+  if (d.profile.industry)          document.getElementById('p1-industry').value     = d.profile.industry;
+  if (d.profile.country)           document.getElementById('p1-country').value      = d.profile.country;
+  if (d.profile.jurisdiction)      document.getElementById('p1-jurisdiction').value = d.profile.jurisdiction;
+  if (d.profile.employeeCount)     document.getElementById('p1-employees').value    = d.profile.employeeCount;
   if (d.profile.industrySector)    document.getElementById('p1-sector').value    = d.profile.industrySector;
   if (d.profile.annualRevenueGbpM) document.getElementById('p1-revenue').value   = d.profile.annualRevenueGbpM;
 
