@@ -1,0 +1,402 @@
+diff --git a/cleartrace/backend/db/emission_factors.js b/cleartrace/backend/db/emission_factors.js
+index cedd370..64f827e 100644
+--- a/cleartrace/backend/db/emission_factors.js
++++ b/cleartrace/backend/db/emission_factors.js
+@@ -36,11 +36,51 @@ const DEFRA_FACTORS = {
+   'Waste (Composted)':                    { factor: 0.01100, unit: 'kg',    scope: 3 },
+   'Water Supply':                         { factor: 0.14900, unit: 'm³',    scope: 3 },
+   'Water Treatment':                      { factor: 0.27200, unit: 'm³',    scope: 3 },
++
++  // ── Scope 3 — GHG Protocol upstream/downstream categories ─────────────────
++  // Mapped to the 15 GHG Protocol Scope 3 categories. Most upstream/downstream
++  // categories have no universal per-unit factor — they depend on supplier or
++  // product-specific data — so these are marked custom:true (manual entry)
++  // until spend-based or supplier-submitted data is available. ghgCategory
++  // is the official GHG Protocol category number for reporting/labeling.
++  'Purchased Goods & Services':           { factor: null,    unit: 'kg',    scope: 3, custom: true, ghgCategory: 1,  note: 'Spend-based or supplier-specific factor required' },
++  'Capital Goods':                        { factor: null,    unit: 'unit', scope: 3, custom: true, ghgCategory: 2,  note: 'Spend-based factor required' },
++  'Fuel & Energy Related Activities':     { factor: null,    unit: 'kWh',  scope: 3, custom: true, ghgCategory: 3,  note: 'Well-to-tank (WTT) factor required — upstream of purchased fuel/electricity' },
++  'Upstream Transport & Distribution':    { factor: null,    unit: 'km',   scope: 3, custom: true, ghgCategory: 4,  note: 'Distance/spend-based freight factor required' },
++  'Waste Generated in Operations':        { factor: null,    unit: 'kg',   scope: 3, custom: true, ghgCategory: 5,  note: 'Use Waste (Landfill/Recycled/Composted) factors above where applicable' },
++  'Upstream Leased Assets':               { factor: null,    unit: 'kWh',  scope: 3, custom: true, ghgCategory: 8 },
++  'Downstream Transport & Distribution':  { factor: null,    unit: 'km',   scope: 3, custom: true, ghgCategory: 9 },
++  'Processing of Sold Products':          { factor: null,    unit: 'kg',   scope: 3, custom: true, ghgCategory: 10 },
++  'Use of Sold Products':                 { factor: null,    unit: 'unit', scope: 3, custom: true, ghgCategory: 11 },
++  'End-of-Life Treatment of Sold Products': { factor: null,  unit: 'kg',   scope: 3, custom: true, ghgCategory: 12 },
++  'Downstream Leased Assets':              { factor: null,   unit: 'kWh',  scope: 3, custom: true, ghgCategory: 13 },
++  'Franchises':                            { factor: null,   unit: 'unit', scope: 3, custom: true, ghgCategory: 14 },
++  'Investments':                           { factor: null,   unit: 'unit', scope: 3, custom: true, ghgCategory: 15 },
+   'Purchased Goods':                      { factor: null,    unit: 'kg',    scope: 3, custom: true },
+   'Upstream Transport':                   { factor: null,    unit: 'km',    scope: 3, custom: true },
+   'Other Scope 3':                        { factor: null,    unit: 'kg',    scope: 3, custom: true },
+ };
+ 
++// GHG Protocol Scope 3 category numbers 1-15, for dashboards/reporting/labeling.
++// 'Business Travel' and 'Employee Commuting' above already map to categories 6 & 7.
++const GHG_PROTOCOL_SCOPE3_CATEGORIES = [
++  { number: 1,  label: 'Purchased Goods & Services' },
++  { number: 2,  label: 'Capital Goods' },
++  { number: 3,  label: 'Fuel & Energy Related Activities' },
++  { number: 4,  label: 'Upstream Transport & Distribution' },
++  { number: 5,  label: 'Waste Generated in Operations' },
++  { number: 6,  label: 'Business Travel' },
++  { number: 7,  label: 'Employee Commuting' },
++  { number: 8,  label: 'Upstream Leased Assets' },
++  { number: 9,  label: 'Downstream Transport & Distribution' },
++  { number: 10, label: 'Processing of Sold Products' },
++  { number: 11, label: 'Use of Sold Products' },
++  { number: 12, label: 'End-of-Life Treatment of Sold Products' },
++  { number: 13, label: 'Downstream Leased Assets' },
++  { number: 14, label: 'Franchises' },
++  { number: 15, label: 'Investments' },
++];
++
+ // Legacy category names from earlier data entry — mapped to their DEFRA equivalents.
+ // Used so that existing DB entries and uploads using old names still resolve correctly.
+ const LEGACY_ALIASES = {
+@@ -67,20 +107,48 @@ const CEA_FACTORS = {
+   applicability: 'India grid-connected electricity (location-based, GHG Protocol Scope 2)',
+ };
+ 
++// UAE-specific factors. Grid electricity varies by emirate/utility — DEWA
++// (Dubai) publishes an annual grid emission factor used in real GHG
++// accounting reports; other emirates (ADWEA/EWEC Abu Dhabi, SEWA Sharjah)
++// are not yet populated with verified published figures and fall back to
++// the DEWA figure with a flag until sourced — do not treat the fallback as
++// authoritative for non-Dubai sites.
++// Sources: DEWA Grid Emission Factor 2023 (0.4041 tCO2e/MWh), as cited in
++// published corporate GHG accounting reports (e.g. AUS FY2024 GHG report,
++// Salik 2024 sustainability report). Desalinated water factor from the same
++// AUS FY2024 report, citing Liu et al., ICAE2015/Energy Procedia 75.
++const UAE_FACTORS = {
++  versions: {
++    'DEWA-2023': { fy: '2023', published: '2024', gridEF: 0.4041, utility: 'DEWA (Dubai)' },
++  },
++  latest: 'DEWA-2023',
++  source: 'Dubai Electricity & Water Authority (DEWA) Grid Emission Factor',
++  scope: 2,
++  unit: 'tCO2e/MWh',
++  applicability: 'UAE grid-connected electricity (location-based, GHG Protocol Scope 2). Verified for Dubai (DEWA) only — confirm before use for Abu Dhabi, Sharjah, or other emirates.',
++  water: {
++    factor: 2.7, // 0.0027 tCO2e/m³ → 2.7 kg CO2e/m³
++    unit: 'm³',
++    label: 'Desalinated Water Supply (UAE)',
++    source: 'UAE-specific desalination energy intensity, as cited in AUS FY2024 GHG Accounting Report',
++  },
++};
++
+ /**
+  * Look up the emission factor entry for a given category name and jurisdiction.
+  * Returns null when no match is found.
+  * @param {string} category
+- * @param {{ jurisdiction?: 'UK'|'IN', ceaVersion?: string }} [options]
++ * @param {{ jurisdiction?: 'UK'|'IN'|'AE', ceaVersion?: string, uaeVersion?: string }} [options]
+  * @returns {{ factor: number|null, unit: string, scope?: number, custom?: boolean, source?: string, jurisdiction?: string } | null}
+  */
+ function lookupFactor(category, options = {}) {
+-  const { jurisdiction = 'UK', ceaVersion = CEA_FACTORS.latest } = options;
++  const { jurisdiction = 'UK', ceaVersion = CEA_FACTORS.latest, uaeVersion = UAE_FACTORS.latest } = options;
+   const cat = (category || '').trim();
+ 
++  // Resolve canonical DEFRA name to detect grid electricity / water categories
++  const canonical = DEFRA_FACTORS[cat] ? cat : (LEGACY_ALIASES[cat] || cat);
++
+   if (jurisdiction === 'IN') {
+-    // Resolve canonical DEFRA name to detect grid electricity categories
+-    const canonical = DEFRA_FACTORS[cat] ? cat : (LEGACY_ALIASES[cat] || cat);
+     if (canonical === 'Grid Electricity (UK)') {
+       const ver = CEA_FACTORS.versions[ceaVersion] || CEA_FACTORS.versions[CEA_FACTORS.latest];
+       const resolvedVersion = CEA_FACTORS.versions[ceaVersion] ? ceaVersion : CEA_FACTORS.latest;
+@@ -93,10 +161,38 @@ function lookupFactor(category, options = {}) {
+     }
+   }
+ 
++  if (jurisdiction === 'AE') {
++    if (canonical === 'Grid Electricity (UK)') {
++      const ver = UAE_FACTORS.versions[uaeVersion] || UAE_FACTORS.versions[UAE_FACTORS.latest];
++      const resolvedVersion = UAE_FACTORS.versions[uaeVersion] ? uaeVersion : UAE_FACTORS.latest;
++      return {
++        factor: ver.gridEF,
++        source: `${ver.utility} Grid Emission Factor ${resolvedVersion.split('-')[1]} — FY ${ver.fy}`,
++        jurisdiction: 'AE',
++        unit: 'tCO2e/MWh',
++      };
++    }
++    if (canonical === 'Water Supply') {
++      return {
++        factor: UAE_FACTORS.water.factor,
++        source: UAE_FACTORS.water.source,
++        jurisdiction: 'AE',
++        unit: UAE_FACTORS.water.unit,
++      };
++    }
++  }
++
+   if (DEFRA_FACTORS[cat]) return DEFRA_FACTORS[cat];
+   const alias = LEGACY_ALIASES[cat];
+   if (alias && DEFRA_FACTORS[alias]) return DEFRA_FACTORS[alias];
+   return null;
+ }
+ 
+-module.exports = { DEFRA_FACTORS, CEA_FACTORS, LEGACY_ALIASES, lookupFactor };
++module.exports = {
++  DEFRA_FACTORS,
++  CEA_FACTORS,
++  UAE_FACTORS,
++  LEGACY_ALIASES,
++  GHG_PROTOCOL_SCOPE3_CATEGORIES,
++  lookupFactor,
++};
+diff --git a/cleartrace/backend/routes/brsr.js b/cleartrace/backend/routes/brsr.js
+index 02cef3d..f7d0a60 100644
+--- a/cleartrace/backend/routes/brsr.js
++++ b/cleartrace/backend/routes/brsr.js
+@@ -13,7 +13,7 @@ const P7_FIELDS                      = require('../lib/brsr-p7-fields');
+ const P8_FIELDS                      = require('../lib/brsr-p8-fields');
+ const P9_FIELDS                      = require('../lib/brsr-p9-fields');
+ const { SECTION_B_FIELDS }           = require('../lib/brsr-section-b-fields');
+-const { CEA_FACTORS }                = require('../db/emission_factors');
++const { CEA_FACTORS, UAE_FACTORS }   = require('../db/emission_factors');
+ 
+ // ── Lazy migration ────────────────────────────────────────────────────────────
+ let migrated = false;
+@@ -667,6 +667,10 @@ router.put('/p6/:id', requireRole('admin', 'editor'), async (req, res) => {
+         const latestKey = CEA_FACTORS.latest;
+         const ver       = CEA_FACTORS.versions[latestKey];
+         efSource = `CEA ${latestKey} — FY ${ver.fy} (${ver.gridEF} tCO₂/MWh)`;
++      } else if (jurisdiction === 'AE') {
++        const latestKey = UAE_FACTORS.latest;
++        const ver       = UAE_FACTORS.versions[latestKey];
++        efSource = `${ver.utility} Grid Emission Factor — FY ${ver.fy} (${ver.gridEF} tCO₂e/MWh)`;
+       } else {
+         efSource = 'DEFRA 2023 (0.20493 kg CO₂e/kWh)';
+       }
+diff --git a/cleartrace/backend/routes/onboarding.js b/cleartrace/backend/routes/onboarding.js
+index 0cacd3a..46033d3 100644
+--- a/cleartrace/backend/routes/onboarding.js
++++ b/cleartrace/backend/routes/onboarding.js
+@@ -74,21 +74,25 @@ router.get('/status', async (req, res) => {
+ // PUT /api/onboarding/profile  — Step 1
+ router.put('/profile', async (req, res) => {
+   await ensureMigrated();
+-  const { name, industry, country, employeeCount } = req.body;
++  const { name, industry, country, employeeCount, jurisdiction } = req.body;
+ 
+   if (!name || !name.trim()) {
+     return res.status(400).json({ error: 'Company name is required' });
+   }
+ 
++  const VALID_JURISDICTIONS = ['UK', 'IN', 'AE'];
++  const resolvedJurisdiction = VALID_JURISDICTIONS.includes(jurisdiction) ? jurisdiction : null;
++
+   try {
+     await db.query(
+       `UPDATE companies
+           SET name           = $1,
+               industry       = $2,
+               country        = $3,
+-              employee_count = $4
++              employee_count = $4,
++              jurisdiction    = COALESCE($6, jurisdiction)
+         WHERE id = $5`,
+-      [name.trim(), industry || null, country || null, employeeCount || null, req.companyId]
++      [name.trim(), industry || null, country || null, employeeCount || null, req.companyId, resolvedJurisdiction]
+     );
+     res.json({ ok: true });
+   } catch (err) {
+diff --git a/cleartrace/frontend/index.html b/cleartrace/frontend/index.html
+index 21487e7..60fb8dd 100644
+--- a/cleartrace/frontend/index.html
++++ b/cleartrace/frontend/index.html
+@@ -301,8 +301,21 @@
+                     <option value="Waste (Composted)">Waste (Composted)</option>
+                     <option value="Water Supply">Water Supply</option>
+                     <option value="Water Treatment">Water Treatment</option>
+-                    <option value="Purchased Goods">Purchased Goods</option>
+-                    <option value="Upstream Transport">Upstream Transport</option>
++                    <option value="Purchased Goods & Services">Purchased Goods & Services (Cat. 1)</option>
++                    <option value="Capital Goods">Capital Goods (Cat. 2)</option>
++                    <option value="Fuel & Energy Related Activities">Fuel & Energy Related Activities (Cat. 3)</option>
++                    <option value="Upstream Transport & Distribution">Upstream Transport & Distribution (Cat. 4)</option>
++                    <option value="Waste Generated in Operations">Waste Generated in Operations (Cat. 5)</option>
++                    <option value="Upstream Leased Assets">Upstream Leased Assets (Cat. 8)</option>
++                    <option value="Downstream Transport & Distribution">Downstream Transport & Distribution (Cat. 9)</option>
++                    <option value="Processing of Sold Products">Processing of Sold Products (Cat. 10)</option>
++                    <option value="Use of Sold Products">Use of Sold Products (Cat. 11)</option>
++                    <option value="End-of-Life Treatment of Sold Products">End-of-Life Treatment of Sold Products (Cat. 12)</option>
++                    <option value="Downstream Leased Assets">Downstream Leased Assets (Cat. 13)</option>
++                    <option value="Franchises">Franchises (Cat. 14)</option>
++                    <option value="Investments">Investments (Cat. 15)</option>
++                    <option value="Purchased Goods">Purchased Goods (legacy)</option>
++                    <option value="Upstream Transport">Upstream Transport (legacy)</option>
+                     <option value="Other Scope 3">Other Scope 3</option>
+                   </optgroup>
+                 </select>
+@@ -352,6 +365,7 @@
+                 <div class="defra-ef-badge" id="defra-ef-badge"></div>
+                 <select class="ef-source-selector" id="ef-source-selector" style="display:none">
+                   <option value="CEA">CEA V21.0 — FY 2024-25 (0.7117 tCO₂/MWh) — recommended for India</option>
++                  <option value="AE">DEWA Grid Emission Factor 2023 (0.4041 tCO₂e/MWh) — Dubai, UAE</option>
+                   <option value="DEFRA">DEFRA 2023 (0.20493 tCO₂/MWh) — UK grid</option>
+                 </select>
+               </div>
+diff --git a/cleartrace/frontend/js/dashboard.js b/cleartrace/frontend/js/dashboard.js
+index 5bed55d..8c712fb 100644
+--- a/cleartrace/frontend/js/dashboard.js
++++ b/cleartrace/frontend/js/dashboard.js
+@@ -511,6 +511,19 @@ const DEFRA_FACTORS = {
+   'Waste (Composted)':                   { factor: 0.01100, unit: 'kg',    scope: 3 },
+   'Water Supply':                        { factor: 0.14900, unit: 'm³',    scope: 3 },
+   'Water Treatment':                     { factor: 0.27200, unit: 'm³',    scope: 3 },
++  'Purchased Goods & Services':          { factor: null,    unit: 'kg',    scope: 3, custom: true },
++  'Capital Goods':                       { factor: null,    unit: 'unit',  scope: 3, custom: true },
++  'Fuel & Energy Related Activities':    { factor: null,    unit: 'kWh',   scope: 3, custom: true },
++  'Upstream Transport & Distribution':   { factor: null,    unit: 'km',    scope: 3, custom: true },
++  'Waste Generated in Operations':       { factor: null,    unit: 'kg',    scope: 3, custom: true },
++  'Upstream Leased Assets':              { factor: null,    unit: 'kWh',   scope: 3, custom: true },
++  'Downstream Transport & Distribution': { factor: null,    unit: 'km',    scope: 3, custom: true },
++  'Processing of Sold Products':         { factor: null,    unit: 'kg',    scope: 3, custom: true },
++  'Use of Sold Products':                { factor: null,    unit: 'unit',  scope: 3, custom: true },
++  'End-of-Life Treatment of Sold Products': { factor: null, unit: 'kg',    scope: 3, custom: true },
++  'Downstream Leased Assets':            { factor: null,    unit: 'kWh',   scope: 3, custom: true },
++  'Franchises':                          { factor: null,    unit: 'unit',  scope: 3, custom: true },
++  'Investments':                         { factor: null,    unit: 'unit',  scope: 3, custom: true },
+   'Purchased Goods':                     { factor: null,    unit: 'kg',    scope: 3, custom: true },
+   'Upstream Transport':                  { factor: null,    unit: 'km',    scope: 3, custom: true },
+   'Other Scope 3':                       { factor: null,    unit: 'kg',    scope: 3, custom: true },
+@@ -530,6 +543,19 @@ const CEA_FACTORS = {
+   applicability: 'India grid-connected electricity (location-based, GHG Protocol Scope 2)',
+ };
+ 
++// UAE (DEWA) grid factor — mirrors cleartrace/backend/db/emission_factors.js — keep in sync.
++// Verified for Dubai (DEWA) only.
++const UAE_FACTORS = {
++  versions: {
++    'DEWA-2023': { fy: '2023', published: '2024', gridEF: 0.4041, utility: 'DEWA (Dubai)' },
++  },
++  latest: 'DEWA-2023',
++  source: 'Dubai Electricity & Water Authority (DEWA) Grid Emission Factor',
++  scope: 2,
++  unit: 'tCO2e/MWh',
++  applicability: 'UAE grid-connected electricity — verified for Dubai (DEWA) only.',
++};
++
+ const GRID_ELECTRICITY_CATEGORIES = new Set(['Grid Electricity (UK)', 'Grid Electricity']);
+ 
+ function setFormUnit(unit) {
+@@ -540,13 +566,19 @@ function setFormUnit(unit) {
+ function updateGridElecBadge() {
+   const badge    = document.getElementById('defra-ef-badge');
+   const selector = document.getElementById('ef-source-selector');
+-  const source   = selector ? selector.value : (companyJurisdiction === 'IN' ? 'CEA' : 'DEFRA');
++  const defaultSource = companyJurisdiction === 'IN' ? 'CEA' : (companyJurisdiction === 'AE' ? 'AE' : 'DEFRA');
++  const source   = selector ? selector.value : defaultSource;
+ 
+   if (source === 'CEA') {
+     const ver = CEA_FACTORS.versions[CEA_FACTORS.latest];
+     badge.innerHTML =
+       `<span>&#x2705; <strong>${ver.gridEF}</strong> tCO₂/MWh</span>` +
+       `<span class="defra-source">CEA ${CEA_FACTORS.latest} — FY ${ver.fy}</span>`;
++  } else if (source === 'AE') {
++    const ver = UAE_FACTORS.versions[UAE_FACTORS.latest];
++    badge.innerHTML =
++      `<span>&#x2705; <strong>${ver.gridEF}</strong> tCO₂e/MWh</span>` +
++      `<span class="defra-source">${ver.utility} Grid Emission Factor — FY ${ver.fy}</span>`;
+   } else {
+     const f = DEFRA_FACTORS['Grid Electricity (UK)'];
+     badge.innerHTML =
+@@ -564,10 +596,10 @@ function applyEmissionFactor(category) {
+   const isGridElec = GRID_ELECTRICITY_CATEGORIES.has(category);
+ 
+   if (selector)   selector.style.display  = isGridElec ? '' : 'none';
+-  if (ceaTooltip) ceaTooltip.style.display = (isGridElec && companyJurisdiction === 'IN') ? '' : 'none';
++  if (ceaTooltip) ceaTooltip.style.display = (isGridElec && (companyJurisdiction === 'IN' || companyJurisdiction === 'AE')) ? '' : 'none';
+ 
+   if (isGridElec) {
+-    if (selector) selector.value = (companyJurisdiction === 'IN') ? 'CEA' : 'DEFRA';
++    if (selector) selector.value = (companyJurisdiction === 'IN') ? 'CEA' : (companyJurisdiction === 'AE') ? 'AE' : 'DEFRA';
+     document.getElementById('f-scope').value = '2';
+     setFormUnit('kWh');
+     updateGridElecBadge();
+@@ -636,6 +668,13 @@ document.getElementById('entry-form').addEventListener('submit', async (e) => {
+           factor_source:       `CEA ${CEA_FACTORS.latest} — FY ${ver.fy}`,
+           factor_jurisdiction: 'IN',
+         };
++      } else if (selector.value === 'AE') {
++        const ver = UAE_FACTORS.versions[UAE_FACTORS.latest];
++        efExtras = {
++          emission_factor:     ver.gridEF,
++          factor_source:       `${ver.utility} Grid Emission Factor — FY ${ver.fy}`,
++          factor_jurisdiction: 'AE',
++        };
+       } else {
+         const f = DEFRA_FACTORS['Grid Electricity (UK)'];
+         efExtras = {
+diff --git a/cleartrace/frontend/js/onboarding.js b/cleartrace/frontend/js/onboarding.js
+index de68e4f..8a8572f 100644
+--- a/cleartrace/frontend/js/onboarding.js
++++ b/cleartrace/frontend/js/onboarding.js
+@@ -123,10 +123,11 @@ async function saveStep(step) {
+   showError('');
+ 
+   if (step === 1) {
+-    const name      = document.getElementById('p1-name').value.trim();
+-    const industry  = document.getElementById('p1-industry').value;
+-    const country   = document.getElementById('p1-country').value.trim();
+-    const employees = document.getElementById('p1-employees').value;
++    const name         = document.getElementById('p1-name').value.trim();
++    const industry     = document.getElementById('p1-industry').value;
++    const country      = document.getElementById('p1-country').value.trim();
++    const jurisdiction = document.getElementById('p1-jurisdiction').value;
++    const employees    = document.getElementById('p1-employees').value;
+ 
+     if (!name) { showError('Company name is required.'); return false; }
+ 
+@@ -134,7 +135,7 @@ async function saveStep(step) {
+     const revenue = document.getElementById('p1-revenue')?.value || '';
+ 
+     const res = await api('PUT', '/api/onboarding/profile', {
+-      name, industry, country,
++      name, industry, country, jurisdiction,
+       employeeCount: employees ? parseInt(employees) : null,
+     });
+     if (!res || !res.ok) {
+@@ -311,9 +312,10 @@ async function prefill() {
+ 
+   // Step 1
+   if (d.profile.name)              document.getElementById('p1-name').value     = d.profile.name;
+-  if (d.profile.industry)          document.getElementById('p1-industry').value  = d.profile.industry;
+-  if (d.profile.country)           document.getElementById('p1-country').value   = d.profile.country;
+-  if (d.profile.employeeCount)     document.getElementById('p1-employees').value = d.profile.employeeCount;
++  if (d.profile.industry)          document.getElementById('p1-industry').value     = d.profile.industry;
++  if (d.profile.country)           document.getElementById('p1-country').value      = d.profile.country;
++  if (d.profile.jurisdiction)      document.getElementById('p1-jurisdiction').value = d.profile.jurisdiction;
++  if (d.profile.employeeCount)     document.getElementById('p1-employees').value    = d.profile.employeeCount;
+   if (d.profile.industrySector)    document.getElementById('p1-sector').value    = d.profile.industrySector;
+   if (d.profile.annualRevenueGbpM) document.getElementById('p1-revenue').value   = d.profile.annualRevenueGbpM;
+ 
+diff --git a/cleartrace/frontend/onboarding.html b/cleartrace/frontend/onboarding.html
+index ec0c3ac..d352c84 100644
+--- a/cleartrace/frontend/onboarding.html
++++ b/cleartrace/frontend/onboarding.html
+@@ -103,8 +103,19 @@
+         <div class="form-row">
+           <div class="ob-field">
+             <label for="p1-country">Country</label>
+-            <input type="text" id="p1-country" placeholder="United Kingdom">
++            <input type="text" id="p1-country" placeholder="United Arab Emirates">
+           </div>
++          <div class="ob-field">
++            <label for="p1-jurisdiction">Emission Factor Jurisdiction <span class="required">*</span></label>
++            <select id="p1-jurisdiction">
++              <option value="UK">United Kingdom (DEFRA)</option>
++              <option value="AE">United Arab Emirates (DEWA)</option>
++              <option value="IN">India (CEA)</option>
++            </select>
++            <small class="ob-field-hint">Determines which grid electricity &amp; water emission factors are applied. Only Dubai (DEWA) is currently verified for UAE — confirm before use for other emirates.</small>
++          </div>
++        </div>
++        <div class="form-row">
+           <div class="ob-field">
+             <label for="p1-employees">Employee Count</label>
+             <select id="p1-employees">
