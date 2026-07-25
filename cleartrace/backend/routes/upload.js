@@ -8,6 +8,8 @@ const path        = require('path');
 const db          = require('../db/database');
 const requireRole = require('../middleware/roles');
 const { decideFactor, defaultRegionFromJurisdiction } = require('../lib/decide-factor');
+const { resolveMethodFields }      = require('../lib/entry-method');
+const { logAction, getIp }         = require('../lib/audit');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -23,10 +25,12 @@ const upload = multer({
 let migrated = false;
 async function ensureMigrated() {
   if (migrated) return;
-  const sql       = fs.readFileSync(path.join(__dirname, '../db/region_factors_migration.sql'), 'utf8');
-  const patch2026 = fs.readFileSync(path.join(__dirname, '../db/region_factors_2026_patch_migration.sql'), 'utf8');
+  const sql              = fs.readFileSync(path.join(__dirname, '../db/region_factors_migration.sql'), 'utf8');
+  const patch2026        = fs.readFileSync(path.join(__dirname, '../db/region_factors_2026_patch_migration.sql'), 'utf8');
+  const vehicleFlightSql = fs.readFileSync(path.join(__dirname, '../db/vehicle_flight_migration.sql'), 'utf8');
   await db.query(sql);
   await db.query(patch2026);
+  await db.query(vehicleFlightSql);
   migrated = true;
 }
 
@@ -85,6 +89,10 @@ router.post('/', requireRole('admin', 'editor'), upload.single('file'), async (r
     const period         = String(r.period          || '').trim();
     const notes          = String(r.notes           || '').trim() || null;
     const region         = String(r.region          || '').trim() || companyRegion;
+    const method         = String(r.method          || '').trim() || undefined;
+    const fuelType       = String(r.fuel_type       || '').trim() || undefined;
+    const distanceKmRaw  = String(r.distance_km     || '').trim();
+    const cabinClass     = String(r.cabin_class     || '').trim() || undefined;
 
     if (!category || !scopeRaw || !amountRaw || !unit || !period) {
       errors.push(`Row ${rowNum}: missing required field (category, scope, amount, unit, period)`);
@@ -116,8 +124,22 @@ router.post('/', requireRole('admin', 'editor'), upload.single('file'), async (r
     const efCellRaw = r.emission_factor != null ? String(r.emission_factor).trim() : '';
     const efProvided = efCellRaw !== '';
 
+    // Same dispatch as the manual form for the two new methods: a row with
+    // method='fuel' but no/unrecognised fuel_type, or a flight row with a
+    // missing/unrecognised cabin_class or distance_km, is a rejected row —
+    // never a silent fall-through to distance-basis or a factor of 1.0.
+    const methodFields = resolveMethodFields({
+      category, method, fuelType, distanceKm: distanceKmRaw, cabinClass,
+      companyRegion: region,
+    });
+    if (methodFields.error) {
+      errors.push(`Row ${rowNum}: ${methodFields.error}`);
+      continue;
+    }
+    const { lookupCategory, subtype, flightBand } = methodFields;
+
     const decided = await decideFactor({
-      db, category, region, unit,
+      db, category, lookupCategory, subtype, region, unit,
       clientFactor: efProvided ? efCellRaw : undefined,
       clientSource: undefined,
       companyId:    req.companyId,
@@ -131,17 +153,41 @@ router.post('/', requireRole('admin', 'editor'), upload.single('file'), async (r
 
     const { ef, factorSource, factorJurisdiction, regionResolved, isFallback, fallbackReason } = decided;
 
+    const storedMethod     = method === 'fuel' ? 'fuel' : (method === 'distance' ? 'distance' : null);
+    const storedFuelType   = method === 'fuel' ? fuelType : null;
+    const storedDistanceKm = flightBand ? parseFloat(distanceKmRaw) : null;
+    const storedCabinClass = flightBand ? cabinClass : null;
+
     try {
       const result = await db.query(
         `INSERT INTO emissions_entries
            (company_id, user_id, category, scope, amount, unit, period, emission_factor, source, notes,
-            factor_source, factor_jurisdiction, region, region_resolved, is_fallback_factor, fallback_reason)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'upload',$9,$10,$11,$12,$13,$14,$15)
+            factor_source, factor_jurisdiction, region, region_resolved, is_fallback_factor, fallback_reason,
+            method, fuel_type, distance_km, cabin_class, flight_band)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'upload',$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
          RETURNING id`,
         [req.companyId, req.userId, category, scope, amount, unit, period, ef, notes,
-         factorSource, factorJurisdiction, region, regionResolved, isFallback, fallbackReason]
+         factorSource, factorJurisdiction, region, regionResolved, isFallback, fallbackReason,
+         storedMethod, storedFuelType, storedDistanceKm, storedCabinClass, flightBand || null]
       );
       inserted.push(result.rows[0].id);
+
+      // lib/audit.js's rule is "call logAction() after any data-mutating
+      // operation." upload.js does not audit its other rows today (a
+      // pre-existing gap, not this step's to fix) — but these two methods
+      // are new code, so their rows are audited from the start.
+      if (storedMethod === 'fuel' || flightBand) {
+        await logAction({
+          companyId: req.companyId, userId: req.userId, userEmail: req.userEmail || '',
+          action: 'create', recordId: result.rows[0].id,
+          newValues: {
+            category, scope, amount, unit, period,
+            ...(storedMethod === 'fuel' ? { method: 'fuel', fuel_type: storedFuelType } : {}),
+            ...(flightBand ? { distance_km: storedDistanceKm, cabin_class: storedCabinClass, flight_band: flightBand } : {}),
+          },
+          ip: getIp(req),
+        });
+      }
     } catch (dbErr) {
       errors.push(`Row ${rowNum}: database error — ${dbErr.message}`);
     }

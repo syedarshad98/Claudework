@@ -22,14 +22,31 @@ const express = require('express');
 const DB_PATH = require.resolve('../../db/database');
 
 const DEFAULT_FACTOR_ROWS = [
-  { region: 'GB',    category: 'Grid Electricity',      canonical_unit: 'kWh', value: 0.20493, factor_source_id: 'defra-2023',           valid_from: '2023-01-01', valid_to: null },
-  { region: 'GB',    category: 'Water Supply',          canonical_unit: 'm3',  value: 0.14900, factor_source_id: 'defra-2023',           valid_from: '2023-01-01', valid_to: null },
-  { region: 'GB',    category: 'Waste (Landfill)',      canonical_unit: 'kg',  value: 0.58700, factor_source_id: 'defra-2023',           valid_from: '2023-01-01', valid_to: null },
-  { region: 'GLOBAL',category: 'Diesel (Stationary)',   canonical_unit: 'L',   value: 2.51920, factor_source_id: 'defra-global-default', valid_from: '2023-01-01', valid_to: null },
-  { region: 'GLOBAL',category: 'Natural Gas',           canonical_unit: 'm3',  value: 2.02263, factor_source_id: 'defra-global-default', valid_from: '2023-01-01', valid_to: null },
-  { region: 'IN',    category: 'Grid Electricity',      canonical_unit: 'kWh', value: 0.7117,  factor_source_id: 'cea-v21.0',            valid_from: '2025-11-01', valid_to: null },
-  { region: 'AE-DU', category: 'Grid Electricity',      canonical_unit: 'kWh', value: 0.4041,  factor_source_id: 'uae-dewa',             valid_from: '2024-01-01', valid_to: null },
-  { region: 'AE',    category: 'Water Supply',          canonical_unit: 'm3',  value: 2.7,     factor_source_id: 'uae-desalination-2024',valid_from: '2024-01-01', valid_to: null },
+  { region: 'GB',    category: 'Grid Electricity',      subtype: null, canonical_unit: 'kWh', value: 0.20493, factor_source_id: 'defra-2023',           valid_from: '2023-01-01', valid_to: null },
+  { region: 'GB',    category: 'Company Car (Diesel)',  subtype: null, canonical_unit: 'km',  value: 0.17123, factor_source_id: 'defra-2023',           valid_from: '2023-01-01', valid_to: null },
+  { region: 'GB',    category: 'Water Supply',          subtype: null, canonical_unit: 'm3',  value: 0.14900, factor_source_id: 'defra-2023',           valid_from: '2023-01-01', valid_to: null },
+  { region: 'GB',    category: 'Waste (Landfill)',      subtype: null, canonical_unit: 'kg',  value: 0.58700, factor_source_id: 'defra-2023',           valid_from: '2023-01-01', valid_to: null },
+  { region: 'GLOBAL',category: 'Diesel (Stationary)',   subtype: null, canonical_unit: 'L',   value: 2.51920, factor_source_id: 'defra-global-default', valid_from: '2023-01-01', valid_to: null },
+  { region: 'GLOBAL',category: 'Petrol (Stationary)',   subtype: null, canonical_unit: 'L',   value: 2.16280, factor_source_id: 'defra-global-default', valid_from: '2023-01-01', valid_to: null },
+  { region: 'GLOBAL',category: 'LPG',                   subtype: null, canonical_unit: 'L',   value: 1.55400, factor_source_id: 'defra-global-default', valid_from: '2023-01-01', valid_to: null },
+  { region: 'GLOBAL',category: 'Natural Gas',           subtype: null, canonical_unit: 'm3',  value: 2.02263, factor_source_id: 'defra-global-default', valid_from: '2023-01-01', valid_to: null },
+  { region: 'IN',    category: 'Grid Electricity',      subtype: null, canonical_unit: 'kWh', value: 0.7117,  factor_source_id: 'cea-v21.0',            valid_from: '2025-11-01', valid_to: null },
+  { region: 'AE-DU', category: 'Grid Electricity',      subtype: null, canonical_unit: 'kWh', value: 0.4041,  factor_source_id: 'uae-dewa',             valid_from: '2024-01-01', valid_to: null },
+  { region: 'AE',    category: 'Water Supply',          subtype: null, canonical_unit: 'm3',  value: 2.7,     factor_source_id: 'uae-desalination-2024',valid_from: '2024-01-01', valid_to: null },
+
+  // Business Travel (Flight) — mirrors db/vehicle_flight_migration.sql's
+  // placeholder values (flagged unverified there; same numbers here so a
+  // test failure means the resolver disagrees with the migration).
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'short-haul:economy',       canonical_unit: 'pkm', value: 0.15700, factor_source_id: 'defra-flight-placeholder-2026', valid_from: '2026-01-01', valid_to: null },
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'short-haul:business',       canonical_unit: 'pkm', value: 0.23500, factor_source_id: 'defra-flight-placeholder-2026', valid_from: '2026-01-01', valid_to: null },
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'medium:economy',            canonical_unit: 'pkm', value: 0.13000, factor_source_id: 'defra-flight-placeholder-2026', valid_from: '2026-01-01', valid_to: null },
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'medium:premium_economy',    canonical_unit: 'pkm', value: 0.20800, factor_source_id: 'defra-flight-placeholder-2026', valid_from: '2026-01-01', valid_to: null },
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'medium:business',           canonical_unit: 'pkm', value: 0.28600, factor_source_id: 'defra-flight-placeholder-2026', valid_from: '2026-01-01', valid_to: null },
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'medium:first',              canonical_unit: 'pkm', value: 0.39000, factor_source_id: 'defra-flight-placeholder-2026', valid_from: '2026-01-01', valid_to: null },
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'long-haul:economy',         canonical_unit: 'pkm', value: 0.10000, factor_source_id: 'defra-flight-placeholder-2026', valid_from: '2026-01-01', valid_to: null },
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'long-haul:premium_economy', canonical_unit: 'pkm', value: 0.16000, factor_source_id: 'defra-flight-placeholder-2026', valid_from: '2026-01-01', valid_to: null },
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'long-haul:business',        canonical_unit: 'pkm', value: 0.22000, factor_source_id: 'defra-flight-placeholder-2026', valid_from: '2026-01-01', valid_to: null },
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'long-haul:first',           canonical_unit: 'pkm', value: 0.30000, factor_source_id: 'defra-flight-placeholder-2026', valid_from: '2026-01-01', valid_to: null },
 ];
 
 /**
@@ -59,12 +76,15 @@ function installDbStub({ jurisdiction = 'UK', region = null, existingEntry = nul
       return { rows: [] };
     }
 
-    // lib/factor-resolver.js's queryCurrent(): exact (region, category) lookup,
-    // current row only (valid_to IS NULL), most recent valid_from first.
+    // lib/factor-resolver.js's queryCurrent(): exact (region, category, subtype)
+    // lookup, current row only (valid_to IS NULL), most recent valid_from first.
+    // subtype is matched NULL-safely, same as the real COALESCE(...,'') SQL.
     if (/SELECT \* FROM emission_factors/i.test(s)) {
-      const [region_, category] = params;
+      const [region_, category, subtype_] = params;
+      const norm = (v) => v ?? '';
       const matches = factorRows
-        .filter(r => r.region === region_ && r.category === category && r.valid_to === null)
+        .filter(r => r.region === region_ && r.category === category
+                  && norm(r.subtype) === norm(subtype_) && r.valid_to === null)
         .sort((a, b) => (a.valid_from < b.valid_from ? 1 : -1));
       return { rows: matches.length ? [matches[0]] : [] };
     }
@@ -93,6 +113,11 @@ function installDbStub({ jurisdiction = 'UK', region = null, existingEntry = nul
         region_resolved:     params[12],
         is_fallback_factor:  params[13],
         fallback_reason:     params[14],
+        method:              params[15] ?? null,
+        fuel_type:           params[16] ?? null,
+        distance_km:         params[17] ?? null,
+        cabin_class:         params[18] ?? null,
+        flight_band:         params[19] ?? null,
       }] };
     }
 
@@ -112,6 +137,11 @@ function installDbStub({ jurisdiction = 'UK', region = null, existingEntry = nul
         region_resolved:     params[12],
         is_fallback_factor:  params[13],
         fallback_reason:     params[14],
+        method:              params[15] ?? null,
+        fuel_type:           params[16] ?? null,
+        distance_km:         params[17] ?? null,
+        cabin_class:         params[18] ?? null,
+        flight_band:         params[19] ?? null,
       }] };
     }
 

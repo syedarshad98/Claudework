@@ -5,6 +5,7 @@ const { logAction, getIp }         = require('../lib/audit');
 const { validateEntry, saveFlags } = require('../lib/validate');
 const requireRole                  = require('../middleware/roles');
 const { decideFactor, defaultRegionFromJurisdiction } = require('../lib/decide-factor');
+const { resolveMethodFields } = require('../lib/entry-method');
 
 // ── Lazy migration ────────────────────────────────────────────────────────────
 let migrated = false;
@@ -12,12 +13,14 @@ async function ensureMigrated() {
   if (migrated) return;
   const fs   = require('fs');
   const path = require('path');
-  const sql        = fs.readFileSync(path.join(__dirname, '../db/audit_migration.sql'), 'utf8');
-  const regionSql  = fs.readFileSync(path.join(__dirname, '../db/region_factors_migration.sql'), 'utf8');
-  const patch2026  = fs.readFileSync(path.join(__dirname, '../db/region_factors_2026_patch_migration.sql'), 'utf8');
+  const sql            = fs.readFileSync(path.join(__dirname, '../db/audit_migration.sql'), 'utf8');
+  const regionSql      = fs.readFileSync(path.join(__dirname, '../db/region_factors_migration.sql'), 'utf8');
+  const patch2026       = fs.readFileSync(path.join(__dirname, '../db/region_factors_2026_patch_migration.sql'), 'utf8');
+  const vehicleFlightSql = fs.readFileSync(path.join(__dirname, '../db/vehicle_flight_migration.sql'), 'utf8');
   await db.query(sql);
   await db.query(regionSql);
   await db.query(patch2026);
+  await db.query(vehicleFlightSql);
   migrated = true;
 }
 
@@ -86,6 +89,7 @@ router.post('/', requireRole('admin', 'editor'), async (req, res) => {
   await ensureMigrated();
   const {
     category, scope, amount, unit, period, emission_factor, notes, region: reqRegion,
+    method, fuel_type, distance_km, cabin_class,
     // factor_jurisdiction is accepted off the wire but never trusted — the
     // server derives it from the resolved factor. See decideFactor().
     factor_source: reqFactorSource,
@@ -108,8 +112,15 @@ router.post('/', requireRole('admin', 'editor'), async (req, res) => {
   const jurisdiction = compRow.rows[0]?.jurisdiction || 'UK';
   const region = reqRegion || compRow.rows[0]?.region || defaultRegionFromJurisdiction(jurisdiction);
 
+  const methodFields = resolveMethodFields({
+    category, method, fuelType: fuel_type, distanceKm: distance_km, cabinClass: cabin_class,
+    companyRegion: region,
+  });
+  if (methodFields.error) return res.status(400).json({ error: methodFields.error });
+  const { lookupCategory, subtype, flightBand } = methodFields;
+
   const decided = await decideFactor({
-    db, category, region, unit,
+    db, category, lookupCategory, subtype, region, unit,
     clientFactor: emission_factor,
     clientSource: reqFactorSource,
     companyId:    req.companyId,
@@ -118,16 +129,23 @@ router.post('/', requireRole('admin', 'editor'), async (req, res) => {
 
   const { ef, factorSource, factorJurisdiction, regionResolved, isFallback, fallbackReason } = decided;
 
+  const storedMethod     = method === 'fuel' ? 'fuel' : (method === 'distance' ? 'distance' : null);
+  const storedFuelType   = method === 'fuel' ? fuel_type : null;
+  const storedDistanceKm = flightBand ? parseFloat(distance_km) : null;
+  const storedCabinClass = flightBand ? cabin_class : null;
+
   try {
     const result = await db.query(
       `INSERT INTO emissions_entries
          (company_id, user_id, category, scope, amount, unit, period, emission_factor, source, notes,
-          factor_source, factor_jurisdiction, region, region_resolved, is_fallback_factor, fallback_reason)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'manual',$9,$10,$11,$12,$13,$14,$15)
+          factor_source, factor_jurisdiction, region, region_resolved, is_fallback_factor, fallback_reason,
+          method, fuel_type, distance_km, cabin_class, flight_band)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'manual',$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
        RETURNING *`,
       [req.companyId, req.userId, category, parseInt(scope),
        parseFloat(amount), unit, period, ef, notes || null, factorSource, factorJurisdiction,
-       region, regionResolved, isFallback, fallbackReason]
+       region, regionResolved, isFallback, fallbackReason,
+       storedMethod, storedFuelType, storedDistanceKm, storedCabinClass, flightBand || null]
     );
     const entry = result.rows[0];
 
@@ -137,7 +155,11 @@ router.post('/', requireRole('admin', 'editor'), async (req, res) => {
     await logAction({
       companyId: req.companyId, userId: req.userId, userEmail: req.userEmail || '',
       action: 'create', recordId: entry.id,
-      newValues: { category, scope, amount, unit, period, notes },
+      newValues: {
+        category, scope, amount, unit, period, notes,
+        ...(storedMethod === 'fuel' ? { method: 'fuel', fuel_type: storedFuelType } : {}),
+        ...(flightBand ? { distance_km: storedDistanceKm, cabin_class: storedCabinClass, flight_band: flightBand } : {}),
+      },
       ip: getIp(req),
     });
 
@@ -169,7 +191,10 @@ router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
     return res.status(423).json({ error: `Period ${oldEntry.period} is locked.`, locked: true });
   }
 
-  const { category, scope, amount, unit, period, emission_factor, notes } = req.body;
+  const {
+    category, scope, amount, unit, period, emission_factor, notes,
+    method, fuel_type, distance_km, cabin_class,
+  } = req.body;
   const newPeriod = period || oldEntry.period;
   if (newPeriod !== oldEntry.period && await isPeriodLocked(req.companyId, newPeriod)) {
     return res.status(423).json({ error: `Target period ${newPeriod} is locked.`, locked: true });
@@ -179,12 +204,23 @@ router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
   const jurisdictionP = compRowP.rows[0]?.jurisdiction || 'UK';
   const region = req.body.region || oldEntry.region || compRowP.rows[0]?.region || defaultRegionFromJurisdiction(jurisdictionP);
 
-  const effectiveCategory = category || oldEntry.category;
-  const effectiveUnit     = unit || oldEntry.unit;
-  const categoryChanged   = !!(category && category !== oldEntry.category);
+  const effectiveCategory    = category || oldEntry.category;
+  const effectiveUnit        = unit || oldEntry.unit;
+  const effectiveMethod      = method !== undefined ? method : oldEntry.method;
+  const effectiveFuelType    = fuel_type !== undefined ? fuel_type : oldEntry.fuel_type;
+  const effectiveDistanceKm  = distance_km !== undefined ? distance_km : oldEntry.distance_km;
+  const effectiveCabinClass  = cabin_class !== undefined ? cabin_class : oldEntry.cabin_class;
+  const categoryChanged      = !!(category && category !== oldEntry.category);
+
+  const methodFields = resolveMethodFields({
+    category: effectiveCategory, method: effectiveMethod, fuelType: effectiveFuelType,
+    distanceKm: effectiveDistanceKm, cabinClass: effectiveCabinClass, companyRegion: region,
+  });
+  if (methodFields.error) return res.status(400).json({ error: methodFields.error });
+  const { lookupCategory, subtype, flightBand } = methodFields;
 
   const decided = await decideFactor({
-    db, category: effectiveCategory, region, unit: effectiveUnit,
+    db, category: effectiveCategory, lookupCategory, subtype, region, unit: effectiveUnit,
     // For a custom category the user's number is the mechanism; when this PATCH
     // does not carry one, keep whatever the entry already had.
     clientFactor: emission_factor != null ? emission_factor : oldEntry.emission_factor,
@@ -216,6 +252,11 @@ router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
     );
   }
 
+  const storedMethod     = effectiveMethod === 'fuel' ? 'fuel' : (effectiveMethod === 'distance' ? 'distance' : null);
+  const storedFuelType   = effectiveMethod === 'fuel' ? effectiveFuelType : null;
+  const storedDistanceKm = flightBand ? parseFloat(effectiveDistanceKm) : null;
+  const storedCabinClass = flightBand ? effectiveCabinClass : null;
+
   try {
     const result = await db.query(
       `UPDATE emissions_entries
@@ -231,7 +272,12 @@ router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
               region             = $12,
               region_resolved    = $13,
               is_fallback_factor = $14,
-              fallback_reason    = $15
+              fallback_reason    = $15,
+              method             = $16,
+              fuel_type          = $17,
+              distance_km        = $18,
+              cabin_class        = $19,
+              flight_band        = $20
         WHERE id=$8 AND company_id=$9
         RETURNING *`,
       [category || null, scope != null ? parseInt(scope) : null,
@@ -239,7 +285,8 @@ router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
        period || null, ef,
        notes !== undefined ? notes : null,
        id, req.companyId, factorSource, factorJurisdiction,
-       region, regionResolved, isFallback, fallbackReason]
+       region, regionResolved, isFallback, fallbackReason,
+       storedMethod, storedFuelType, storedDistanceKm, storedCabinClass, flightBand || null]
     );
     const entry = result.rows[0];
 
@@ -250,9 +297,13 @@ router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
       companyId: req.companyId, userId: req.userId, userEmail: req.userEmail || '',
       action: 'edit', recordId: id,
       oldValues: { category: oldEntry.category, scope: oldEntry.scope,
-                   amount: oldEntry.amount, unit: oldEntry.unit, period: oldEntry.period },
+                   amount: oldEntry.amount, unit: oldEntry.unit, period: oldEntry.period,
+                   method: oldEntry.method, fuel_type: oldEntry.fuel_type,
+                   distance_km: oldEntry.distance_km, cabin_class: oldEntry.cabin_class },
       newValues: { category: entry.category, scope: entry.scope,
-                   amount: entry.amount, unit: entry.unit, period: entry.period },
+                   amount: entry.amount, unit: entry.unit, period: entry.period,
+                   method: entry.method, fuel_type: entry.fuel_type,
+                   distance_km: entry.distance_km, cabin_class: entry.cabin_class },
       ip: getIp(req),
     });
 

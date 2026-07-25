@@ -27,37 +27,45 @@
 
 const AE_ELECTRICITY_FALLBACK_REGION = 'AE-DU';
 
-async function queryCurrent(db, region, category) {
+/**
+ * subtype distinguishes multiple rows sharing one (region, category) — e.g.
+ * a flight's band:cabin_class. NULL for every category that doesn't need it
+ * (which is most of them), matched NULL-safely so existing callers are
+ * unaffected.
+ */
+async function queryCurrent(db, region, category, subtype = null) {
   const res = await db.query(
     `SELECT * FROM emission_factors
-      WHERE region = $1 AND category = $2 AND valid_to IS NULL
+      WHERE region = $1 AND category = $2
+        AND COALESCE(subtype, '') = COALESCE($3, '')
+        AND valid_to IS NULL
       ORDER BY valid_from DESC
       LIMIT 1`,
-    [region, category]
+    [region, category, subtype]
   );
   return res.rows[0] || null;
 }
 
 /**
  * @param {object} db
- * @param {{ category: string, region: string }} params
+ * @param {{ category: string, region: string, subtype?: string }} params
  * @returns {Promise<{
  *   row: object, regionResolved: string, isFallback: boolean,
  *   fallbackReason: string|null
  * } | null>}
  */
-async function resolveRegionFactor(db, { category, region }) {
+async function resolveRegionFactor(db, { category, region, subtype = null }) {
   const requestedRegion = region || 'GB';
 
   // Tier 1 — exact region.
-  const exact = await queryCurrent(db, requestedRegion, category);
+  const exact = await queryCurrent(db, requestedRegion, category, subtype);
   if (exact) {
     return { row: exact, regionResolved: requestedRegion, isFallback: false, fallbackReason: null };
   }
 
   // Tier 2 — declared fallback (UAE electricity only, for now).
   if (requestedRegion.startsWith('AE') && requestedRegion !== AE_ELECTRICITY_FALLBACK_REGION) {
-    const fallback = await queryCurrent(db, AE_ELECTRICITY_FALLBACK_REGION, category);
+    const fallback = await queryCurrent(db, AE_ELECTRICITY_FALLBACK_REGION, category, subtype);
     if (fallback) {
       return {
         row: fallback,
@@ -72,7 +80,7 @@ async function resolveRegionFactor(db, { category, region }) {
   }
 
   // Tier 3 — global default (declared region-independent categories only).
-  const global = await queryCurrent(db, 'GLOBAL', category);
+  const global = await queryCurrent(db, 'GLOBAL', category, subtype);
   if (global) {
     return { row: global, regionResolved: 'GLOBAL', isFallback: false, fallbackReason: null };
   }
@@ -82,7 +90,7 @@ async function resolveRegionFactor(db, { category, region }) {
   // step did not research (refrigerants, waste, business travel, commuting,
   // water treatment, district heating).
   if (requestedRegion !== 'GB') {
-    const gb = await queryCurrent(db, 'GB', category);
+    const gb = await queryCurrent(db, 'GB', category, subtype);
     if (gb) {
       return {
         row: gb,

@@ -60,6 +60,13 @@ function isCustomCategory(rawCategory) {
  * @param {object} opts
  * @param {object} opts.db
  * @param {string} opts.category
+ * @param {string} [opts.lookupCategory] category to resolve the factor table
+ *   against, if different from the entry's own displayed category — e.g. a
+ *   vehicle fuel-method entry displays 'Company Car (Diesel)' but resolves
+ *   against the shared 'Diesel (Stationary)' row. Defaults to `category`.
+ * @param {string} [opts.subtype]       distinguishes multiple rows sharing one
+ *   (region, lookupCategory) — a flight's '<band>:<cabin_class>'. Undefined
+ *   for everything else.
  * @param {string} [opts.region]        entry- or company-level region code
  * @param {string} opts.unit            unit as entered
  * @param {*} opts.clientFactor         emission_factor as sent by the client
@@ -72,12 +79,13 @@ function isCustomCategory(rawCategory) {
  *     regionResolved: string|null, isFallback: boolean, fallbackReason: string|null }
  * >}
  */
-async function decideFactor({ db, category, region, unit, clientFactor, clientSource, companyId, logPrefix = '[emissions]' }) {
-  const canonicalCategory = canonicalizeCategory(category);
-  const custom = isCustomCategory(category);
+async function decideFactor({ db, category, lookupCategory, subtype, region, unit, clientFactor, clientSource, companyId, logPrefix = '[emissions]' }) {
+  const categoryForLookup = lookupCategory || category;
+  const canonicalCategory = canonicalizeCategory(categoryForLookup);
+  const custom = isCustomCategory(categoryForLookup);
 
   if (!custom) {
-    const resolved = await resolveRegionFactor(db, { category: canonicalCategory, region });
+    const resolved = await resolveRegionFactor(db, { category: canonicalCategory, region, subtype });
 
     if (resolved) {
       if (clientFactor != null || clientSource) {
@@ -108,7 +116,12 @@ async function decideFactor({ db, category, region, unit, clientFactor, clientSo
       };
     }
     // No factor at any tier and not a custom category — a 400, not a silent 1.0.
-    return { error: `No emission factor is available for category "${category}" in region "${region || 'GB'}".` };
+    // Name whichever category actually failed to resolve: for a vehicle
+    // fuel-method entry or a flight, that's the internal lookup category
+    // (e.g. 'CNG'), not necessarily what the entry displays ('Company Car
+    // (Petrol)') — naming the wrong one here would blame the wrong gap.
+    const context = lookupCategory && lookupCategory !== category ? ` (entered as "${category}")` : '';
+    return { error: `No emission factor is available for category "${categoryForLookup}"${context} in region "${region || 'GB'}".` };
   }
 
   // Custom category: the user-supplied number is the mechanism.

@@ -728,4 +728,9 @@ that file. It is a stray artifact, not source.
 - §1, §5 — superseded, see banners
 - §6 — test runner now exists (Step 0b)
 - C12 — resolved by deletion in Step 4
+- §5's "no calculations/ directory... no banding logic anywhere" is now
+  inaccurate: `lib/flights.js` (banding + cabin-class substitution) and
+  `lib/vehicle-fuel.js` (fuel-type → factor-category mapping) are exactly
+  that, added in Step 3. `lib/entry-method.js` is the shared dispatch point
+  both routes/emissions.js and routes/upload.js call before decideFactor.
 
