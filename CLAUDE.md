@@ -723,3 +723,9 @@ routes could shadow `/evidence/...` if a matching pattern is ever added.
 `cleartrace-uae-scope3 2.txt` (402 lines) is a `git diff` against
 `cleartrace/backend/db/emission_factors.js`. Its content appears already applied to
 that file. It is a stray artifact, not source.
+
+## PENDING DOC UPDATES (rewrite at end of Part 1)
+- §1, §5 — superseded, see banners
+- §6 — test runner now exists (Step 0b)
+- C12 — resolved by deletion in Step 4
+
