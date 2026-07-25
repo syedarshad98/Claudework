@@ -12,10 +12,12 @@ async function ensureMigrated() {
   if (migrated) return;
   const fs   = require('fs');
   const path = require('path');
-  const sql       = fs.readFileSync(path.join(__dirname, '../db/audit_migration.sql'), 'utf8');
-  const regionSql = fs.readFileSync(path.join(__dirname, '../db/region_factors_migration.sql'), 'utf8');
+  const sql        = fs.readFileSync(path.join(__dirname, '../db/audit_migration.sql'), 'utf8');
+  const regionSql  = fs.readFileSync(path.join(__dirname, '../db/region_factors_migration.sql'), 'utf8');
+  const patch2026  = fs.readFileSync(path.join(__dirname, '../db/region_factors_2026_patch_migration.sql'), 'utf8');
   await db.query(sql);
   await db.query(regionSql);
+  await db.query(patch2026);
   migrated = true;
 }
 
