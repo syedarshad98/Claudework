@@ -3,9 +3,11 @@ const router      = express.Router();
 const multer      = require('multer');
 const XLSX        = require('xlsx');
 const { parse }   = require('csv-parse/sync');
+const fs          = require('fs');
+const path        = require('path');
 const db          = require('../db/database');
-const { lookupFactor } = require('../db/emission_factors');
 const requireRole = require('../middleware/roles');
+const { decideFactor, defaultRegionFromJurisdiction } = require('../lib/decide-factor');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -17,14 +19,25 @@ const upload = multer({
   }
 });
 
+// ── Lazy migration ─────────────────────────────────────────────────────────────
+let migrated = false;
+async function ensureMigrated() {
+  if (migrated) return;
+  const sql = fs.readFileSync(path.join(__dirname, '../db/region_factors_migration.sql'), 'utf8');
+  await db.query(sql);
+  migrated = true;
+}
+
 // POST /api/upload
 // Expected spreadsheet columns (case-insensitive):
 //   category | scope | amount | unit | period | emission_factor (optional) | notes (optional)
 router.post('/', requireRole('admin', 'editor'), upload.single('file'), async (req, res) => {
+  await ensureMigrated();
   if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
-  const compRow = await db.query('SELECT jurisdiction FROM companies WHERE id=$1', [req.companyId]);
+  const compRow = await db.query('SELECT jurisdiction, region FROM companies WHERE id=$1', [req.companyId]);
   const jurisdiction = compRow.rows[0]?.jurisdiction || 'UK';
+  const companyRegion = compRow.rows[0]?.region || defaultRegionFromJurisdiction(jurisdiction);
 
   const ext = req.file.originalname.split('.').pop().toLowerCase();
   let rows  = [];
@@ -69,25 +82,7 @@ router.post('/', requireRole('admin', 'editor'), upload.single('file'), async (r
     const unit           = String(r.unit            || '').trim();
     const period         = String(r.period          || '').trim();
     const notes          = String(r.notes           || '').trim() || null;
-
-    // Resolve emission factor: if the spreadsheet provides one, use it.
-    // Otherwise auto-apply the standard factor for the category (DEFRA or CEA by jurisdiction).
-    const efProvided = r.emission_factor != null && String(r.emission_factor).trim() !== '';
-    let ef;
-    let factorSource = null;
-    let factorJurisdiction = null;
-    if (efProvided) {
-      ef = parseFloat(String(r.emission_factor).trim()) || 1.0;
-    } else {
-      const factorResult = lookupFactor(category, { jurisdiction });
-      if (factorResult && !factorResult.custom && factorResult.factor != null) {
-        ef = factorResult.factor;
-        factorSource = factorResult.source || 'DEFRA 2023';
-        factorJurisdiction = factorResult.jurisdiction || 'UK';
-      } else {
-        ef = 1.0;
-      }
-    }
+    const region         = String(r.region          || '').trim() || companyRegion;
 
     if (!category || !scopeRaw || !amountRaw || !unit || !period) {
       errors.push(`Row ${rowNum}: missing required field (category, scope, amount, unit, period)`);
@@ -110,13 +105,39 @@ router.post('/', requireRole('admin', 'editor'), upload.single('file'), async (r
       continue;
     }
 
+    // Same resolution + normalization as the manual entry form (routes/emissions.js).
+    // A row that supplies its own factor for a resolvable category has that factor
+    // discarded and logged, exactly like the form path — a spreadsheet is not a
+    // more trusted source than the entry form. A blank cell resolves the server's
+    // factor rather than falling through to 1.0. An unresolvable category is a
+    // rejected row, not a silently-inserted 1.0.
+    const efCellRaw = r.emission_factor != null ? String(r.emission_factor).trim() : '';
+    const efProvided = efCellRaw !== '';
+
+    const decided = await decideFactor({
+      db, category, region, unit,
+      clientFactor: efProvided ? efCellRaw : undefined,
+      clientSource: undefined,
+      companyId:    req.companyId,
+      logPrefix:    `[upload row ${rowNum}]`,
+    });
+
+    if (decided.error) {
+      errors.push(`Row ${rowNum}: ${decided.error}`);
+      continue;
+    }
+
+    const { ef, factorSource, factorJurisdiction, regionResolved, isFallback, fallbackReason } = decided;
+
     try {
       const result = await db.query(
         `INSERT INTO emissions_entries
-           (company_id, user_id, category, scope, amount, unit, period, emission_factor, source, notes, factor_source, factor_jurisdiction)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'upload',$9,$10,$11)
+           (company_id, user_id, category, scope, amount, unit, period, emission_factor, source, notes,
+            factor_source, factor_jurisdiction, region, region_resolved, is_fallback_factor, fallback_reason)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'upload',$9,$10,$11,$12,$13,$14,$15)
          RETURNING id`,
-        [req.companyId, req.userId, category, scope, amount, unit, period, ef, notes, factorSource, factorJurisdiction]
+        [req.companyId, req.userId, category, scope, amount, unit, period, ef, notes,
+         factorSource, factorJurisdiction, region, regionResolved, isFallback, fallbackReason]
       );
       inserted.push(result.rows[0].id);
     } catch (dbErr) {

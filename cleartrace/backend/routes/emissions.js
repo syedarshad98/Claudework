@@ -1,10 +1,10 @@
 const express  = require('express');
 const router   = express.Router();
 const db       = require('../db/database');
-const { lookupFactor }             = require('../db/emission_factors');
 const { logAction, getIp }         = require('../lib/audit');
 const { validateEntry, saveFlags } = require('../lib/validate');
 const requireRole                  = require('../middleware/roles');
+const { decideFactor, defaultRegionFromJurisdiction } = require('../lib/decide-factor');
 
 // ── Lazy migration ────────────────────────────────────────────────────────────
 let migrated = false;
@@ -12,62 +12,11 @@ async function ensureMigrated() {
   if (migrated) return;
   const fs   = require('fs');
   const path = require('path');
-  const sql  = fs.readFileSync(path.join(__dirname, '../db/audit_migration.sql'), 'utf8');
+  const sql       = fs.readFileSync(path.join(__dirname, '../db/audit_migration.sql'), 'utf8');
+  const regionSql = fs.readFileSync(path.join(__dirname, '../db/region_factors_migration.sql'), 'utf8');
   await db.query(sql);
+  await db.query(regionSql);
   migrated = true;
-}
-
-// ── Factor decision ───────────────────────────────────────────────────────────
-/**
- * Decide the emission factor for an entry. The server is authoritative: when a
- * factor can be resolved for the category, any client-supplied emission_factor
- * or factor_source is discarded and logged as a rejected field.
- *
- * The exception is the GHG Protocol Scope 3 categories, flagged custom:true
- * with factor:null in db/emission_factors.js — no published factor exists for
- * them by design, so the user-supplied number is the intended mechanism. Those
- * are stored with factor_source 'user-supplied' so reports can tell them apart
- * from a published factor.
- *
- * Never returns a fallback value: an unresolvable category is an error, not 1.0.
- *
- * @returns {{ ef: number, factorSource: string, factorJurisdiction: string }
- *           | { error: string }}
- */
-function decideFactor({ category, jurisdiction, clientFactor, clientSource, companyId }) {
-  const factorResult = lookupFactor(category, { jurisdiction });
-  const isCustom = !!(factorResult && factorResult.custom && factorResult.factor == null);
-
-  if (factorResult && !isCustom && factorResult.factor != null) {
-    if (clientFactor != null || clientSource) {
-      console.warn(
-        `[emissions] rejected client-supplied factor fields — company_id=${companyId} ` +
-        `category="${category}" emission_factor=${clientFactor} factor_source=${clientSource}; ` +
-        `server-resolved factor ${factorResult.factor} used instead`
-      );
-    }
-    return {
-      ef:                 factorResult.factor,
-      factorSource:       factorResult.source || 'DEFRA 2023',
-      factorJurisdiction: factorResult.jurisdiction || 'UK',
-    };
-  }
-
-  if (isCustom) {
-    const parsed = parseFloat(clientFactor);
-    if (!Number.isFinite(parsed)) {
-      return { error: `Category "${category}" has no published emission factor. Supply emission_factor.` };
-    }
-    if (clientSource) {
-      console.warn(
-        `[emissions] rejected client-supplied factor_source — company_id=${companyId} ` +
-        `category="${category}" factor_source=${clientSource}; stored as 'user-supplied'`
-      );
-    }
-    return { ef: parsed, factorSource: 'user-supplied', factorJurisdiction: jurisdiction };
-  }
-
-  return { error: `No emission factor is available for category "${category}".` };
 }
 
 // ── Lock check helper ─────────────────────────────────────────────────────────
@@ -134,7 +83,7 @@ router.get('/', async (req, res) => {
 router.post('/', requireRole('admin', 'editor'), async (req, res) => {
   await ensureMigrated();
   const {
-    category, scope, amount, unit, period, emission_factor, notes,
+    category, scope, amount, unit, period, emission_factor, notes, region: reqRegion,
     // factor_jurisdiction is accepted off the wire but never trusted — the
     // server derives it from the resolved factor. See decideFactor().
     factor_source: reqFactorSource,
@@ -153,28 +102,30 @@ router.post('/', requireRole('admin', 'editor'), async (req, res) => {
     return res.status(423).json({ error: `Period ${period} is locked. Contact an admin to unlock.` });
   }
 
-  const compRow = await db.query('SELECT jurisdiction FROM companies WHERE id=$1', [req.companyId]);
+  const compRow = await db.query('SELECT jurisdiction, region FROM companies WHERE id=$1', [req.companyId]);
   const jurisdiction = compRow.rows[0]?.jurisdiction || 'UK';
+  const region = reqRegion || compRow.rows[0]?.region || defaultRegionFromJurisdiction(jurisdiction);
 
-  const decided = decideFactor({
-    category,
-    jurisdiction,
+  const decided = await decideFactor({
+    db, category, region, unit,
     clientFactor: emission_factor,
     clientSource: reqFactorSource,
     companyId:    req.companyId,
   });
   if (decided.error) return res.status(400).json({ error: decided.error });
 
-  const { ef, factorSource, factorJurisdiction } = decided;
+  const { ef, factorSource, factorJurisdiction, regionResolved, isFallback, fallbackReason } = decided;
 
   try {
     const result = await db.query(
       `INSERT INTO emissions_entries
-         (company_id, user_id, category, scope, amount, unit, period, emission_factor, source, notes, factor_source, factor_jurisdiction)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'manual',$9,$10,$11)
+         (company_id, user_id, category, scope, amount, unit, period, emission_factor, source, notes,
+          factor_source, factor_jurisdiction, region, region_resolved, is_fallback_factor, fallback_reason)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'manual',$9,$10,$11,$12,$13,$14,$15)
        RETURNING *`,
       [req.companyId, req.userId, category, parseInt(scope),
-       parseFloat(amount), unit, period, ef, notes || null, factorSource, factorJurisdiction]
+       parseFloat(amount), unit, period, ef, notes || null, factorSource, factorJurisdiction,
+       region, regionResolved, isFallback, fallbackReason]
     );
     const entry = result.rows[0];
 
@@ -222,15 +173,16 @@ router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
     return res.status(423).json({ error: `Target period ${newPeriod} is locked.`, locked: true });
   }
 
-  const compRowP = await db.query('SELECT jurisdiction FROM companies WHERE id=$1', [req.companyId]);
+  const compRowP = await db.query('SELECT jurisdiction, region FROM companies WHERE id=$1', [req.companyId]);
   const jurisdictionP = compRowP.rows[0]?.jurisdiction || 'UK';
+  const region = req.body.region || oldEntry.region || compRowP.rows[0]?.region || defaultRegionFromJurisdiction(jurisdictionP);
 
   const effectiveCategory = category || oldEntry.category;
+  const effectiveUnit     = unit || oldEntry.unit;
   const categoryChanged   = !!(category && category !== oldEntry.category);
 
-  const decided = decideFactor({
-    category:     effectiveCategory,
-    jurisdiction: jurisdictionP,
+  const decided = await decideFactor({
+    db, category: effectiveCategory, region, unit: effectiveUnit,
     // For a custom category the user's number is the mechanism; when this PATCH
     // does not carry one, keep whatever the entry already had.
     clientFactor: emission_factor != null ? emission_factor : oldEntry.emission_factor,
@@ -238,7 +190,7 @@ router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
     companyId:    req.companyId,
   });
 
-  let ef, factorSource, factorJurisdiction;
+  let ef, factorSource, factorJurisdiction, regionResolved, isFallback, fallbackReason;
   if (decided.error) {
     // Switching to an unresolvable category is a client error. Leaving an
     // already-unresolvable category untouched is not — that would make legacy
@@ -247,8 +199,11 @@ router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
     ef                 = parseFloat(oldEntry.emission_factor);
     factorSource       = oldEntry.factor_source || null;
     factorJurisdiction = oldEntry.factor_jurisdiction || null;
+    regionResolved     = oldEntry.region_resolved || null;
+    isFallback         = oldEntry.is_fallback_factor || false;
+    fallbackReason      = oldEntry.fallback_reason || null;
   } else {
-    ({ ef, factorSource, factorJurisdiction } = decided);
+    ({ ef, factorSource, factorJurisdiction, regionResolved, isFallback, fallbackReason } = decided);
   }
 
   if (emission_factor != null && Number(emission_factor) !== Number(ef)) {
@@ -270,14 +225,19 @@ router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
               emission_factor    = $6,
               notes              = COALESCE($7, notes),
               factor_source      = $10,
-              factor_jurisdiction = $11
+              factor_jurisdiction = $11,
+              region             = $12,
+              region_resolved    = $13,
+              is_fallback_factor = $14,
+              fallback_reason    = $15
         WHERE id=$8 AND company_id=$9
         RETURNING *`,
       [category || null, scope != null ? parseInt(scope) : null,
        amount != null ? parseFloat(amount) : null, unit || null,
        period || null, ef,
        notes !== undefined ? notes : null,
-       id, req.companyId, factorSource, factorJurisdiction]
+       id, req.companyId, factorSource, factorJurisdiction,
+       region, regionResolved, isFallback, fallbackReason]
     );
     const entry = result.rows[0];
 
