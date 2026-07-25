@@ -17,6 +17,59 @@ async function ensureMigrated() {
   migrated = true;
 }
 
+// ── Factor decision ───────────────────────────────────────────────────────────
+/**
+ * Decide the emission factor for an entry. The server is authoritative: when a
+ * factor can be resolved for the category, any client-supplied emission_factor
+ * or factor_source is discarded and logged as a rejected field.
+ *
+ * The exception is the GHG Protocol Scope 3 categories, flagged custom:true
+ * with factor:null in db/emission_factors.js — no published factor exists for
+ * them by design, so the user-supplied number is the intended mechanism. Those
+ * are stored with factor_source 'user-supplied' so reports can tell them apart
+ * from a published factor.
+ *
+ * Never returns a fallback value: an unresolvable category is an error, not 1.0.
+ *
+ * @returns {{ ef: number, factorSource: string, factorJurisdiction: string }
+ *           | { error: string }}
+ */
+function decideFactor({ category, jurisdiction, clientFactor, clientSource, companyId }) {
+  const factorResult = lookupFactor(category, { jurisdiction });
+  const isCustom = !!(factorResult && factorResult.custom && factorResult.factor == null);
+
+  if (factorResult && !isCustom && factorResult.factor != null) {
+    if (clientFactor != null || clientSource) {
+      console.warn(
+        `[emissions] rejected client-supplied factor fields — company_id=${companyId} ` +
+        `category="${category}" emission_factor=${clientFactor} factor_source=${clientSource}; ` +
+        `server-resolved factor ${factorResult.factor} used instead`
+      );
+    }
+    return {
+      ef:                 factorResult.factor,
+      factorSource:       factorResult.source || 'DEFRA 2023',
+      factorJurisdiction: factorResult.jurisdiction || 'UK',
+    };
+  }
+
+  if (isCustom) {
+    const parsed = parseFloat(clientFactor);
+    if (!Number.isFinite(parsed)) {
+      return { error: `Category "${category}" has no published emission factor. Supply emission_factor.` };
+    }
+    if (clientSource) {
+      console.warn(
+        `[emissions] rejected client-supplied factor_source — company_id=${companyId} ` +
+        `category="${category}" factor_source=${clientSource}; stored as 'user-supplied'`
+      );
+    }
+    return { ef: parsed, factorSource: 'user-supplied', factorJurisdiction: jurisdiction };
+  }
+
+  return { error: `No emission factor is available for category "${category}".` };
+}
+
 // ── Lock check helper ─────────────────────────────────────────────────────────
 async function isPeriodLocked(companyId, period) {
   const r = await db.query(
@@ -82,7 +135,9 @@ router.post('/', requireRole('admin', 'editor'), async (req, res) => {
   await ensureMigrated();
   const {
     category, scope, amount, unit, period, emission_factor, notes,
-    factor_source: reqFactorSource, factor_jurisdiction: reqFactorJurisdiction,
+    // factor_jurisdiction is accepted off the wire but never trusted — the
+    // server derives it from the resolved factor. See decideFactor().
+    factor_source: reqFactorSource,
   } = req.body;
 
   if (!category || scope == null || amount == null || !unit || !period) {
@@ -101,24 +156,16 @@ router.post('/', requireRole('admin', 'editor'), async (req, res) => {
   const compRow = await db.query('SELECT jurisdiction FROM companies WHERE id=$1', [req.companyId]);
   const jurisdiction = compRow.rows[0]?.jurisdiction || 'UK';
 
-  const factorResult = lookupFactor(category, { jurisdiction });
-  let ef;
-  let factorSource = null;
-  let factorJurisdiction = null;
+  const decided = decideFactor({
+    category,
+    jurisdiction,
+    clientFactor: emission_factor,
+    clientSource: reqFactorSource,
+    companyId:    req.companyId,
+  });
+  if (decided.error) return res.status(400).json({ error: decided.error });
 
-  // Frontend may send an explicit factor_source (e.g. user switched selector from CEA→DEFRA
-  // for an Indian company). When provided alongside emission_factor, use it directly.
-  if (reqFactorSource && emission_factor != null) {
-    ef = parseFloat(emission_factor);
-    factorSource = reqFactorSource;
-    factorJurisdiction = reqFactorJurisdiction || jurisdiction;
-  } else if (factorResult && !factorResult.custom && factorResult.factor != null) {
-    ef = factorResult.factor;
-    factorSource = factorResult.source || 'DEFRA 2023';
-    factorJurisdiction = factorResult.jurisdiction || 'UK';
-  } else {
-    ef = parseFloat(emission_factor) || 1.0;
-  }
+  const { ef, factorSource, factorJurisdiction } = decided;
 
   try {
     const result = await db.query(
@@ -178,25 +225,38 @@ router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
   const compRowP = await db.query('SELECT jurisdiction FROM companies WHERE id=$1', [req.companyId]);
   const jurisdictionP = compRowP.rows[0]?.jurisdiction || 'UK';
 
-  let ef = parseFloat(oldEntry.emission_factor);
-  let factorSource = oldEntry.factor_source || null;
-  let factorJurisdiction = oldEntry.factor_jurisdiction || null;
+  const effectiveCategory = category || oldEntry.category;
+  const categoryChanged   = !!(category && category !== oldEntry.category);
 
-  if (category && category !== oldEntry.category) {
-    const factorResult = lookupFactor(category, { jurisdiction: jurisdictionP });
-    if (factorResult && !factorResult.custom && factorResult.factor != null) {
-      ef = factorResult.factor;
-      factorSource = factorResult.source || 'DEFRA 2023';
-      factorJurisdiction = factorResult.jurisdiction || 'UK';
-    } else {
-      ef = parseFloat(emission_factor) || ef;
-      factorSource = null;
-      factorJurisdiction = null;
-    }
-  } else if (emission_factor != null) {
-    ef = parseFloat(emission_factor);
-    factorSource = null;
-    factorJurisdiction = null;
+  const decided = decideFactor({
+    category:     effectiveCategory,
+    jurisdiction: jurisdictionP,
+    // For a custom category the user's number is the mechanism; when this PATCH
+    // does not carry one, keep whatever the entry already had.
+    clientFactor: emission_factor != null ? emission_factor : oldEntry.emission_factor,
+    clientSource: undefined,
+    companyId:    req.companyId,
+  });
+
+  let ef, factorSource, factorJurisdiction;
+  if (decided.error) {
+    // Switching to an unresolvable category is a client error. Leaving an
+    // already-unresolvable category untouched is not — that would make legacy
+    // rows uneditable, so keep their stored factor.
+    if (categoryChanged) return res.status(400).json({ error: decided.error });
+    ef                 = parseFloat(oldEntry.emission_factor);
+    factorSource       = oldEntry.factor_source || null;
+    factorJurisdiction = oldEntry.factor_jurisdiction || null;
+  } else {
+    ({ ef, factorSource, factorJurisdiction } = decided);
+  }
+
+  if (emission_factor != null && Number(emission_factor) !== Number(ef)) {
+    console.warn(
+      `[emissions] rejected client-supplied factor fields — company_id=${req.companyId} ` +
+      `category="${effectiveCategory}" emission_factor=${emission_factor}; ` +
+      `server-resolved factor ${ef} used instead`
+    );
   }
 
   try {

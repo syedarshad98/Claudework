@@ -708,14 +708,13 @@ document.getElementById('entry-form').addEventListener('submit', async (e) => {
       fb.textContent = data.error || 'Failed to save';
       fb.className   = 'form-feedback error';
     } else {
-      let efLabel;
-      if (isGridElec && efExtras.factor_source) {
-        efLabel = `${efExtras.factor_source} · ${efExtras.emission_factor} kg CO₂e/kWh`;
-      } else if (defraEntry && !defraEntry.custom) {
-        efLabel = `DEFRA 2023 · ${defraEntry.factor} kg CO₂e/${defraEntry.unit}`;
-      } else {
-        efLabel = `EF ${(payload.emission_factor || 1.0)} kg CO₂e/unit`;
-      }
+      // The factor and CO₂e shown here come from the server's response, never
+      // from the browser's own table. The server resolves the factor and may
+      // have discarded whatever this form posted; the local table survives
+      // until Step 3 and will disagree with the server until then.
+      const efLabel = data.factor_source
+        ? `${data.factor_source} · ${data.emission_factor} kg CO₂e/${data.unit}`
+        : `EF ${data.emission_factor} kg CO₂e/${data.unit}`;
       fb.textContent = `✓ Entry saved — ${fmt(parseFloat(data.co2e_tonnes), 4)} tCO₂e  [${efLabel}]`;
       fb.className   = 'form-feedback success';
       e.target.reset();
