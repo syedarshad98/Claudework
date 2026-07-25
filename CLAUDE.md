@@ -38,6 +38,9 @@ Two framing corrections, because they change the answers to several questions be
 
 ## 1. Data access — server vs client
 
+> **SUPERSEDED IN PART 1** — the generated column and the browser factor tables
+> are being removed. Do not follow this section until Part 1 completes.
+
 ### There is no browser-side database client
 
 The browser never talks to a database. Every frontend module fetches the app's own
@@ -446,6 +449,9 @@ per-route path above. Verify the actual host before relying on this section.
 ---
 
 ## 5. Where business logic lives
+
+> **SUPERSEDED IN PART 1** — the generated column and the browser factor tables
+> are being removed. Do not follow this section until Part 1 completes.
 
 ### Three layers, loosely observed
 
