@@ -264,4 +264,173 @@ no-op response for another tenant's period (found during the extended IDOR
 pass) returns a misleading `200 {"unlocked":true}` instead of `404` — same
 treatment as finding #5: tracked, not blocking Phase 2.
 
-**Phase 2 (Calculation Completeness) not started, per instructions.**
+**Phase 2 started below.**
+
+---
+
+## Phase 2: Calculation Completeness
+
+**Date:** 2026-07-26. **Scope:** the emission-factor resolution engine
+(`lib/decide-factor.js`, `lib/factor-resolver.js`, `lib/flights.js`,
+`lib/vehicle-fuel.js`, `lib/entry-method.js`, `lib/units.js`) and the live
+`emission_factors` table. **Method:** same as Phase 1 — a live PostgreSQL
+instance, real HTTP requests against a freshly-registered, non-demo tenant
+(`Calc Test Co`, company id 3 — the two seeded tenants are both `is_demo`
+after Phase 1's fixes and can't write). This pass reports only; nothing
+below was fixed.
+
+### Step 1 — coverage matrix
+
+Built from the live `emission_factors` table (39 current rows) plus
+`db/emission_factors.js`'s `custom:true` declarations. Regions actually
+resolve through four tiers (`lib/factor-resolver.js`): **exact** region row
+→ **declared fallback** (AE-family → AE-DU) → **GLOBAL** default → **Tier-4
+unreviewed GB substitute**. "Fallback?" below is what tier fired, live-tested
+per category — not inferred.
+
+| Category | GB | IN | AE (bare) | AE-DU | AE-AZ/SH/NE | GLOBAL | Manual | Upload |
+|---|---|---|---|---|---|---|---|---|
+| Grid Electricity | real 2026 (0.14396) | real CEA V21.0 (0.7117) | fallback→AE-DU (0.4041) | real DEWA (0.4041) | fallback→AE-DU (0.4041) | n/a | ✓ | ✓ |
+| Water Supply | real (0.149) | **Tier-4 GB fallback (0.149)** | real UAE desal. (2.7) | **BUG — Tier-4 GB fallback (0.149), skips the real 2.7** | **same bug** | n/a | ✓ | ✓ |
+| District Heating | real (0.184) | Tier-4 GB fallback | Tier-4 GB fallback | Tier-4 GB fallback | Tier-4 GB fallback | n/a | ✓ | ✓ |
+| Company Car (Diesel/Petrol/Average) — distance | real (0.17123/0.18110/0.17068) | Tier-4 GB fallback | Tier-4 GB fallback | Tier-4 GB fallback | Tier-4 GB fallback | n/a | ✓ | ✓ (no UI for method selection either way) |
+| Refrigerants (R-134a/R-410A) | real (1430/2088) | Tier-4 GB fallback | Tier-4 GB fallback | Tier-4 GB fallback | Tier-4 GB fallback | n/a | ✓ | ✓ |
+| Business Travel (Car/Rail) | real | Tier-4 GB fallback | Tier-4 GB fallback | Tier-4 GB fallback | Tier-4 GB fallback | n/a | ✓ | ✓ |
+| Business Travel (Short-haul/Long-haul Flight) — **legacy flat categories** | real (0.15477/0.19304) | Tier-4 GB fallback | Tier-4 GB fallback | Tier-4 GB fallback | Tier-4 GB fallback | n/a | ✓ | ✓ — **only path reachable from the actual UI (see finding #2)** |
+| Employee Commuting (Car/Rail) | real | Tier-4 GB fallback | Tier-4 GB fallback | Tier-4 GB fallback | Tier-4 GB fallback | n/a | ✓ | ✓ |
+| Waste (Landfill/Recycled/Composted) | real | Tier-4 GB fallback | Tier-4 GB fallback | Tier-4 GB fallback | Tier-4 GB fallback | n/a | ✓ | ✓ |
+| Water Treatment | real (0.272) | Tier-4 GB fallback | Tier-4 GB fallback | Tier-4 GB fallback | Tier-4 GB fallback | n/a | ✓ | ✓ |
+| Natural Gas / Diesel (Stationary) / Petrol (Stationary) / LPG | n/a | n/a | n/a | n/a | n/a | real, region-independent by design, non-fallback everywhere | ✓ | ✓ |
+| Vehicle fuel-basis: diesel/petrol/lpg (`method:"fuel"`) | resolves to the GLOBAL fuel rows above, everywhere | | | | | | ✓ (API/upload only — **no UI**, see finding #2) | ✓ |
+| Vehicle fuel-basis: cng (`method:"fuel"`) | **clean 400 rejection everywhere — no seeded row, matches the "clean rejection" reference case** | | | | | | ✓ | ✓ |
+| Business Travel (Flight) — **new banded category**, `domestic\|uk-international-short\|uk-international-long\|international-non-uk` × 4-5 cabin classes | region-independent (GLOBAL), real DESNZ 2026 banded figures, non-fallback | | | | | | ✓ (API/upload only — **no UI**, see finding #2) | ✓ |
+| 14 `custom:true` GHG Protocol Scope 3 categories (Purchased Goods & Services, Capital Goods, Fuel & Energy Related Activities, Upstream Transport & Distribution, Waste Generated in Operations, Upstream Leased Assets, Downstream Transport & Distribution, Processing of Sold Products, Use of Sold Products, End-of-Life Treatment of Sold Products, Downstream Leased Assets, Franchises, Investments, Purchased Goods, Upstream Transport, Other Scope 3) | region never consulted — user-supplied `emission_factor` required; clean 400 if omitted | | | | | | ✓ | ✓ |
+
+Legend: "real" = exact-region row, `isFallback=false`. "Tier-4 GB fallback" =
+`isFallback=true`, GB value applied, reason string present — this is the
+*documented, intended* behavior for every category this build never
+researched region data for (refrigerants, waste, business travel, commuting,
+water treatment, district heating), so it is not itself a defect. The one
+row marked **BUG** is: this same Tier-4 mechanism firing where it
+*shouldn't* have, because a real regional row exists but isn't reachable
+from the region code a real UAE tenant would plausibly use.
+
+### Step 2 — spot-verify against known reference values
+
+| Reference | Computed live | Match? |
+|---|---|---|
+| Electricity AE-DU: ~404 kg per 1000 kWh (0.4041) | 1000 kWh × 0.4041 → `co2e_tonnes: 0.404100` = **404.1 kg** | ✅ exact |
+| Diesel, global-default tier: ~258 kg per 100L | 100 L × 2.51920 → `co2e_tonnes: 0.251920` = **251.92 kg** | ⚠️ **251.92, not 258 — a 2.4% discrepancy.** See finding #4; this is the system's real, consistent answer (matches every path — manual, upload, vehicle fuel-basis — and the 2026-patch migration's explicit "no major changes" confirmation), not a bug I could find. Flagging the mismatch for you to resolve which figure is authoritative. |
+| Flights, domestic (with-RF, per pkm) 0.22928 | `emission_factor: 0.229280` | ✅ exact |
+| Flights, short-haul-UK economy 0.12576 | `emission_factor: 0.125760` | ✅ exact |
+| Flights, long-haul-UK economy 0.11704 | `emission_factor: 0.117040` | ✅ exact |
+| Flights, international-non-UK economy 0.10916 | `emission_factor: 0.109160` | ✅ exact |
+
+### Step 3 — manual vs upload parity
+
+Extended to all 22 non-custom DEFRA categories (one CSV upload + 22 matching
+manual entries, same activity data, compared row-for-row) plus the two
+special-method paths (vehicle fuel-basis, banded flights) and one
+`custom:true` category. **Result: zero divergence across all 25 tested
+categories/methods** — `emission_factor` and `co2e_tonnes` were byte-identical
+between manual and upload for every one, including vehicle fuel-basis diesel
+(`factor: 2.519200`, both paths) and long-haul economy flight (`factor:
+0.117040`, both paths). Expected, since both routes call the same
+`decideFactor()`/`resolveMethodFields()` — this pass exercised that shared
+path rather than assuming it from the code.
+
+### Step 4 — unit normalization sweep
+
+Every registered `(unit, canonicalUnit)` pair in `lib/units.js` tested live,
+confirming the conversion ratio actually applied (not just that it didn't
+error):
+
+| Canonical | Units tested | Result |
+|---|---|---|
+| kWh | kWh, kwh, MWh, GJ, Wh | All correct: MWh×1000, GJ×277.777778, Wh×0.001 |
+| L | litres, L, liter, liters, m3, m³, gallon, gallons | All correct: m3/m³×1000, gallon(s)×4.54609 (UK gallon) |
+| kg | kg, kilogram, kilograms, g, gram, grams, tonne, tonnes, t | All correct: g/gram(s)×0.001, tonne/tonnes/t×1000 |
+| km | km, kilometre(s), kilometer(s), m, mile, miles | All correct: m×0.001, mile(s)×1.60934 |
+| m3 | m3, m³, l, litre, litres, liter, liters | All correct: l/litre(s)/liter(s)×0.001 |
+| pkm | pkm, km | Both ×1 (a passenger-km is a km for one traveller) |
+
+**Unregistered pairs correctly throw, never default to 1.0** — live-tested
+three cross-canonical mismatches: `Water Supply` (m3-canonical) + `gallons`
+(only registered under L) → `400 Unrecognised unit "gallons" for canonical
+unit "m3"`; `Grid Electricity` (kWh-canonical) + `litres` → same rejection
+pattern; `Waste (Landfill)` (kg-canonical) + `lbs` (never registered anywhere)
+→ same. No silent 1.0 found anywhere in the sweep.
+
+### Step 5 — fallback consistency
+
+For every category in the flagged-fallback tier (water treatment, waste,
+refrigerants, commuting, business travel, district heating — i.e. everything
+with only a GB row), tested GB / IN / AE, not just one spot-check each:
+**`isFallback` and `fallbackReason` were set correctly and consistently in
+every case** — `false`/`null` for the real GB row, `true`/a real
+category-and-region-naming reason string for IN and AE. No inconsistency
+found in this tier.
+
+The one place fallback behavior is **not** consistent is Water Supply
+(finding #1) — but that's a resolution-order bug, not an
+`isFallback`-flagging bug: when the (wrong) Tier-4 path fires, it still
+flags `isFallback=true` correctly and honestly. The bug is that Tier-4 fires
+at all for `region=AE-DU`, when a correct, unflagged Tier-1 answer was
+available two tiers earlier under `region=AE`.
+
+### Step 6 — regression sweep
+
+- **CNG** — still a clean `400` at every region tested (GB/IN/AE), both via
+  distance-basis (no such category exists) and fuel-basis (`method:"fuel",
+  fuel_type:"cng"`) — `"No emission factor is available for category
+  \"CNG\"..."`. Never a fabricated factor.
+- **Historical rows frozen** — Verdant Group's seeded 2023-01 Grid
+  Electricity entry (`id=86`) still reads `emission_factor: 0.204930,
+  factor_source: 'DEFRA 2023'` after the 2026 patch migration closed out
+  that row and added the 2026 replacement — confirmed live via direct query.
+  The generated `co2e_tonnes` column computes from each entry's own stored
+  factor, never a live join, so nothing already computed can move
+  retroactively. A fresh entry against the same category on the same tenant
+  correctly gets the new 2026 figure (0.14396) — old and new coexist exactly
+  as designed.
+- **`custom:true` path** — still requires a user-supplied `emission_factor`
+  (clean `400` if omitted: `"Category ... has no published emission factor.
+  Supply emission_factor."`), still labels the stored row `factor_source:
+  'user-supplied'`, confirmed via both manual and upload.
+- **`baseline_emissions` / BRSR P6 typed totals** — confirmed **not**
+  silently included in any calculated aggregate. Live test: inserted a
+  deliberately huge baseline (999,999 t/scope) via
+  `PUT /api/onboarding/baseline` for the test tenant; `/api/kpi`'s
+  `totalEntries` and `/api/emissions`'s `total` were unchanged before and
+  after (134 both times). Code-confirmed the same holds for BRSR P6
+  (`brsr_p6_environment` is referenced only in `routes/brsr.js` — zero
+  occurrences in `kpi.js` or `charts.js`, same isolation pattern as
+  `baseline_emissions`, which the live test exercised directly).
+
+### Findings, ranked by severity
+
+| # | Severity | Finding |
+|---|---|---|
+| 1 | **High** | **Wrong water factor for explicit UAE emirate regions.** `lib/factor-resolver.js`'s Tier 2 ("declared fallback") hardcodes a lookup against `region='AE-DU'` for *any* category once the requested region starts with `'AE'` — the code comment says "UAE electricity only, for now" but the code itself isn't scoped to electricity. The verified UAE water factor is stored at the *bare* `region='AE'`, not `'AE-DU'`. Live-verified: `region=AE` (bare) correctly resolves Water Supply to the real 2.7 kg/m³ desalination figure, `isFallback=false`. `region=AE-DU`/`AE-AZ`/`AE-SH`/`AE-NE` — the specific-emirate values a real UAE tenant would plausibly set — instead fall through to Tier 4 and silently apply the *GB* figure (0.149, ~18x lower) flagged as an "unreviewed cross-region substitute," even though the correct, verified, already-present number was one tier away. `defaultRegionFromJurisdiction` happens to default a UAE company to the bare `'AE'` (so the common case is unaffected), but any entry or company explicitly on an emirate-level region gets this wrong. |
+| 2 | **High** | **The two newest calculation features are unreachable from the product UI.** `frontend/index.html` / `frontend/js/dashboard.js` have no field for `method`, `fuel_type`, `cabin_class`, `touches_uk`, or `both_endpoints_uk`, and never list `'Business Travel (Flight)'` as a category option — grepped, zero occurrences. A real user can only log vehicle fuel receipts as distance driven (never fuel consumed) and can only log flights via the old flat GB-only per-km categories (no route banding, no cabin class) — verified those still resolve correctly, but the accurate, DESNZ-2026-banded, cabin-class-aware system that was built specifically to replace them (`lib/flights.js`, `lib/vehicle-fuel.js`) is reachable only via direct API calls or a correctly-formatted upload file, neither of which is documented anywhere a user would see. |
+| 3 | **Medium** | **Dashboard shows a stale factor and sends it, on every grid-electricity entry.** `dashboard.js` carries its own hardcoded `DEFRA_FACTORS` copy (2023 vintage) and displays a "✅ 0.20493 kg CO₂e/kWh — DEFRA 2023" badge to the user, then actively sends `emission_factor: 0.20493, factor_source: 'DEFRA 2023'` to the server on submit. The server correctly discards this for GB (resolving 0.14396 instead — confirmed no data corruption, server-authoritative design holds), but this means every dashboard-submitted GB grid-electricity entry logs a "rejected client-supplied factor" server warning as its *normal* path, and the badge actively misleads the user about what will be recorded. |
+| 4 | **Low** | **Diesel reference-value mismatch, unresolved.** This test's reference figure ("~258 kg per 100L") doesn't match the system's actual, internally-consistent answer (251.92 kg per 100L, confirmed identical across manual/upload/vehicle-fuel-basis, and unchanged/re-confirmed by the 2026 patch). Not fixed — no code path was found producing 258; flagging so you can confirm which number should be authoritative before Phase 2 closes. |
+| 5 | **Low** | **Dead code:** `lookupFactor()`, `CEA_FACTORS`, `UAE_FACTORS` in `db/emission_factors.js` have zero callers anywhere (grepped) — the real resolution path is entirely `decideFactor` → `resolveRegionFactor` → the DB table. Their numbers still happen to match the live table today (CEA 0.7117, DEWA 0.4041), so there's no active divergence, but nothing enforces that going forward. |
+| 6 | **Info** | Two independent, non-deprecated flight calculation paths now coexist — the legacy flat `'Business Travel (Short-haul/Long-haul Flight)'` categories and the new banded `'Business Travel (Flight)'` category — with no schema or UI signal that one supersedes the other. Compounds finding #2, since the UI can only reach the legacy path. |
+
+### Needs a decision before fixing
+
+- **Finding #1** (water/AE-DU) — straightforward to fix (Tier 2 should try
+  the bare country code, not just the hardcoded electricity fallback
+  region, before falling to Tier 4) but touches the same resolver every
+  category goes through — want this scoped narrowly to water, or should Tier
+  2 be generalized properly for any future country-level-but-not-electricity
+  factor?
+- **Finding #2** (UI gap) — is closing this in scope for this test-report
+  effort at all, or is it a separate, larger frontend workstream? It's the
+  single biggest gap between "what the calculation engine can do" and "what
+  a user can actually do," but it's a UI build, not a calculation fix.
+- **Finding #4** (258 vs 251.92) — need your call on which figure is
+  correct before anything touches the diesel row.
+
+**Phase 3 not started, per instructions.**
