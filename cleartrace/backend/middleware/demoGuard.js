@@ -4,6 +4,12 @@
  * Only fires on POST, PATCH, PUT, DELETE.
  * Caches the is_demo flag on req.company to avoid extra DB queries
  * when other middleware has already loaded the company row.
+ *
+ * Fails closed: if the is_demo lookup itself errors, we don't know whether
+ * this tenant is a demo account, so the write is denied rather than let
+ * through. A transient DB blip should degrade to "temporarily unavailable"
+ * for writes, not silently drop the one protection this middleware exists
+ * to provide.
  */
 
 const db = require('../db/database');
@@ -46,9 +52,10 @@ async function demoGuard(req, res, next) {
 
     next();
   } catch (err) {
-    // Fail open — don't block legitimate users if DB is momentarily unavailable
+    // Fail closed — if we can't confirm this tenant isn't a demo account,
+    // deny the write rather than let it through.
     console.error('demoGuard error:', err.message);
-    next();
+    res.status(503).json({ error: 'Service temporarily unavailable' });
   }
 }
 

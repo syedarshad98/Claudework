@@ -247,4 +247,21 @@ apply the fix, re-run the identical test, confirm the result flips.
 | 5 | `logAction()` audit coverage is 3 of 21 route files (BRSR's 16 write endpoints, team, company, and seven others have zero audit trail) | **Deferred — explicitly tracked, not forgotten, not blocking Phase 2.** | No code changed. This is a larger, cross-cutting change (adding `logAction()` calls consistently across ~10 route files) that wasn't in this pass's scope; flagging again here so it isn't lost between phases. |
 | 6 | First-boot race: the intended demo tenant (`Verdant Group`) wasn't `is_demo`-flagged until the *second* server boot, because the startup migration's `UPDATE` ran before the post-listen seed created the row | **Fixed** | Same fix as #1 — `is_demo` is now set on the `INSERT` itself in `scripts/seed-demo.js`, not left to `demo_migration.sql`'s name-based `UPDATE` (which is left in place, harmless, as a backward-compatible safety net for databases seeded before this fix). Verified live on a completely fresh database: after a single `node server.js` boot (no restart), `SELECT is_demo FROM companies` showed `true` for `Verdant Group` immediately — the two-boot race no longer reproduces. |
 
+### Second remediation pass
+
+Branch note: `claude/cleartrace-esg-app-NoDQp` was fast-forwarded to
+`claude/cleartrace-pdf-redesign-t5r7qq` (`0d56f6a..f26c28a`, confirmed a
+fast-forward — no merge commit) and is now the branch this and all further
+work happens on directly.
+
+| # | Finding | Status | Verification |
+|---|---|---|---|
+| 7 | `demoGuard`'s fail-open-on-DB-error behavior (found during the Step A isolation test) had only been diagnosed, not fixed — the `catch` block still called `next()` | **Fixed** | `middleware/demoGuard.js`'s `catch` now returns `503 {"error":"Service temporarily unavailable"}` instead of calling `next()` — if the `is_demo` lookup itself fails, the tenant's demo status is unknown, so the write is denied rather than let through. Reproduced the original fail-open live first (stopped PostgreSQL, POSTed `/api/team/invite` as the demo-flagged tenant, got `500 Failed to process invite` — proof the request passed `demoGuard` and only died later at the route's own DB call), then re-ran the identical scenario after the fix: now `503` directly from `demoGuard`, before the route handler runs at all. Confirmed no regression: with the DB up, the same demo tenant is still correctly blocked with `403 Demo mode`, and service resumes normally once PostgreSQL is back. |
+| 8 | `db/seed.js` only ran `schema.sql`, not `brsr_migration.sql`, but inserts a `brsr_submissions` row — on a truly fresh database this threw and aborted the whole `db/seed.js && server.js` production start command | **Fixed** | `db/seed.js` now also applies `brsr_migration.sql` (idempotent, same as every other migration file) before the `brsr_submissions` insert. Reproduced first on a genuinely dropped-and-recreated database: `node db/seed.js` failed with `relation "brsr_submissions" does not exist`, exit code `1`. After the fix, the identical steps (drop DB, recreate, run `node db/seed.js`) complete with `Demo seed complete.`, exit code `0`; a second run is a no-op (`Demo data already seeded, skipping.`), confirming idempotency is preserved. |
+
+**Known, deferred, not fixed:** the `DELETE /api/validation/locked/:period`
+no-op response for another tenant's period (found during the extended IDOR
+pass) returns a misleading `200 {"unlocked":true}` instead of `404` — same
+treatment as finding #5: tracked, not blocking Phase 2.
+
 **Phase 2 (Calculation Completeness) not started, per instructions.**

@@ -10,6 +10,13 @@ async function seed() {
   const sql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
   await db.query(sql);
 
+  // This script inserts a brsr_submissions row below (and is the first thing
+  // the production start command runs, before server.js's own startup
+  // migrations) — brsr_migration.sql must have already created that table,
+  // or a truly fresh database fails here and aborts the whole deploy.
+  const brsrSql = fs.readFileSync(path.join(__dirname, 'brsr_migration.sql'), 'utf8');
+  await db.query(brsrSql);
+
   // is_demo normally arrives via demo_migration.sql, which this script does
   // not run — add it here too so the flag can be set on the INSERT below,
   // before any request can be served against a row that isn't flagged yet.
