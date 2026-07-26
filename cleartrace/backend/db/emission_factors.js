@@ -134,65 +134,10 @@ const UAE_FACTORS = {
   },
 };
 
-/**
- * Look up the emission factor entry for a given category name and jurisdiction.
- * Returns null when no match is found.
- * @param {string} category
- * @param {{ jurisdiction?: 'UK'|'IN'|'AE', ceaVersion?: string, uaeVersion?: string }} [options]
- * @returns {{ factor: number|null, unit: string, scope?: number, custom?: boolean, source?: string, jurisdiction?: string } | null}
- */
-function lookupFactor(category, options = {}) {
-  const { jurisdiction = 'UK', ceaVersion = CEA_FACTORS.latest, uaeVersion = UAE_FACTORS.latest } = options;
-  const cat = (category || '').trim();
-
-  // Resolve canonical DEFRA name to detect grid electricity / water categories
-  const canonical = DEFRA_FACTORS[cat] ? cat : (LEGACY_ALIASES[cat] || cat);
-
-  if (jurisdiction === 'IN') {
-    if (canonical === 'Grid Electricity (UK)') {
-      const ver = CEA_FACTORS.versions[ceaVersion] || CEA_FACTORS.versions[CEA_FACTORS.latest];
-      const resolvedVersion = CEA_FACTORS.versions[ceaVersion] ? ceaVersion : CEA_FACTORS.latest;
-      return {
-        factor: ver.gridEF,
-        source: `CEA ${resolvedVersion} — FY ${ver.fy}`,
-        jurisdiction: 'IN',
-        unit: 'tCO2/MWh',
-      };
-    }
-  }
-
-  if (jurisdiction === 'AE') {
-    if (canonical === 'Grid Electricity (UK)') {
-      const ver = UAE_FACTORS.versions[uaeVersion] || UAE_FACTORS.versions[UAE_FACTORS.latest];
-      const resolvedVersion = UAE_FACTORS.versions[uaeVersion] ? uaeVersion : UAE_FACTORS.latest;
-      return {
-        factor: ver.gridEF,
-        source: `${ver.utility} Grid Emission Factor ${resolvedVersion.split('-')[1]} — FY ${ver.fy}`,
-        jurisdiction: 'AE',
-        unit: 'tCO2e/MWh',
-      };
-    }
-    if (canonical === 'Water Supply') {
-      return {
-        factor: UAE_FACTORS.water.factor,
-        source: UAE_FACTORS.water.source,
-        jurisdiction: 'AE',
-        unit: UAE_FACTORS.water.unit,
-      };
-    }
-  }
-
-  if (DEFRA_FACTORS[cat]) return DEFRA_FACTORS[cat];
-  const alias = LEGACY_ALIASES[cat];
-  if (alias && DEFRA_FACTORS[alias]) return DEFRA_FACTORS[alias];
-  return null;
-}
-
 module.exports = {
   DEFRA_FACTORS,
   CEA_FACTORS,
   UAE_FACTORS,
   LEGACY_ALIASES,
   GHG_PROTOCOL_SCOPE3_CATEGORIES,
-  lookupFactor,
 };

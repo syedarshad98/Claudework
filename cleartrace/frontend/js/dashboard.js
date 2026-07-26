@@ -482,79 +482,27 @@ document.getElementById('f-period').value =
 // Company jurisdiction resolved from /api/onboarding/status — drives CEA vs DEFRA default.
 let companyJurisdiction = 'UK';
 
-// ── Emission factors ───────────────────────────────────────────────────────
-// Mirrors cleartrace/backend/db/emission_factors.js — keep in sync.
-// factor = kg CO₂e per unit. custom:true means no standard factor — user supplies.
-const DEFRA_FACTORS = {
-  // Scope 1
-  'Natural Gas':                         { factor: 2.02263, unit: 'm³',    scope: 1 },
-  'Diesel (Stationary)':                 { factor: 2.51920, unit: 'litres',scope: 1 },
-  'Petrol (Stationary)':                 { factor: 2.16280, unit: 'litres',scope: 1 },
-  'LPG':                                 { factor: 1.55400, unit: 'litres',scope: 1 },
-  'Company Car (Diesel)':                { factor: 0.17123, unit: 'km',    scope: 1 },
-  'Company Car (Petrol)':                { factor: 0.18110, unit: 'km',    scope: 1 },
-  'Company Car (Average)':               { factor: 0.17068, unit: 'km',    scope: 1 },
-  'Refrigerants (R-134a)':               { factor: 1430.00, unit: 'kg',    scope: 1 },
-  'Refrigerants (R-410A)':              { factor: 2088.00, unit: 'kg',    scope: 1 },
-  // Scope 2
-  'Grid Electricity (UK)':               { factor: 0.20493, unit: 'kWh',   scope: 2 },
-  'District Heating':                    { factor: 0.18400, unit: 'kWh',   scope: 2 },
-  // Scope 3
-  'Business Travel (Car)':               { factor: 0.17068, unit: 'km',    scope: 3 },
-  'Business Travel (Rail)':              { factor: 0.00604, unit: 'km',    scope: 3 },
-  'Business Travel (Short-haul Flight)': { factor: 0.15477, unit: 'km',    scope: 3 },
-  'Business Travel (Long-haul Flight)':  { factor: 0.19304, unit: 'km',    scope: 3 },
-  'Employee Commuting (Car)':            { factor: 0.17068, unit: 'km',    scope: 3 },
-  'Employee Commuting (Rail)':           { factor: 0.00604, unit: 'km',    scope: 3 },
-  'Waste (Landfill)':                    { factor: 0.58700, unit: 'kg',    scope: 3 },
-  'Waste (Recycled)':                    { factor: 0.02100, unit: 'kg',    scope: 3 },
-  'Waste (Composted)':                   { factor: 0.01100, unit: 'kg',    scope: 3 },
-  'Water Supply':                        { factor: 0.14900, unit: 'm³',    scope: 3 },
-  'Water Treatment':                     { factor: 0.27200, unit: 'm³',    scope: 3 },
-  'Purchased Goods & Services':          { factor: null,    unit: 'kg',    scope: 3, custom: true },
-  'Capital Goods':                       { factor: null,    unit: 'unit',  scope: 3, custom: true },
-  'Fuel & Energy Related Activities':    { factor: null,    unit: 'kWh',   scope: 3, custom: true },
-  'Upstream Transport & Distribution':   { factor: null,    unit: 'km',    scope: 3, custom: true },
-  'Waste Generated in Operations':       { factor: null,    unit: 'kg',    scope: 3, custom: true },
-  'Upstream Leased Assets':              { factor: null,    unit: 'kWh',   scope: 3, custom: true },
-  'Downstream Transport & Distribution': { factor: null,    unit: 'km',    scope: 3, custom: true },
-  'Processing of Sold Products':         { factor: null,    unit: 'kg',    scope: 3, custom: true },
-  'Use of Sold Products':                { factor: null,    unit: 'unit',  scope: 3, custom: true },
-  'End-of-Life Treatment of Sold Products': { factor: null, unit: 'kg',    scope: 3, custom: true },
-  'Downstream Leased Assets':            { factor: null,    unit: 'kWh',   scope: 3, custom: true },
-  'Franchises':                          { factor: null,    unit: 'unit',  scope: 3, custom: true },
-  'Investments':                         { factor: null,    unit: 'unit',  scope: 3, custom: true },
-  'Purchased Goods':                     { factor: null,    unit: 'kg',    scope: 3, custom: true },
-  'Upstream Transport':                  { factor: null,    unit: 'km',    scope: 3, custom: true },
-  'Other Scope 3':                       { factor: null,    unit: 'kg',    scope: 3, custom: true },
-};
+// ── Live emission factors ───────────────────────────────────────────────────
+// Fetched from GET /api/emission-factors?region=<code> — the server's real,
+// region-aware resolver (lib/factor-resolver.js), the same one every
+// submission actually resolves against. This replaces a hardcoded local copy
+// (DEFRA_FACTORS/CEA_FACTORS/UAE_FACTORS) that was still showing 2023 DEFRA
+// figures after the server moved to 2026 — see docs/TEST-REPORT.md Phase 2
+// finding #3. Nothing shown here can disagree with what gets saved, because
+// both read the same resolver.
+const REGION_FOR_JURISDICTION = { UK: 'GB', IN: 'IN', AE: 'AE' };
+function regionForJurisdiction(j) { return REGION_FOR_JURISDICTION[j] || 'GB'; }
 
-// CEA India grid factors — mirrors cleartrace/backend/db/emission_factors.js — keep in sync.
-const CEA_FACTORS = {
-  versions: {
-    'V21.0': { fy: '2024-25', published: '2025-11', gridEF: 0.7117 },
-    'V20.0': { fy: '2023-24', published: '2025-01', gridEF: 0.727  },
-    'V19.0': { fy: '2022-23', published: '2024-01', gridEF: 0.716  },
-  },
-  latest: 'V21.0',
-  source: 'Central Electricity Authority, CO₂ Baseline Database for the Indian Power Sector',
-  scope: 2,
-  unit: 'tCO2/MWh',
-  applicability: 'India grid-connected electricity (location-based, GHG Protocol Scope 2)',
-};
+// 'GB' | 'IN' | 'AE' -> { category: { factor, unit, scope, factorSource?, isFallback?, custom? } }
+let liveFactorsByRegion = {};
 
-// UAE (DEWA) grid factor — mirrors cleartrace/backend/db/emission_factors.js — keep in sync.
-// Verified for Dubai (DEWA) only.
-const UAE_FACTORS = {
-  versions: {
-    'DEWA-2023': { fy: '2023', published: '2024', gridEF: 0.4041, utility: 'DEWA (Dubai)' },
-  },
-  latest: 'DEWA-2023',
-  source: 'Dubai Electricity & Water Authority (DEWA) Grid Emission Factor',
-  scope: 2,
-  unit: 'tCO2e/MWh',
-  applicability: 'UAE grid-connected electricity — verified for Dubai (DEWA) only.',
-};
+async function loadLiveFactors() {
+  const regions = ['GB', 'IN', 'AE'];
+  const results = await Promise.all(
+    regions.map(r => fetch(`/api/emission-factors?region=${r}`).then(res => res.json()).catch(() => ({})))
+  );
+  regions.forEach((r, i) => { liveFactorsByRegion[r] = results[i]; });
+}
 
 const GRID_ELECTRICITY_CATEGORIES = new Set(['Grid Electricity (UK)', 'Grid Electricity']);
 
@@ -568,23 +516,14 @@ function updateGridElecBadge() {
   const selector = document.getElementById('ef-source-selector');
   const defaultSource = companyJurisdiction === 'IN' ? 'CEA' : (companyJurisdiction === 'AE' ? 'AE' : 'DEFRA');
   const source   = selector ? selector.value : defaultSource;
+  const region   = source === 'CEA' ? 'IN' : source === 'AE' ? 'AE' : 'GB';
 
-  if (source === 'CEA') {
-    const ver = CEA_FACTORS.versions[CEA_FACTORS.latest];
-    badge.innerHTML =
-      `<span>&#x2705; <strong>${ver.gridEF}</strong> tCO₂/MWh</span>` +
-      `<span class="defra-source">CEA ${CEA_FACTORS.latest} — FY ${ver.fy}</span>`;
-  } else if (source === 'AE') {
-    const ver = UAE_FACTORS.versions[UAE_FACTORS.latest];
-    badge.innerHTML =
-      `<span>&#x2705; <strong>${ver.gridEF}</strong> tCO₂e/MWh</span>` +
-      `<span class="defra-source">${ver.utility} Grid Emission Factor — FY ${ver.fy}</span>`;
-  } else {
-    const f = DEFRA_FACTORS['Grid Electricity (UK)'];
-    badge.innerHTML =
-      `<span>&#x2705; <strong>${f.factor}</strong> kg CO₂e / ${f.unit}</span>` +
-      `<span class="defra-source">DEFRA 2023</span>`;
-  }
+  const f = (liveFactorsByRegion[region] || {})['Grid Electricity (UK)'];
+  if (!f) { badge.innerHTML = ''; return; }
+
+  badge.innerHTML =
+    `<span>&#x2705; <strong>${f.factor}</strong> kg CO₂e / ${f.unit}</span>` +
+    `<span class="defra-source">${f.factorSource || ''}</span>`;
 }
 
 function applyEmissionFactor(category) {
@@ -608,7 +547,8 @@ function applyEmissionFactor(category) {
     return;
   }
 
-  const entry = DEFRA_FACTORS[category];
+  const region = regionForJurisdiction(companyJurisdiction);
+  const entry  = (liveFactorsByRegion[region] || {})[category];
   if (!entry) {
     defraGroup.style.display  = 'none';
     customGroup.style.display = '';
@@ -624,7 +564,7 @@ function applyEmissionFactor(category) {
   } else {
     document.getElementById('defra-ef-badge').innerHTML =
       `<span>&#x2705; <strong>${entry.factor}</strong> kg CO₂e / ${entry.unit}</span>` +
-      `<span class="defra-source">DEFRA 2023</span>`;
+      `<span class="defra-source">${entry.factorSource || ''}</span>`;
     defraGroup.style.display  = '';
     customGroup.style.display = 'none';
   }
@@ -653,40 +593,23 @@ document.getElementById('entry-form').addEventListener('submit', async (e) => {
 
   try {
     const category    = document.getElementById('f-category').value;
-    const defraEntry  = DEFRA_FACTORS[category];
-    const isGridElec  = GRID_ELECTRICITY_CATEGORIES.has(category);
-    const selector    = document.getElementById('ef-source-selector');
+    const region       = regionForJurisdiction(companyJurisdiction);
+    const entry        = (liveFactorsByRegion[region] || {})[category];
+    const isGridElec   = GRID_ELECTRICITY_CATEGORIES.has(category);
+    const selector     = document.getElementById('ef-source-selector');
 
     let efExtras = {};
     if (isGridElec && selector && selector.style.display !== 'none') {
-      // Always send an explicit factor + source for grid electricity so the backend
-      // uses exactly what the user selected rather than auto-detecting from jurisdiction.
-      if (selector.value === 'CEA') {
-        const ver = CEA_FACTORS.versions[CEA_FACTORS.latest];
-        efExtras = {
-          emission_factor:     ver.gridEF,
-          factor_source:       `CEA ${CEA_FACTORS.latest} — FY ${ver.fy}`,
-          factor_jurisdiction: 'IN',
-        };
-      } else if (selector.value === 'AE') {
-        const ver = UAE_FACTORS.versions[UAE_FACTORS.latest];
-        efExtras = {
-          emission_factor:     ver.gridEF,
-          factor_source:       `${ver.utility} Grid Emission Factor — FY ${ver.fy}`,
-          factor_jurisdiction: 'AE',
-        };
-      } else {
-        const f = DEFRA_FACTORS['Grid Electricity (UK)'];
-        efExtras = {
-          emission_factor:     f.factor,
-          factor_source:       'DEFRA 2023',
-          factor_jurisdiction: 'UK',
-        };
-      }
-    } else if (!defraEntry || defraEntry.custom) {
+      // Tell the server WHICH REGION to resolve against — never a factor
+      // number. decideFactor() resolves the current, correct value itself
+      // from that region; sending an emission_factor here would just be
+      // discarded and logged as a rejected client-supplied factor on every
+      // legitimate submission (docs/TEST-REPORT.md Phase 2 finding #3).
+      efExtras = { region: selector.value === 'CEA' ? 'IN' : selector.value === 'AE' ? 'AE' : 'GB' };
+    } else if (!entry || entry.custom) {
       efExtras = { emission_factor: parseFloat(document.getElementById('f-ef').value) || 1.0 };
     }
-    // For non-Grid non-custom DEFRA categories, omit emission_factor — backend applies its own.
+    // For non-Grid non-custom categories, omit emission_factor — backend applies its own.
 
     const payload = {
       category,
@@ -709,9 +632,10 @@ document.getElementById('entry-form').addEventListener('submit', async (e) => {
       fb.className   = 'form-feedback error';
     } else {
       // The factor and CO₂e shown here come from the server's response, never
-      // from the browser's own table. The server resolves the factor and may
-      // have discarded whatever this form posted; the local table survives
-      // until Step 3 and will disagree with the server until then.
+      // from a local table — there is no local table anymore (see
+      // loadLiveFactors() above). The badge shown before submit and the
+      // value confirmed here now read the same live resolver, so they
+      // can't disagree.
       const efLabel = data.factor_source
         ? `${data.factor_source} · ${data.emission_factor} kg CO₂e/${data.unit}`
         : `EF ${data.emission_factor} kg CO₂e/${data.unit}`;
@@ -987,3 +911,4 @@ async function refreshAll() {
 }
 
 refreshAll();
+loadLiveFactors();

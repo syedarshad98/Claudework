@@ -464,4 +464,105 @@ instructions specifically called out (`Grid Electricity` at `AE-DU` and
 | 5 | Dead code: `lookupFactor()`, `CEA_FACTORS`, `UAE_FACTORS` in `db/emission_factors.js` have zero callers | **Not addressed this pass** — outside the four steps in this remediation round; still open. | — |
 | 6 | Two independent, non-deprecated flight calculation paths coexist (legacy flat categories vs. the new banded category) with no schema/UI signal that one supersedes the other | **Not addressed this pass** — directly related to #2 (the legacy path is the *only* one the UI can reach); tracked together with it, not separately fixed. | — |
 
-**Phase 3 not started, per instructions.**
+### Phase 2 close-out
+
+**Step 1 — mapped before fixing.** Grepped `dashboard.js` for every
+`DEFRA_FACTORS`/`CEA_FACTORS`/`UAE_FACTORS` use (11 call sites across
+`updateGridElecBadge()`, `applyEmissionFactor()`, and the submit handler's
+`efExtras` construction — full list in-session, not reproduced here).
+Traced why the local table was never deleted: commit `d4d2690` ("Make the
+server authoritative for emission factors") migrated exactly one usage —
+the save-confirmation banner — and left a comment on the rest: *"the local
+table survives until Step 3."* The build's actual Step 3 (per
+`vehicle_flight_migration.sql`'s own header) turned out to be vehicle
+fuel-basis and flight banding, not a dashboard cleanup — a dropped
+commitment, not a reintroduced copy.
+
+That mapping surfaced two premises in the original instructions that didn't
+hold, both flagged and resolved with you before any code changed:
+
+- `GET /api/emission-factors` was **not** region+date aware — it served the
+  same static, frozen-2023 `DEFRA_FACTORS` object `dashboard.js` already
+  hardcoded (confirmed live: `curl .../api/emission-factors` returned
+  `0.20493`, not the current `0.14396`). Wiring the frontend to it as
+  originally specified would have moved the staleness over HTTP without
+  fixing it. Resolved: extend the endpoint to be genuinely live
+  (`?region=` param, backed by the same `lib/factor-resolver.js` every real
+  submission uses).
+- `CEA_FACTORS`/`UAE_FACTORS` were **not** actually dead — `routes/brsr.js`
+  uses both to auto-stamp a factor-source label on BRSR P6's Scope 2 save.
+  Resolved: keep them, delete only `lookupFactor()` (which genuinely has
+  zero callers), and log `routes/brsr.js`'s use of the same stale 2023
+  figures as a new, separate finding (below) rather than silently leaving
+  it out of the record.
+
+**Step 2 — finding #3 fixed.** `server.js`'s `GET /api/emission-factors`
+now accepts `?region=<code>` and, when present, resolves every category's
+*current* factor via a new `lib/factor-preview.js` (`resolveAllFactors()`),
+built on the exact same `resolveRegionFactor()` every real submission goes
+through — verified live: `?region=GB` → `0.14396`/`defra-2026`,
+`?region=IN` → `0.7117`/`cea-v21.0`, `?region=AE-DU` → `0.4041`/`uae-dewa`.
+The region-factor migrations were added to `server.js`'s `STARTUP_MIGRATIONS`
+so this public, unauthenticated route can't be the first request served
+against a database that doesn't have the table yet.
+
+`dashboard.js`'s hardcoded `DEFRA_FACTORS`/`CEA_FACTORS`/`UAE_FACTORS` are
+deleted; `loadLiveFactors()` fetches all three regions once at page load
+and every badge/scope/unit lookup now reads that. The submit handler no
+longer constructs a client-side `emission_factor`/`factor_source` for grid
+electricity at all — it sends `region` instead (`GB`/`IN`/`AE`) and lets
+the server's resolver do the real work, matching how every other
+non-custom category already worked.
+
+Reproduced first in a real headless-Chromium session (Playwright, temporary
+`--no-save` install, not a project dependency): badge showed `0.20493`,
+saved value came back `0.143960`, server logged `[emissions] rejected
+client-supplied factor fields ... server-resolved factor 0.143960
+(defra-2026, region=GB) used instead` on a completely ordinary submit. After
+the fix, identical flow: badge shows `0.14396 · defra-2026`, no warning in
+the log for that submission. Separately confirmed the check itself is
+unweakened — a manually crafted request with a spoofed `emission_factor:
+0.001` still gets discarded and still logs the rejection warning,
+unaffected by anything touched this pass (`decideFactor()` itself was never
+modified). Full suite: **41/41 passing**, no regressions.
+
+**Step 3 — finding #5 fixed (narrowed per your decision).** Confirmed via
+grep that `lookupFactor()` has zero callers anywhere and deleted it.
+`CEA_FACTORS`/`UAE_FACTORS` are kept — `routes/brsr.js` is a real caller —
+and are now also referenced by the new `lib/factor-preview.js`, so they're
+no longer even partially dead code. `db/emission_factors.js` still exports
+`DEFRA_FACTORS`, `CEA_FACTORS`, `UAE_FACTORS`, `LEGACY_ALIASES`,
+`GHG_PROTOCOL_SCOPE3_CATEGORIES` — only `lookupFactor` removed. Full suite
+re-run after deletion: **41/41 passing**; `routes/brsr.js` confirmed to
+still load and resolve correctly.
+
+**Step 4 — finding #6 left as-is.** No code touched. Remains tracked tied
+to finding #2 in the table below, not separately decided or actioned.
+
+**New finding surfaced during Step 1/3 investigation, not part of the
+original six:** `routes/brsr.js:658-685` auto-stamps BRSR P6's
+`emission_factor_source` disclosure field with the same class of stale data
+as the original finding #3 — a hardcoded `'DEFRA 2023 (0.20493 kg CO₂e/kWh)'`
+string for UK-jurisdiction companies, and `CEA_FACTORS`/`UAE_FACTORS`
+(unchanged, still 2023/current-at-migration-time vintage) for IN/AE. Not
+fixed in this pass — flagging it now so it isn't lost, same discipline as
+every other finding in this document. Also unrelated and pre-existing,
+noticed only because it errors on the same requests exercised while
+verifying this fix: `GET /api/onboarding/status` 500s with `column
+"industry_sector" does not exist` — a schema/route mismatch with no
+connection to emission factors, not investigated further here.
+
+### Phase 2 — all 6 original findings, final status
+
+| # | Finding | Final status |
+|---|---|---|
+| 1 | UAE emirate region codes got the wrong Water Supply factor | **Fixed** — general resolver fix, verified with a before/after fixture diff, 2 new regression tests, 41/41 suite passing. |
+| 2 | Vehicle fuel-basis and banded flights unreachable from the dashboard UI | **Deferred as a scheduled workstream** — explicitly out of scope for calculation/data fixes; needs its own frontend build. |
+| 3 | Dashboard showed a stale factor and sent it on every grid-electricity submission | **Fixed** — endpoint made genuinely region+date aware, frontend wired to it, local hardcoded tables deleted, tamper-detection confirmed still intact, verified live in a real browser. |
+| 4 | Diesel reference value (~258) didn't match the system's actual output (251.92) | **Confirmed not a bug** — the reference was a stale figure in the test script itself; closed with no code change. |
+| 5 | Dead code (`lookupFactor()`, `CEA_FACTORS`, `UAE_FACTORS`) | **Fixed, narrowed on investigation** — `lookupFactor()` deleted (genuinely zero callers); `CEA_FACTORS`/`UAE_FACTORS` kept, since `routes/brsr.js` is a real caller that deletion would have broken. |
+| 6 | Two coexisting flight calculation paths (legacy flat vs. new banded) | **Tracked with #2** — not separately actioned; resolves naturally once #2's UI work decides whether to expose or deprecate the legacy categories. |
+
+**Phase 2 is closed.** One new finding (BRSR P6's own stale factor-source
+stamp, `routes/brsr.js:658-685`) is carried forward, untouched, for a future
+pass. **Phase 3 not started, per instructions.**

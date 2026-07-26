@@ -23,9 +23,26 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 // Public routes — no auth required
 app.use('/api/auth', require('./routes/auth'));
 
-// DEFRA emission factors — public so the frontend can fetch them without auth
-const { DEFRA_FACTORS } = require('./db/emission_factors');
-app.get('/api/emission-factors', (_req, res) => res.json(DEFRA_FACTORS));
+const db = require('./db/database');
+
+// DEFRA emission factors — public so the frontend can fetch them without auth.
+// ?region=<code> (e.g. GB, IN, AE-DU) resolves each category's CURRENT live
+// factor through the same resolver every real submission uses
+// (lib/factor-resolver.js) — this is no longer a second, independently
+// drifting copy of the numbers. Omit region for the raw static declarations
+// only (unit/scope/custom metadata — no live values, back-compat default).
+const { DEFRA_FACTORS }    = require('./db/emission_factors');
+const { resolveAllFactors } = require('./lib/factor-preview');
+app.get('/api/emission-factors', async (req, res) => {
+  const region = typeof req.query.region === 'string' && req.query.region.trim() ? req.query.region.trim() : null;
+  if (!region) return res.json(DEFRA_FACTORS);
+  try {
+    res.json(await resolveAllFactors(db, region));
+  } catch (err) {
+    console.error('GET /api/emission-factors live resolution error:', err.message);
+    res.status(500).json({ error: 'Failed to resolve emission factors' });
+  }
+});
 
 
 // Protected routes — JWT required
@@ -59,14 +76,22 @@ app.get('*', (req, res) => {
 });
 
 // ── Startup: run idempotent migrations, then begin listening ─────────────────
-const db = require('./db/database');
 
 // Migrations that must exist before any request is served.
 // All files use IF NOT EXISTS so they are safe to re-run on every boot.
+// The region_factors/vehicle_flight files are here (not just lazily applied
+// by routes/emissions.js and routes/upload.js) because GET /api/emission-factors
+// is a public route that can be the very first request the server serves —
+// it needs the emission_factors table to exist before app.listen(), the same
+// guarantee schema.sql/brsr_migration.sql/demo_migration.sql already give.
 const STARTUP_MIGRATIONS = [
   'schema.sql',
   'brsr_migration.sql',
   'demo_migration.sql',
+  'region_factors_migration.sql',
+  'region_factors_2026_patch_migration.sql',
+  'vehicle_flight_migration.sql',
+  'flight_2026_route_patch_migration.sql',
 ];
 
 async function startup() {
