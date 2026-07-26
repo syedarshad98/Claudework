@@ -34,19 +34,26 @@ const DEFAULT_FACTOR_ROWS = [
   { region: 'AE-DU', category: 'Grid Electricity',      subtype: null, canonical_unit: 'kWh', value: 0.4041,  factor_source_id: 'uae-dewa',             valid_from: '2024-01-01', valid_to: null },
   { region: 'AE',    category: 'Water Supply',          subtype: null, canonical_unit: 'm3',  value: 2.7,     factor_source_id: 'uae-desalination-2024',valid_from: '2024-01-01', valid_to: null },
 
-  // Business Travel (Flight) — mirrors db/vehicle_flight_migration.sql's
-  // placeholder values (flagged unverified there; same numbers here so a
-  // test failure means the resolver disagrees with the migration).
-  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'short-haul:economy',       canonical_unit: 'pkm', value: 0.15700, factor_source_id: 'defra-flight-placeholder-2026', valid_from: '2026-01-01', valid_to: null },
-  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'short-haul:business',       canonical_unit: 'pkm', value: 0.23500, factor_source_id: 'defra-flight-placeholder-2026', valid_from: '2026-01-01', valid_to: null },
-  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'medium:economy',            canonical_unit: 'pkm', value: 0.13000, factor_source_id: 'defra-flight-placeholder-2026', valid_from: '2026-01-01', valid_to: null },
-  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'medium:premium_economy',    canonical_unit: 'pkm', value: 0.20800, factor_source_id: 'defra-flight-placeholder-2026', valid_from: '2026-01-01', valid_to: null },
-  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'medium:business',           canonical_unit: 'pkm', value: 0.28600, factor_source_id: 'defra-flight-placeholder-2026', valid_from: '2026-01-01', valid_to: null },
-  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'medium:first',              canonical_unit: 'pkm', value: 0.39000, factor_source_id: 'defra-flight-placeholder-2026', valid_from: '2026-01-01', valid_to: null },
-  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'long-haul:economy',         canonical_unit: 'pkm', value: 0.10000, factor_source_id: 'defra-flight-placeholder-2026', valid_from: '2026-01-01', valid_to: null },
-  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'long-haul:premium_economy', canonical_unit: 'pkm', value: 0.16000, factor_source_id: 'defra-flight-placeholder-2026', valid_from: '2026-01-01', valid_to: null },
-  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'long-haul:business',        canonical_unit: 'pkm', value: 0.22000, factor_source_id: 'defra-flight-placeholder-2026', valid_from: '2026-01-01', valid_to: null },
-  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'long-haul:first',           canonical_unit: 'pkm', value: 0.30000, factor_source_id: 'defra-flight-placeholder-2026', valid_from: '2026-01-01', valid_to: null },
+  // Business Travel (Flight) — real DESNZ 2026 figures, mirrors
+  // db/flight_2026_route_patch_migration.sql. Route classification is now
+  // touches_uk/both_endpoints_uk-driven, not company-region-driven.
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'domestic:average', canonical_unit: 'pkm', value: 0.22928, factor_source_id: 'defra-2026', valid_from: '2026-01-01', valid_to: null },
+
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'uk-international-short:average',  canonical_unit: 'pkm', value: 0.12786, factor_source_id: 'defra-2026', valid_from: '2026-01-01', valid_to: null },
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'uk-international-short:economy',  canonical_unit: 'pkm', value: 0.12576, factor_source_id: 'defra-2026', valid_from: '2026-01-01', valid_to: null },
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'uk-international-short:business', canonical_unit: 'pkm', value: 0.18863, factor_source_id: 'defra-2026', valid_from: '2026-01-01', valid_to: null },
+
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'uk-international-long:average',         canonical_unit: 'pkm', value: 0.15282, factor_source_id: 'defra-2026', valid_from: '2026-01-01', valid_to: null },
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'uk-international-long:economy',         canonical_unit: 'pkm', value: 0.11704, factor_source_id: 'defra-2026', valid_from: '2026-01-01', valid_to: null },
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'uk-international-long:premium_economy', canonical_unit: 'pkm', value: 0.18726, factor_source_id: 'defra-2026', valid_from: '2026-01-01', valid_to: null },
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'uk-international-long:business',        canonical_unit: 'pkm', value: 0.33940, factor_source_id: 'defra-2026', valid_from: '2026-01-01', valid_to: null },
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'uk-international-long:first',           canonical_unit: 'pkm', value: 0.46814, factor_source_id: 'defra-2026', valid_from: '2026-01-01', valid_to: null },
+
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'international-non-uk:average',         canonical_unit: 'pkm', value: 0.14253, factor_source_id: 'defra-2026', valid_from: '2026-01-01', valid_to: null },
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'international-non-uk:economy',         canonical_unit: 'pkm', value: 0.10916, factor_source_id: 'defra-2026', valid_from: '2026-01-01', valid_to: null },
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'international-non-uk:premium_economy', canonical_unit: 'pkm', value: 0.17465, factor_source_id: 'defra-2026', valid_from: '2026-01-01', valid_to: null },
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'international-non-uk:business',        canonical_unit: 'pkm', value: 0.31656, factor_source_id: 'defra-2026', valid_from: '2026-01-01', valid_to: null },
+  { region: 'GLOBAL', category: 'Business Travel (Flight)', subtype: 'international-non-uk:first',           canonical_unit: 'pkm', value: 0.43663, factor_source_id: 'defra-2026', valid_from: '2026-01-01', valid_to: null },
 ];
 
 /**
@@ -118,6 +125,8 @@ function installDbStub({ jurisdiction = 'UK', region = null, existingEntry = nul
         distance_km:         params[17] ?? null,
         cabin_class:         params[18] ?? null,
         flight_band:         params[19] ?? null,
+        touches_uk:          params[20] ?? null,
+        both_endpoints_uk:   params[21] ?? null,
       }] };
     }
 
@@ -142,6 +151,8 @@ function installDbStub({ jurisdiction = 'UK', region = null, existingEntry = nul
         distance_km:         params[17] ?? null,
         cabin_class:         params[18] ?? null,
         flight_band:         params[19] ?? null,
+        touches_uk:          params[20] ?? null,
+        both_endpoints_uk:   params[21] ?? null,
       }] };
     }
 

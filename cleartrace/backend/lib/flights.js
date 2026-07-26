@@ -1,79 +1,103 @@
 /**
- * ClearTrace — flight banding and cabin-class factor selection.
+ * ClearTrace — flight route classification and cabin-class factor selection.
  *
- * Complete rewrite (Step 3): previously a flat factor × amount with no
- * banding, no cabin class, and no distance handling. Order of operations,
- * per spec: normalize -> band -> select factor by band + cabin class ->
- * multiply. The "multiply" step is the existing decideFactor/unit-
- * normalization pipeline (lib/decide-factor.js) — this module only does
- * banding and cabin-class selection, so there is exactly one lookup path.
+ * Second rewrite. Step 3 banded by distance for every tenant and only used
+ * DEFRA's real domestic/short-haul/long-haul terminology as a DISPLAY label
+ * when company.region === 'GB'. That was the wrong branch condition: whether
+ * a flight is domestic, UK-international, or fully international depends on
+ * the ROUTE — does it touch the UK, do both ends touch the UK — not on where
+ * the reporting company happens to be based. A UAE tenant flying to London
+ * uses the UK bands; a UK tenant flying Mumbai-Singapore uses the flat
+ * international-non-UK figure. Region never belonged in this decision.
  *
- * Input is distance_km directly on the entry — no airport-pair geodesic
- * lookup (explicitly out of scope).
+ * Order of operations, per spec: normalize -> classify route -> select
+ * factor by route + cabin class -> multiply. The "multiply" step is the
+ * existing decideFactor/unit-normalization pipeline — this module only
+ * classifies the route and picks the cabin class, so there is exactly one
+ * lookup path (routes/emissions.js and routes/upload.js both call this).
  *
- * ── GB route-type naming vs. the no-airport-lookup constraint ──────────────
- * The spec asks for DEFRA's own UK route-type terminology (domestic / short-
- * haul / long-haul) for GB-region companies, rather than generic distance
- * bands, for every other region. DEFRA's real "domestic" category is a ROUTE
- * fact (both ends in the UK), not a distance fact — a genuine domestic vs.
- * international determination needs origin/destination, which this module
- * deliberately does not have. Given that conflict, this implementation:
- *   - resolves the FACTOR using the same three distance-threshold bands for
- *     every region (no separate, unverifiable "domestic" figure is invented
- *     — see the placeholder-data warning in db/vehicle_flight_migration.sql;
- *     inventing a fourth distinct number here would repeat exactly the
- *     mistake Step 2 avoided for UAE emirate electricity fallbacks), and
- *   - relabels the band for DISPLAY ONLY when company.region === 'GB', so a
- *     sub-785km GB entry is stored/reported as flight_band='domestic' while
- *     resolving the identical 'short-haul' factor row.
- * This is a deliberate simplification, not a full implementation of GB route-
- * type banding — flagged for a decision in the Step 3 report.
+ * Values: DESNZ 2026 GHG Conversion Factors, Passenger Flights worksheet —
+ * kg CO2e per passenger.km, WITH radiative forcing already included.
+ *
+ * ── Why no further multiplier is applied ────────────────────────────────
+ * DEFRA/DESNZ methodology documentation elsewhere mentions a ~1.7x factor.
+ * That figure is for direct aviation-fuel-burn calculations (Scope 1, an
+ * airline or owned-aircraft operator computing emissions from litres of jet
+ * fuel actually burned) — a completely different calculation from this one
+ * (Scope 3, passenger-km business travel, where the WITH-RF per-pkm factor
+ * ALREADY has the radiative-forcing uplift baked in). Applying 1.7x on top
+ * of a WITH-RF passenger-km factor double-counts radiative forcing. This is
+ * exactly the kind of thing that gets "fixed" incorrectly on a later
+ * revisit by someone who's seen "1.7x" mentioned in a DEFRA document without
+ * checking which calculation it belongs to — do not add it here.
  */
 
 const FLIGHT_CATEGORY = 'Business Travel (Flight)';
 
 const CABIN_CLASSES = ['economy', 'premium_economy', 'business', 'first'];
 
-const BANDS = [
-  { key: 'short-haul', max: 785 },     // < 785 km
-  { key: 'medium',     max: 3700 },    // 785 - 3699 km (spec: "785-3699")
-  { key: 'long-haul',  max: Infinity },// >= 3700 km
-];
+// Collapsed to a single split, not the three-tier short/medium/long scheme
+// from Step 3: DESNZ only publishes two UK-international tables (short-haul,
+// long-haul), so there is no real "medium" factor to back a middle band.
+// 3700km is the previously-given long-haul lower bound, chosen over the
+// previously-given short-haul upper bound (785km) per an explicit decision
+// on this collapse — flag for review if DESNZ's real split point differs.
+const UK_INTERNATIONAL_LONGHAUL_THRESHOLD_KM = 3700;
 
-// DEFRA does not publish every cabin class for every band. Documented
-// substitution, not a silent default: short-haul aircraft rarely offer four
-// distinct cabins, so premium_economy substitutes to economy and first
-// substitutes to business for that band only. Medium and long-haul use all
-// four classes directly — see db/vehicle_flight_migration.sql for the seeded
-// rows this maps onto.
-const SHORT_HAUL_SUBSTITUTION = { premium_economy: 'economy', first: 'business' };
+// DEFRA does not publish every cabin class for every route bucket.
+// Documented substitution, never a silent default:
+//   domestic               — ONE factor for every class (no breakdown
+//                             published at all). Every cabin_class input
+//                             resolves here; always logged as a substitution.
+//   uk-international-short — only average/economy/business exist.
+//                             premium_economy and first BOTH substitute to
+//                             economy (not business — DESNZ's short-haul
+//                             cabin mix doesn't distinguish a premium tier).
+//   uk-international-long,
+//   international-non-uk   — all four classes published directly, no
+//                             substitution.
+const SHORT_HAUL_SUBSTITUTION = { premium_economy: 'economy', first: 'economy' };
 
-/** @returns {string} one of BANDS[].key */
-function bandFromDistance(distanceKm) {
-  const band = BANDS.find(b => distanceKm < b.max);
-  return band.key;
-}
+/**
+ * @param {{ touchesUk: boolean, bothEndpointsUk: boolean, distanceKm: number }} route
+ * @returns {{ routeCategory: string } | { error: string }}
+ */
+function classifyRoute({ touchesUk, bothEndpointsUk, distanceKm }) {
+  if (typeof touchesUk !== 'boolean') {
+    return { error: 'touches_uk is required for a flight entry (true or false).' };
+  }
 
-/** GB-only display relabeling — see the module header. Never changes which
- * factor row resolves, only what's shown/stored as flight_band. */
-function displayBand(bandKey, companyRegion) {
-  if (companyRegion !== 'GB') return bandKey;
-  return bandKey === 'short-haul' ? 'domestic' : bandKey;
+  if (touchesUk === false) {
+    if (bothEndpointsUk === true) {
+      return { error: 'both_endpoints_uk cannot be true when touches_uk is false.' };
+    }
+    // Flat by class, no distance banding at all — distance_km is irrelevant here.
+    return { routeCategory: 'international-non-uk' };
+  }
+
+  // touchesUk === true
+  if (bothEndpointsUk === true) {
+    return { routeCategory: 'domestic' };
+  }
+
+  const km = Number(distanceKm);
+  if (!Number.isFinite(km) || km <= 0) {
+    return { error: 'distance_km is required (and must be positive) for a touches_uk flight that is not domestic.' };
+  }
+  return { routeCategory: km < UK_INTERNATIONAL_LONGHAUL_THRESHOLD_KM ? 'uk-international-short' : 'uk-international-long' };
 }
 
 /**
  * @param {number} distanceKm
  * @param {string} cabinClass
- * @param {string} companyRegion
- * @returns {{ category: string, subtype: string, band: string, flightBand: string }
+ * @param {boolean} touchesUk
+ * @param {boolean} bothEndpointsUk
+ * @returns {{ category: string, subtype: string, routeCategory: string,
+ *             flightBand: string, substitutedCabinClass: boolean,
+ *             substitutionReason: string|null }
  *           | { error: string }}
  */
-function resolveFlightSubtype(distanceKm, cabinClass, companyRegion) {
-  const km = Number(distanceKm);
-  if (!Number.isFinite(km) || km <= 0) {
-    return { error: 'distance_km is required for a flight entry and must be a positive number.' };
-  }
-
+function resolveFlightSubtype(distanceKm, cabinClass, touchesUk, bothEndpointsUk) {
   const cabin = String(cabinClass || '').trim().toLowerCase();
   if (!cabin) {
     return { error: `cabin_class is required for a flight entry. Supply one of: ${CABIN_CLASSES.join(', ')}.` };
@@ -82,15 +106,35 @@ function resolveFlightSubtype(distanceKm, cabinClass, companyRegion) {
     return { error: `Unrecognised cabin_class "${cabinClass}". Supply one of: ${CABIN_CLASSES.join(', ')}.` };
   }
 
-  const band = bandFromDistance(km);
-  const effectiveCabin = band === 'short-haul' ? (SHORT_HAUL_SUBSTITUTION[cabin] || cabin) : cabin;
+  const classified = classifyRoute({ touchesUk, bothEndpointsUk, distanceKm });
+  if (classified.error) return { error: classified.error };
+  const { routeCategory } = classified;
+
+  let effectiveCabin = cabin;
+  let substitutedCabinClass = false;
+  let substitutionReason = null;
+
+  if (routeCategory === 'domestic') {
+    effectiveCabin = 'average';
+    substitutedCabinClass = true;
+    substitutionReason = 'DEFRA does not publish a domestic cabin-class breakdown; using the single blended domestic factor regardless of stated cabin_class.';
+  } else if (routeCategory === 'uk-international-short' && SHORT_HAUL_SUBSTITUTION[cabin]) {
+    effectiveCabin = SHORT_HAUL_SUBSTITUTION[cabin];
+    substitutedCabinClass = true;
+    substitutionReason = `DEFRA publishes no ${cabin.replace('_', ' ')} figure for UK-international short-haul; substituting ${effectiveCabin}.`;
+  }
 
   return {
-    category:   FLIGHT_CATEGORY,
-    subtype:    `${band}:${effectiveCabin}`,
-    band,
-    flightBand: displayBand(band, companyRegion),
+    category: FLIGHT_CATEGORY,
+    subtype:  `${routeCategory}:${effectiveCabin}`,
+    routeCategory,
+    flightBand: routeCategory,
+    substitutedCabinClass,
+    substitutionReason,
   };
 }
 
-module.exports = { FLIGHT_CATEGORY, CABIN_CLASSES, bandFromDistance, resolveFlightSubtype };
+module.exports = {
+  FLIGHT_CATEGORY, CABIN_CLASSES, UK_INTERNATIONAL_LONGHAUL_THRESHOLD_KM,
+  classifyRoute, resolveFlightSubtype,
+};

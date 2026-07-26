@@ -28,10 +28,20 @@ async function ensureMigrated() {
   const sql              = fs.readFileSync(path.join(__dirname, '../db/region_factors_migration.sql'), 'utf8');
   const patch2026        = fs.readFileSync(path.join(__dirname, '../db/region_factors_2026_patch_migration.sql'), 'utf8');
   const vehicleFlightSql = fs.readFileSync(path.join(__dirname, '../db/vehicle_flight_migration.sql'), 'utf8');
+  const flightRouteSql   = fs.readFileSync(path.join(__dirname, '../db/flight_2026_route_patch_migration.sql'), 'utf8');
   await db.query(sql);
   await db.query(patch2026);
   await db.query(vehicleFlightSql);
+  await db.query(flightRouteSql);
   migrated = true;
+}
+
+/** Parse a spreadsheet cell as a boolean. Blank -> undefined (not "false") so
+ * a missing column is distinguishable from an explicit false. */
+function parseCellBoolean(raw) {
+  const s = String(raw ?? '').trim().toLowerCase();
+  if (s === '') return undefined;
+  return ['true', '1', 'yes', 'y'].includes(s);
 }
 
 // POST /api/upload
@@ -93,6 +103,8 @@ router.post('/', requireRole('admin', 'editor'), upload.single('file'), async (r
     const fuelType       = String(r.fuel_type       || '').trim() || undefined;
     const distanceKmRaw  = String(r.distance_km     || '').trim();
     const cabinClass     = String(r.cabin_class     || '').trim() || undefined;
+    const touchesUk      = parseCellBoolean(r.touches_uk);
+    const bothEndpointsUk = parseCellBoolean(r.both_endpoints_uk);
 
     if (!category || !scopeRaw || !amountRaw || !unit || !period) {
       errors.push(`Row ${rowNum}: missing required field (category, scope, amount, unit, period)`);
@@ -130,13 +142,17 @@ router.post('/', requireRole('admin', 'editor'), upload.single('file'), async (r
     // never a silent fall-through to distance-basis or a factor of 1.0.
     const methodFields = resolveMethodFields({
       category, method, fuelType, distanceKm: distanceKmRaw, cabinClass,
-      companyRegion: region,
+      touchesUk, bothEndpointsUk,
     });
     if (methodFields.error) {
       errors.push(`Row ${rowNum}: ${methodFields.error}`);
       continue;
     }
-    const { lookupCategory, subtype, flightBand } = methodFields;
+    const { lookupCategory, subtype, flightBand, substitutedCabinClass, substitutionReason } = methodFields;
+
+    if (substitutedCabinClass) {
+      console.warn(`[upload row ${rowNum}] cabin_class substitution — company_id=${req.companyId} category="${category}": ${substitutionReason}`);
+    }
 
     const decided = await decideFactor({
       db, category, lookupCategory, subtype, region, unit,
@@ -153,22 +169,25 @@ router.post('/', requireRole('admin', 'editor'), upload.single('file'), async (r
 
     const { ef, factorSource, factorJurisdiction, regionResolved, isFallback, fallbackReason } = decided;
 
-    const storedMethod     = method === 'fuel' ? 'fuel' : (method === 'distance' ? 'distance' : null);
-    const storedFuelType   = method === 'fuel' ? fuelType : null;
-    const storedDistanceKm = flightBand ? parseFloat(distanceKmRaw) : null;
-    const storedCabinClass = flightBand ? cabinClass : null;
+    const storedMethod          = method === 'fuel' ? 'fuel' : (method === 'distance' ? 'distance' : null);
+    const storedFuelType        = method === 'fuel' ? fuelType : null;
+    const storedDistanceKm      = flightBand ? (distanceKmRaw !== '' ? parseFloat(distanceKmRaw) : null) : null;
+    const storedCabinClass      = flightBand ? cabinClass : null;
+    const storedTouchesUk       = flightBand ? !!touchesUk : null;
+    const storedBothEndpointsUk = flightBand ? (bothEndpointsUk === true) : null;
 
     try {
       const result = await db.query(
         `INSERT INTO emissions_entries
            (company_id, user_id, category, scope, amount, unit, period, emission_factor, source, notes,
             factor_source, factor_jurisdiction, region, region_resolved, is_fallback_factor, fallback_reason,
-            method, fuel_type, distance_km, cabin_class, flight_band)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'upload',$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+            method, fuel_type, distance_km, cabin_class, flight_band, touches_uk, both_endpoints_uk)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'upload',$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
          RETURNING id`,
         [req.companyId, req.userId, category, scope, amount, unit, period, ef, notes,
          factorSource, factorJurisdiction, region, regionResolved, isFallback, fallbackReason,
-         storedMethod, storedFuelType, storedDistanceKm, storedCabinClass, flightBand || null]
+         storedMethod, storedFuelType, storedDistanceKm, storedCabinClass, flightBand || null,
+         storedTouchesUk, storedBothEndpointsUk]
       );
       inserted.push(result.rows[0].id);
 
@@ -183,7 +202,11 @@ router.post('/', requireRole('admin', 'editor'), upload.single('file'), async (r
           newValues: {
             category, scope, amount, unit, period,
             ...(storedMethod === 'fuel' ? { method: 'fuel', fuel_type: storedFuelType } : {}),
-            ...(flightBand ? { distance_km: storedDistanceKm, cabin_class: storedCabinClass, flight_band: flightBand } : {}),
+            ...(flightBand ? {
+              distance_km: storedDistanceKm, cabin_class: storedCabinClass, flight_band: flightBand,
+              touches_uk: storedTouchesUk, both_endpoints_uk: storedBothEndpointsUk,
+              ...(substitutedCabinClass ? { cabin_class_substitution: substitutionReason } : {}),
+            } : {}),
           },
           ip: getIp(req),
         });

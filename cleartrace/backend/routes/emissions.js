@@ -13,14 +13,16 @@ async function ensureMigrated() {
   if (migrated) return;
   const fs   = require('fs');
   const path = require('path');
-  const sql            = fs.readFileSync(path.join(__dirname, '../db/audit_migration.sql'), 'utf8');
-  const regionSql      = fs.readFileSync(path.join(__dirname, '../db/region_factors_migration.sql'), 'utf8');
-  const patch2026       = fs.readFileSync(path.join(__dirname, '../db/region_factors_2026_patch_migration.sql'), 'utf8');
+  const sql              = fs.readFileSync(path.join(__dirname, '../db/audit_migration.sql'), 'utf8');
+  const regionSql        = fs.readFileSync(path.join(__dirname, '../db/region_factors_migration.sql'), 'utf8');
+  const patch2026        = fs.readFileSync(path.join(__dirname, '../db/region_factors_2026_patch_migration.sql'), 'utf8');
   const vehicleFlightSql = fs.readFileSync(path.join(__dirname, '../db/vehicle_flight_migration.sql'), 'utf8');
+  const flightRouteSql   = fs.readFileSync(path.join(__dirname, '../db/flight_2026_route_patch_migration.sql'), 'utf8');
   await db.query(sql);
   await db.query(regionSql);
   await db.query(patch2026);
   await db.query(vehicleFlightSql);
+  await db.query(flightRouteSql);
   migrated = true;
 }
 
@@ -89,7 +91,7 @@ router.post('/', requireRole('admin', 'editor'), async (req, res) => {
   await ensureMigrated();
   const {
     category, scope, amount, unit, period, emission_factor, notes, region: reqRegion,
-    method, fuel_type, distance_km, cabin_class,
+    method, fuel_type, distance_km, cabin_class, touches_uk, both_endpoints_uk,
     // factor_jurisdiction is accepted off the wire but never trusted — the
     // server derives it from the resolved factor. See decideFactor().
     factor_source: reqFactorSource,
@@ -114,10 +116,14 @@ router.post('/', requireRole('admin', 'editor'), async (req, res) => {
 
   const methodFields = resolveMethodFields({
     category, method, fuelType: fuel_type, distanceKm: distance_km, cabinClass: cabin_class,
-    companyRegion: region,
+    touchesUk: touches_uk, bothEndpointsUk: both_endpoints_uk,
   });
   if (methodFields.error) return res.status(400).json({ error: methodFields.error });
-  const { lookupCategory, subtype, flightBand } = methodFields;
+  const { lookupCategory, subtype, flightBand, substitutedCabinClass, substitutionReason } = methodFields;
+
+  if (substitutedCabinClass) {
+    console.warn(`[emissions] cabin_class substitution — company_id=${req.companyId} category="${category}": ${substitutionReason}`);
+  }
 
   const decided = await decideFactor({
     db, category, lookupCategory, subtype, region, unit,
@@ -129,23 +135,26 @@ router.post('/', requireRole('admin', 'editor'), async (req, res) => {
 
   const { ef, factorSource, factorJurisdiction, regionResolved, isFallback, fallbackReason } = decided;
 
-  const storedMethod     = method === 'fuel' ? 'fuel' : (method === 'distance' ? 'distance' : null);
-  const storedFuelType   = method === 'fuel' ? fuel_type : null;
-  const storedDistanceKm = flightBand ? parseFloat(distance_km) : null;
-  const storedCabinClass = flightBand ? cabin_class : null;
+  const storedMethod          = method === 'fuel' ? 'fuel' : (method === 'distance' ? 'distance' : null);
+  const storedFuelType        = method === 'fuel' ? fuel_type : null;
+  const storedDistanceKm      = flightBand ? (distance_km != null ? parseFloat(distance_km) : null) : null;
+  const storedCabinClass      = flightBand ? cabin_class : null;
+  const storedTouchesUk       = flightBand ? !!touches_uk : null;
+  const storedBothEndpointsUk = flightBand ? (both_endpoints_uk === true) : null;
 
   try {
     const result = await db.query(
       `INSERT INTO emissions_entries
          (company_id, user_id, category, scope, amount, unit, period, emission_factor, source, notes,
           factor_source, factor_jurisdiction, region, region_resolved, is_fallback_factor, fallback_reason,
-          method, fuel_type, distance_km, cabin_class, flight_band)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'manual',$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+          method, fuel_type, distance_km, cabin_class, flight_band, touches_uk, both_endpoints_uk)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'manual',$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
        RETURNING *`,
       [req.companyId, req.userId, category, parseInt(scope),
        parseFloat(amount), unit, period, ef, notes || null, factorSource, factorJurisdiction,
        region, regionResolved, isFallback, fallbackReason,
-       storedMethod, storedFuelType, storedDistanceKm, storedCabinClass, flightBand || null]
+       storedMethod, storedFuelType, storedDistanceKm, storedCabinClass, flightBand || null,
+       storedTouchesUk, storedBothEndpointsUk]
     );
     const entry = result.rows[0];
 
@@ -158,7 +167,11 @@ router.post('/', requireRole('admin', 'editor'), async (req, res) => {
       newValues: {
         category, scope, amount, unit, period, notes,
         ...(storedMethod === 'fuel' ? { method: 'fuel', fuel_type: storedFuelType } : {}),
-        ...(flightBand ? { distance_km: storedDistanceKm, cabin_class: storedCabinClass, flight_band: flightBand } : {}),
+        ...(flightBand ? {
+          distance_km: storedDistanceKm, cabin_class: storedCabinClass, flight_band: flightBand,
+          touches_uk: storedTouchesUk, both_endpoints_uk: storedBothEndpointsUk,
+          ...(substitutedCabinClass ? { cabin_class_substitution: substitutionReason } : {}),
+        } : {}),
       },
       ip: getIp(req),
     });
@@ -193,7 +206,7 @@ router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
 
   const {
     category, scope, amount, unit, period, emission_factor, notes,
-    method, fuel_type, distance_km, cabin_class,
+    method, fuel_type, distance_km, cabin_class, touches_uk, both_endpoints_uk,
   } = req.body;
   const newPeriod = period || oldEntry.period;
   if (newPeriod !== oldEntry.period && await isPeriodLocked(req.companyId, newPeriod)) {
@@ -204,20 +217,27 @@ router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
   const jurisdictionP = compRowP.rows[0]?.jurisdiction || 'UK';
   const region = req.body.region || oldEntry.region || compRowP.rows[0]?.region || defaultRegionFromJurisdiction(jurisdictionP);
 
-  const effectiveCategory    = category || oldEntry.category;
-  const effectiveUnit        = unit || oldEntry.unit;
-  const effectiveMethod      = method !== undefined ? method : oldEntry.method;
-  const effectiveFuelType    = fuel_type !== undefined ? fuel_type : oldEntry.fuel_type;
-  const effectiveDistanceKm  = distance_km !== undefined ? distance_km : oldEntry.distance_km;
-  const effectiveCabinClass  = cabin_class !== undefined ? cabin_class : oldEntry.cabin_class;
-  const categoryChanged      = !!(category && category !== oldEntry.category);
+  const effectiveCategory        = category || oldEntry.category;
+  const effectiveUnit            = unit || oldEntry.unit;
+  const effectiveMethod          = method !== undefined ? method : oldEntry.method;
+  const effectiveFuelType        = fuel_type !== undefined ? fuel_type : oldEntry.fuel_type;
+  const effectiveDistanceKm      = distance_km !== undefined ? distance_km : oldEntry.distance_km;
+  const effectiveCabinClass      = cabin_class !== undefined ? cabin_class : oldEntry.cabin_class;
+  const effectiveTouchesUk       = touches_uk !== undefined ? touches_uk : oldEntry.touches_uk;
+  const effectiveBothEndpointsUk = both_endpoints_uk !== undefined ? both_endpoints_uk : oldEntry.both_endpoints_uk;
+  const categoryChanged          = !!(category && category !== oldEntry.category);
 
   const methodFields = resolveMethodFields({
     category: effectiveCategory, method: effectiveMethod, fuelType: effectiveFuelType,
-    distanceKm: effectiveDistanceKm, cabinClass: effectiveCabinClass, companyRegion: region,
+    distanceKm: effectiveDistanceKm, cabinClass: effectiveCabinClass,
+    touchesUk: effectiveTouchesUk, bothEndpointsUk: effectiveBothEndpointsUk,
   });
   if (methodFields.error) return res.status(400).json({ error: methodFields.error });
-  const { lookupCategory, subtype, flightBand } = methodFields;
+  const { lookupCategory, subtype, flightBand, substitutedCabinClass, substitutionReason } = methodFields;
+
+  if (substitutedCabinClass) {
+    console.warn(`[emissions] cabin_class substitution — company_id=${req.companyId} category="${effectiveCategory}": ${substitutionReason}`);
+  }
 
   const decided = await decideFactor({
     db, category: effectiveCategory, lookupCategory, subtype, region, unit: effectiveUnit,
@@ -252,10 +272,12 @@ router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
     );
   }
 
-  const storedMethod     = effectiveMethod === 'fuel' ? 'fuel' : (effectiveMethod === 'distance' ? 'distance' : null);
-  const storedFuelType   = effectiveMethod === 'fuel' ? effectiveFuelType : null;
-  const storedDistanceKm = flightBand ? parseFloat(effectiveDistanceKm) : null;
-  const storedCabinClass = flightBand ? effectiveCabinClass : null;
+  const storedMethod          = effectiveMethod === 'fuel' ? 'fuel' : (effectiveMethod === 'distance' ? 'distance' : null);
+  const storedFuelType        = effectiveMethod === 'fuel' ? effectiveFuelType : null;
+  const storedDistanceKm      = flightBand ? (effectiveDistanceKm != null ? parseFloat(effectiveDistanceKm) : null) : null;
+  const storedCabinClass      = flightBand ? effectiveCabinClass : null;
+  const storedTouchesUk       = flightBand ? !!effectiveTouchesUk : null;
+  const storedBothEndpointsUk = flightBand ? (effectiveBothEndpointsUk === true) : null;
 
   try {
     const result = await db.query(
@@ -277,7 +299,9 @@ router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
               fuel_type          = $17,
               distance_km        = $18,
               cabin_class        = $19,
-              flight_band        = $20
+              flight_band        = $20,
+              touches_uk         = $21,
+              both_endpoints_uk  = $22
         WHERE id=$8 AND company_id=$9
         RETURNING *`,
       [category || null, scope != null ? parseInt(scope) : null,
@@ -286,7 +310,8 @@ router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
        notes !== undefined ? notes : null,
        id, req.companyId, factorSource, factorJurisdiction,
        region, regionResolved, isFallback, fallbackReason,
-       storedMethod, storedFuelType, storedDistanceKm, storedCabinClass, flightBand || null]
+       storedMethod, storedFuelType, storedDistanceKm, storedCabinClass, flightBand || null,
+       storedTouchesUk, storedBothEndpointsUk]
     );
     const entry = result.rows[0];
 
@@ -299,11 +324,14 @@ router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
       oldValues: { category: oldEntry.category, scope: oldEntry.scope,
                    amount: oldEntry.amount, unit: oldEntry.unit, period: oldEntry.period,
                    method: oldEntry.method, fuel_type: oldEntry.fuel_type,
-                   distance_km: oldEntry.distance_km, cabin_class: oldEntry.cabin_class },
+                   distance_km: oldEntry.distance_km, cabin_class: oldEntry.cabin_class,
+                   touches_uk: oldEntry.touches_uk, both_endpoints_uk: oldEntry.both_endpoints_uk },
       newValues: { category: entry.category, scope: entry.scope,
                    amount: entry.amount, unit: entry.unit, period: entry.period,
                    method: entry.method, fuel_type: entry.fuel_type,
-                   distance_km: entry.distance_km, cabin_class: entry.cabin_class },
+                   distance_km: entry.distance_km, cabin_class: entry.cabin_class,
+                   touches_uk: entry.touches_uk, both_endpoints_uk: entry.both_endpoints_uk,
+                   ...(substitutedCabinClass ? { cabin_class_substitution: substitutionReason } : {}) },
       ip: getIp(req),
     });
 
