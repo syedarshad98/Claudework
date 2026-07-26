@@ -790,4 +790,134 @@ already-existing inconsistency in the current data, exactly the kind Step
 | 5 | **Info** | Two structurally near-identical tables exist for pending team invitations — `team_invites` (`team_migration.sql`) and `pending_invites` (`onboarding_migration.sql`) — both `company_id`-scoped, serving overlapping purposes from two different onboarding paths. Not itself an integrity bug, but doubles the surface area for the same class of reasoning this phase covers. |
 | — | **Positive** | Company deletion — the single most consequential cascade in the schema — is completely correct: every one of 27 child tables (companies' full dependency graph) cascades cleanly with zero orphans, verified live, not assumed from the `ON DELETE CASCADE` clauses alone. |
 
-**Phase 4 not started, per instructions.**
+### Remediation pass
+
+Same discipline as Phases 1 and 2: reproduce the original bug live first,
+apply the fix, re-run the identical scenario to confirm it flips, then the
+full regression suite.
+
+**Finding 1 — DB-level delete guard.** Reproduced first: with
+`routes/emissions.js`'s lazy migration already warmed by a prior request
+(otherwise its own `ensureMigrated()` self-heals a freshly-deleted current
+row via its `ON CONFLICT DO NOTHING` re-insert on the very next request —
+a real quirk of this codebase's lazy-migration architecture, not a fix for
+the finding, worth remembering separately), deleted the active GB Grid
+Electricity row directly via SQL and confirmed a new submission failed
+with the same `400 "No emission factor is available..."` this phase
+originally found. Added
+`cleartrace/backend/db/emission_factors_delete_guard_migration.sql`: a
+`BEFORE DELETE` trigger on `emission_factors` that raises an exception
+naming the row's id/region/category/subtype whenever `valid_to IS NULL`
+(the active vintage), and points at the correct fix (`UPDATE ... SET
+valid_to`, then `INSERT` the replacement row) in the error text itself.
+Wired into both places that currently touch this table's schema
+(`routes/emissions.js`, `routes/upload.js`, each behind their own
+independent `ensureMigrated()`) and into `server.js`'s
+`STARTUP_MIGRATIONS`, so the guard exists before any request — public or
+authenticated — can reach the table. Re-verified: the identical `DELETE`
+that broke resolution a moment ago now fails at the database with
+`Cannot delete emission_factors row id=... — it is still active
+(valid_to IS NULL)...`, live resolution keeps working, and deleting an
+already-superseded (`valid_to IS NOT NULL`) row is unaffected. Also
+confirmed the normal supersede pattern — `UPDATE` old row to set
+`valid_to`, `INSERT` a new vintage row — still works exactly as every
+existing migration already does it; the trigger only blocks the shortcut,
+not the correct path. This closes the finding at the source: the app
+route, a one-off script, direct psql access, and any future migration are
+now all protected by the same guard, not just app-layer checks.
+
+**Finding 2 — clean error now, deactivation as the real fix.** Reproduced
+first: `DELETE /api/team/:userId` against a user with an attributed
+emissions entry still raised the raw, generic `500
+{"error":"Failed to remove user"}` this phase originally found, with the
+real cause (`23503 emissions_entries_user_id_fkey`) only visible in server
+logs, never to the admin. Two changes:
+
+- **Immediate:** `routes/team.js`'s `DELETE /:userId` now catches
+  `err.code === '23503'` and returns `409` with a specific message
+  ("existing activity... deactivate them instead") plus a `code:
+  'has_activity'` the frontend can key off. The underlying FK behavior
+  (`NO ACTION` on `entered_by`/`submitted_by`/etc.) is untouched, per
+  instruction — this only replaces what the admin sees when it fires, not
+  what fires.
+- **Real fix:** `team_migration.sql` adds `users.is_active` (default
+  `true`). `routes/auth.js`'s login handler checks it *after* password
+  verification (deliberately, to avoid leaking account status to a
+  password-guessing attacker) and returns `403 "This account has been
+  deactivated..."` for a deactivated user — confirmed live with a bcrypt
+  hash generated to match, not a placeholder. Two new admin-only routes,
+  `PATCH /:userId/deactivate` and `PATCH /:userId/reactivate`, flip the
+  flag (blocking self-deactivation); the user row and every FK-attributed
+  history row are untouched either way. `frontend/js/team.js` now shows an
+  "Inactive" badge and dims the row for deactivated members, swaps the
+  action button to "Reactivate," and on a `409 has_activity` response from
+  Remove, offers a confirm dialog that redirects straight into
+  deactivation instead of a dead end.
+
+Re-verified end to end: removing a user with activity now gets the clean
+`409` message instead of a raw `500`; deactivating them, then attempting
+login with their correct password, gets the new `403`; reactivating
+restores login. Note the deliberate boundary: `is_active` is checked only
+at login, not in `middleware/auth.js`, so it doesn't add a database
+dependency to every authenticated request — an existing 7-day JWT for a
+just-deactivated user remains valid until it naturally expires. Documented
+here as an accepted limitation, not a gap discovered later.
+
+**Finding 4 — orphan scope confirmed, no fix built.** Traced all 138
+orphaned `factor_source` rows by `company_id` against `companies.is_demo`:
+100% land on the two seeded demo tenants (`GreenTech Solutions Ltd`,
+`Verdant Group`) already named in the original scan; zero rows on any
+non-demo tenant. Per instruction, this closes as low-priority seed-data
+drift — fixable by re-seeding, not a migration/backfill target. No code
+changed for this finding.
+
+**Finding 5 — duplicate table removed (adjusted after investigation).**
+The original framing assumed one of `team_invites`/`pending_invites` was
+simply unused; confirmed instead that both were live — `team_invites` for
+real invites (`routes/team.js`), `pending_invites` only as
+`routes/onboarding.js`'s Step 5 draft field, never read again after
+onboarding completes and never converted into a real invite. Flagged this
+mismatch and asked before proceeding rather than deleting on a false
+premise; decision was to consolidate anyway: added
+`team_invites.is_onboarding_draft` (default `false`), repointed
+`onboarding.js`'s `GET /status` and `PUT /invites` at `team_invites`
+filtered on that flag, added the same filter to `routes/team.js`'s pending
+list and its invite-cancel route so drafts can never surface there, then
+dropped `pending_invites` (confirmed empty first).
+
+Verified live, end to end, on a real non-demo tenant: `PUT
+/api/onboarding/invites` creates a `team_invites` row with
+`is_onboarding_draft=true`, `invited_by`, and a token populated correctly;
+`GET /api/onboarding/status` round-trips it back. `POST /api/team/invite`
+creates a separate real invite (`is_onboarding_draft=false`). Confirmed
+zero leakage in both directions: `GET /api/onboarding/status`'s invites
+list showed only the draft, `GET /api/team`'s pending list showed only the
+real invites (both the pre-existing one and the freshly created one) —
+never the draft. Full suite re-run after all of Finding 5's changes:
+**41/41 passing**, no regressions.
+
+**Finding 3 — logged, not fixed, per instruction.** Worth stating plainly
+rather than leaving it as a one-line severity note: the BRSR evidence
+files this finding covers are not just incidental storage objects — they
+are the actual uploaded compliance documents (permits, certificates,
+utility bills, whatever a company submitted as evidence for a BRSR
+disclosure). An orphaned file today is silent and harmless because nothing
+reads storage independent of the database. But the moment this system is
+looked at from an assurance or compliance-audit angle — "produce every
+document ever uploaded for submission X," or "prove nothing was deleted
+outside an audited path" — an orphaned-but-undeleted file in Supabase
+Storage that no longer has a corresponding DB row is exactly the kind of
+gap that turns into a real finding in that review, not a hypothetical one.
+Tracked here explicitly for that reason. No code changed.
+
+### Phase 3 — all findings, final status
+
+| # | Finding | Final status |
+|---|---|---|
+| 1 | `emission_factors` rows have zero delete protection | **Fixed** — `BEFORE DELETE` trigger blocks any hard delete of a row where `valid_to IS NULL` (the active vintage), at the database level, independent of which path attempts it. Reproduced the original break live, confirmed the trigger blocks it with a clear, actionable error, confirmed the correct supersede pattern (`UPDATE valid_to` + `INSERT`) is unaffected. |
+| 2 | A user with any attributed activity can never be removed through the app, and the failure surfaces as a raw, unexplained `500` | **Fixed** — clean `409` with a specific message replaces the raw `500`; `is_active` deactivation built as the real remedy (revokes login, preserves the user row and all FK-attributed history, `NO ACTION` FK behavior left exactly as-is). Verified live: clean error on delete-with-activity, `403` on login after deactivation, restored on reactivation. |
+| 3 | BRSR evidence files in Supabase Storage aren't cleaned up by any DB-level cascade | **Logged only, per instruction** — explicitly reframed as a compliance/assurance-review risk (these are uploaded evidentiary documents, not incidental files), not merely storage hygiene. Not fixed this pass. |
+| 4 | 138 orphaned `factor_source` rows exist with no live match | **Confirmed demo-only** — all 138 rows traced to the two seeded demo tenants; zero on any non-demo tenant. Treated as low-priority seed-data drift per instruction; no migration/backfill built. |
+| 5 | Two structurally near-identical tables for pending team invitations | **Fixed, premise corrected first** — both tables were live (not one dead), for different purposes; flagged and confirmed before acting. Consolidated onto `team_invites` with an `is_onboarding_draft` discriminator; `pending_invites` dropped after confirming it was empty. Verified live in both directions (draft never leaks to the Team page, real invites never leak into onboarding) plus full suite: 41/41 passing. |
+
+**Phase 3 is closed. Phase 4 not started, per instructions.**

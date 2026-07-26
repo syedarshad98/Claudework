@@ -2,6 +2,7 @@ const express     = require('express');
 const router      = express.Router();
 const fs          = require('fs');
 const path        = require('path');
+const crypto      = require('crypto');
 const db          = require('../db/database');
 const requireRole = require('../middleware/roles');
 
@@ -12,7 +13,13 @@ async function ensureMigrated() {
   const sql = fs.readFileSync(
     path.join(__dirname, '../db/onboarding_migration.sql'), 'utf8'
   );
+  // Step 5's invite draft now lives in team_invites (is_onboarding_draft),
+  // not a separate table — see team_migration.sql.
+  const teamSql = fs.readFileSync(
+    path.join(__dirname, '../db/team_migration.sql'), 'utf8'
+  );
   await db.query(sql);
+  await db.query(teamSql);
   migrated = true;
 }
 
@@ -36,7 +43,7 @@ router.get('/status', async (req, res) => {
 
     const [baselineRes, inviteRes, frameworkRes] = await Promise.all([
       db.query('SELECT scope, co2e_tonnes, year FROM baseline_emissions WHERE company_id = $1 ORDER BY scope', [req.companyId]),
-      db.query('SELECT email, role FROM pending_invites WHERE company_id = $1 ORDER BY id',                    [req.companyId]),
+      db.query('SELECT email, role FROM team_invites WHERE company_id = $1 AND is_onboarding_draft = true ORDER BY id', [req.companyId]),
       db.query('SELECT framework, status FROM framework_status WHERE company_id = $1 ORDER BY framework',      [req.companyId]),
     ]);
 
@@ -218,17 +225,22 @@ router.put('/invites', requireRole('admin', 'editor'), async (req, res) => {
 
   try {
     if (Array.isArray(invites)) {
-      // Replace all pending invites for this company
-      await db.query('DELETE FROM pending_invites WHERE company_id = $1', [req.companyId]);
+      // Replace this company's draft rows only — is_onboarding_draft=true
+      // scopes the delete to Step 5's own data, leaving any real invite
+      // created via /api/team/invite completely untouched.
+      await db.query(
+        'DELETE FROM team_invites WHERE company_id = $1 AND is_onboarding_draft = true',
+        [req.companyId]
+      );
 
       for (const { email, role } of invites) {
         if (!email || !email.includes('@')) continue;
         const r = validRoles.includes(role) ? role : 'viewer';
+        const token = crypto.randomBytes(32).toString('hex');
         await db.query(
-          `INSERT INTO pending_invites (company_id, email, role)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (company_id, email) DO UPDATE SET role = $3`,
-          [req.companyId, email.toLowerCase().trim(), r]
+          `INSERT INTO team_invites (company_id, invited_by, email, role, token, is_onboarding_draft)
+           VALUES ($1, $2, $3, $4, $5, true)`,
+          [req.companyId, req.userId, email.toLowerCase().trim(), r, token]
         );
       }
     }

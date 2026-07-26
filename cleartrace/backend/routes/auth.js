@@ -81,7 +81,7 @@ router.post('/login', async (req, res) => {
 
   try {
     const result = await db.query(
-      `SELECT u.id, u.password_hash, u.role, u.company_id,
+      `SELECT u.id, u.password_hash, u.role, u.company_id, u.is_active,
               c.name AS company_name,
               COALESCE(c.onboarding_complete, FALSE) AS onboarding_complete,
               COALESCE(c.is_demo, FALSE) AS is_demo
@@ -99,6 +99,10 @@ router.post('/login', async (req, res) => {
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    if (user.is_active === false) {
+      return res.status(403).json({ error: 'This account has been deactivated. Contact your admin.' });
     }
 
     const token = makeToken(user.id, user.company_id, user.role, email.toLowerCase().trim());

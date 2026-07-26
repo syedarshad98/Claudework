@@ -20,16 +20,14 @@ CREATE TABLE IF NOT EXISTS baseline_emissions (
   UNIQUE (company_id, scope)
 );
 
--- ── Pending team invites (created during onboarding Step 5) ─────────────────
-CREATE TABLE IF NOT EXISTS pending_invites (
-  id         SERIAL  PRIMARY KEY,
-  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-  email      TEXT    NOT NULL,
-  role       TEXT    NOT NULL DEFAULT 'viewer'
-             CHECK (role IN ('admin', 'editor', 'viewer')),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (company_id, email)
-);
+-- ── Step 5 invite draft — consolidated onto team_invites ─────────────────────
+-- Was its own table here (pending_invites); Phase 3 data-integrity finding #5
+-- found it was a near-duplicate of team_invites used only as a Step 5 draft
+-- field (never read after onboarding completes, never converted into a real
+-- invite — no accept-invite flow ever consumed it). Confirmed empty in the
+-- live database before dropping; no backfill, since a discarded onboarding
+-- draft is exactly as recoverable as re-typing the row. See
+-- team_migration.sql for the replacement (team_invites.is_onboarding_draft).
+DROP TABLE IF EXISTS pending_invites;
 
 CREATE INDEX IF NOT EXISTS idx_baseline_company  ON baseline_emissions(company_id);
-CREATE INDEX IF NOT EXISTS idx_invites_company   ON pending_invites(company_id);

@@ -23,7 +23,7 @@ router.get('/', async (req, res) => {
   try {
     const [membersRes, invitesRes] = await Promise.all([
       db.query(
-        `SELECT id, email, COALESCE(name, '') AS name, role, created_at
+        `SELECT id, email, COALESCE(name, '') AS name, role, is_active, created_at
            FROM users
           WHERE company_id = $1
           ORDER BY created_at ASC`,
@@ -35,6 +35,7 @@ router.get('/', async (req, res) => {
           WHERE company_id = $1
             AND accepted_at IS NULL
             AND expires_at > NOW()
+            AND is_onboarding_draft = false
           ORDER BY created_at DESC`,
         [req.companyId]
       ),
@@ -164,8 +165,65 @@ router.delete('/:userId', requireRole('admin'), async (req, res) => {
 
     res.json({ removed: true });
   } catch (err) {
+    // 23503 = foreign_key_violation. This user has an emissions entry, a
+    // BRSR submission, or similar attributed to them — those FKs are
+    // intentionally NO ACTION (Phase 3 data-integrity finding #2: protects
+    // audit history, left as-is). Removing them isn't possible; deactivating
+    // them is the correct alternative (see PATCH /:userId/deactivate).
+    if (err.code === '23503') {
+      return res.status(409).json({
+        error: 'Cannot remove this user — they have existing activity (emissions entries, BRSR submissions, or similar). Deactivate them instead to revoke access without losing their history.',
+        code: 'has_activity',
+      });
+    }
     console.error('DELETE /api/team/:userId error:', err.message);
     res.status(500).json({ error: 'Failed to remove user' });
+  }
+});
+
+// ── PATCH /api/team/:userId/deactivate ────────────────────────────────────────
+// Admin only. Cannot deactivate yourself. Revokes login (checked at
+// /api/auth/login) without touching the user row or any FK-attributed
+// history — the real fix for a user DELETE blocked by existing activity.
+router.patch('/:userId/deactivate', requireRole('admin'), async (req, res) => {
+  await ensureMigrated();
+  const targetId = parseInt(req.params.userId);
+
+  if (targetId === req.userId) {
+    return res.status(400).json({ error: 'You cannot deactivate yourself.' });
+  }
+
+  try {
+    const r = await db.query(
+      'UPDATE users SET is_active = false WHERE id = $1 AND company_id = $2 RETURNING id',
+      [targetId, req.companyId]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'User not found.' });
+
+    res.json({ deactivated: true });
+  } catch (err) {
+    console.error('PATCH /api/team/:userId/deactivate error:', err.message);
+    res.status(500).json({ error: 'Failed to deactivate user' });
+  }
+});
+
+// ── PATCH /api/team/:userId/reactivate ────────────────────────────────────────
+// Admin only. Restores login access.
+router.patch('/:userId/reactivate', requireRole('admin'), async (req, res) => {
+  await ensureMigrated();
+  const targetId = parseInt(req.params.userId);
+
+  try {
+    const r = await db.query(
+      'UPDATE users SET is_active = true WHERE id = $1 AND company_id = $2 RETURNING id',
+      [targetId, req.companyId]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'User not found.' });
+
+    res.json({ reactivated: true });
+  } catch (err) {
+    console.error('PATCH /api/team/:userId/reactivate error:', err.message);
+    res.status(500).json({ error: 'Failed to reactivate user' });
   }
 });
 
@@ -176,7 +234,7 @@ router.delete('/invites/:id', requireRole('admin'), async (req, res) => {
   const inviteId = parseInt(req.params.id);
   try {
     const r = await db.query(
-      'DELETE FROM team_invites WHERE id = $1 AND company_id = $2 RETURNING id',
+      'DELETE FROM team_invites WHERE id = $1 AND company_id = $2 AND is_onboarding_draft = false RETURNING id',
       [inviteId, req.companyId]
     );
     if (!r.rows.length) return res.status(404).json({ error: 'Invite not found.' });

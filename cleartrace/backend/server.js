@@ -92,6 +92,11 @@ const STARTUP_MIGRATIONS = [
   'region_factors_2026_patch_migration.sql',
   'vehicle_flight_migration.sql',
   'flight_2026_route_patch_migration.sql',
+  'emission_factors_delete_guard_migration.sql',
+  // Same reasoning: /api/auth/login is public and can be the first request
+  // served, and now needs users.is_active (Phase 3 finding #2 — deactivation)
+  // to exist, not just routes/team.js's lazy migration to have already run.
+  'team_migration.sql',
 ];
 
 async function startup() {

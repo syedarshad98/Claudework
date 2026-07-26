@@ -102,6 +102,7 @@ function renderMembers(members) {
 
   tbody.innerHTML = members.map(m => {
     const isMe      = m.email === MY_EMAIL;
+    const isActive  = m.is_active !== false;
     const nameCell  = `
       <div class="tm-member-name">${m.name || ''}</div>
       <div class="tm-member-email">${m.email}${isMe ? ' <span class="tm-you-badge">you</span>' : ''}</div>
@@ -127,18 +128,25 @@ function renderMembers(members) {
           </select>`;
       }
 
+      // Removing a user with existing activity (an emissions entry, a BRSR
+      // submission, ...) is blocked by the database — removeMember() catches
+      // that and offers deactivation instead. Already-inactive members get a
+      // Reactivate button instead of Remove.
       const removeBtn = canRemove
-        ? `<button class="btn tm-remove-btn" onclick="removeMember(${m.id}, '${m.email.replace(/'/g, "\\'")}')">Remove</button>`
+        ? (isActive
+            ? `<button class="btn tm-remove-btn" onclick="removeMember(${m.id}, '${m.email.replace(/'/g, "\\'")}')">Remove</button>`
+            : `<button class="btn tm-reactivate-btn" onclick="reactivateMember(${m.id}, '${m.email.replace(/'/g, "\\'")}')">Reactivate</button>`)
         : '';
 
       actionsCell = `<div class="tm-actions-cell">${roleDropdown}${removeBtn}</div>`;
     }
 
     const showActions = MY_ROLE === 'admin' || MY_ROLE === 'editor';
+    const statusBadge = isActive ? '' : ' <span class="tm-inactive-badge">Inactive</span>';
 
-    return `<tr>
+    return `<tr${isActive ? '' : ' class="tm-inactive-row"'}>
       <td>${nameCell}</td>
-      <td>${roleBadgeHtml(m.role)}</td>
+      <td>${roleBadgeHtml(m.role)}${statusBadge}</td>
       <td class="al-nowrap al-muted">${fmtDate(m.created_at)}</td>
       ${showActions ? `<td>${actionsCell}</td>` : ''}
     </tr>`;
@@ -214,8 +222,38 @@ async function removeMember(userId, email) {
   const res = await api('DELETE', `/api/team/${userId}`);
   if (!res) return;
   const data = await res.json();
-  if (!res.ok) { showToast(data.error || 'Failed to remove member.', 'error'); return; }
+  if (!res.ok) {
+    // has_activity: the user has an emissions entry, a BRSR submission, or
+    // similar attributed to them — the database won't allow removal without
+    // losing that history. Offer deactivation instead.
+    if (data.code === 'has_activity' &&
+        confirm(`${email} has existing activity and can't be removed. Deactivate them instead? They'll be blocked from logging in, but their history stays intact.`)) {
+      await deactivateMember(userId, email);
+      return;
+    }
+    showToast(data.error || 'Failed to remove member.', 'error');
+    return;
+  }
   showToast(`${email} removed from the team.`);
+  await loadTeam();
+}
+
+// ── Deactivate / reactivate member ──────────────────────────────────────────
+async function deactivateMember(userId, email) {
+  const res = await api('PATCH', `/api/team/${userId}/deactivate`);
+  if (!res) return;
+  const data = await res.json();
+  if (!res.ok) { showToast(data.error || 'Failed to deactivate member.', 'error'); return; }
+  showToast(`${email} deactivated — login revoked, history kept.`);
+  await loadTeam();
+}
+
+async function reactivateMember(userId, email) {
+  const res = await api('PATCH', `/api/team/${userId}/reactivate`);
+  if (!res) return;
+  const data = await res.json();
+  if (!res.ok) { showToast(data.error || 'Failed to reactivate member.', 'error'); return; }
+  showToast(`${email} reactivated.`);
   await loadTeam();
 }
 
