@@ -3,6 +3,76 @@ const router      = express.Router();
 const PDFDocument = require('pdfkit');
 const db          = require('../db/database');
 const requireRole = require('../middleware/roles');
+const ds          = require('../lib/pdf-design-system');
+
+// Water/waste/social/governance rows are user-typed metric values — there is
+// no factor_source-equivalent column behind them, so they get the honest
+// neutral tag rather than a fabricated calculation-source badge.
+const REPORTED_VALUE_BADGE = { label: 'Reported value', variant: 'reported' };
+
+// Small gray label line above a group of rows (e.g. "Water — Period: 2024-06").
+function drawSubLabel(doc, margin, width, y, text) {
+  y = ds.checkPageBreak(doc, y, 16, margin);
+  doc.fillColor(ds.COLORS.gray).font(ds.F('body')).fontSize(8.5).text(text, margin, y, { width });
+  return y + 16;
+}
+
+// Category divider bar used inside Social/Governance sections, e.g.
+// "Diversity & Inclusion" with its GRI code right-aligned.
+function drawCategoryHeader(doc, margin, width, y, title, code) {
+  const h = 20;
+  y = ds.checkPageBreak(doc, y, h + 6, margin);
+  doc.rect(margin, y, width, h).fill(ds.COLORS.slateBlueBg);
+  doc.fillColor(ds.COLORS.tealDark).font(ds.F('heading')).fontSize(9.5)
+     .text(title, margin + 10, y + 5, { width: width * 0.6, lineBreak: false });
+  if (code) {
+    doc.fillColor(ds.COLORS.gray).font(ds.F('body')).fontSize(8)
+       .text(code, margin + 10, y + 6, { align: 'right', width: width - 20, lineBreak: false });
+  }
+  return y + h + 6;
+}
+
+// One label/value row, with an optional provenance badge right-aligned.
+// `badge` is either null or { label, variant } (see pdf-design-system).
+function drawMetricRow(doc, margin, width, y, label, value, badge) {
+  const rowH = 22;
+  y = ds.checkPageBreak(doc, y, rowH + 4, margin);
+
+  doc.rect(margin, y, width, rowH).fill(ds.COLORS.lightGray);
+  doc.fillColor(ds.COLORS.ink).font(ds.F('body')).fontSize(9)
+     .text(label, margin + 10, y + 6.5, { width: width * 0.45, lineBreak: false });
+
+  const badgeRightX = margin + width - 10;
+  const badgeY      = y + (rowH - 14) / 2;
+  const badgeW      = badge
+    ? ds.drawProvenanceBadge(doc, badge.label, badgeRightX, badgeY, { variant: badge.variant, align: 'right' })
+    : 0;
+  const valueLeftX  = margin + width * 0.45;
+  const valueRightX = badge ? badgeRightX - badgeW - 10 : badgeRightX;
+
+  doc.fillColor(ds.COLORS.ink).font(ds.F('bodyMedium')).fontSize(9)
+     .text(value, valueLeftX, y + 6.5, { width: valueRightX - valueLeftX, align: 'right', lineBreak: false });
+
+  return y + rowH + 4;
+}
+
+// One framework-status row (GRI/TCFD/SASB/LOCAL), status right-aligned.
+function drawFrameworkRow(doc, margin, width, y, fw, fwNames, statusStyles) {
+  const rowH = 26;
+  y = ds.checkPageBreak(doc, y, rowH + 4, margin);
+
+  doc.rect(margin, y, width, rowH).fill(ds.COLORS.lightGray);
+  doc.fillColor(ds.COLORS.tealDark).font(ds.F('heading')).fontSize(9.5)
+     .text(fw.framework, margin + 10, y + 8, { width: 60, lineBreak: false });
+  doc.fillColor(ds.COLORS.gray).font(ds.F('body')).fontSize(8.5)
+     .text(fwNames[fw.framework] || fw.framework, margin + 75, y + 9, { width: width * 0.45, lineBreak: false });
+
+  const st = statusStyles[fw.status] || statusStyles.not_started;
+  doc.fillColor(st.color).font(ds.F('bodyMedium')).fontSize(9)
+     .text(st.label, margin + 10, y + 8, { align: 'right', width: width - 20, lineBreak: false });
+
+  return y + rowH + 4;
+}
 
 // GET /api/report
 // Streams a PDF ESG summary report for the authenticated company
@@ -48,6 +118,7 @@ router.get('/', requireRole('admin', 'editor'), async (req, res) => {
 
     // Collect distinct factor sources used in this report period
     let factorFooter = 'DEFRA 2023 (UK)';
+    let distinctSources = [];
     try {
       const sourceRows = await db.query(
         `SELECT DISTINCT factor_source FROM emissions_entries
@@ -55,6 +126,7 @@ router.get('/', requireRole('admin', 'editor'), async (req, res) => {
         [companyId]
       );
       const sources = sourceRows.rows.map(r => r.factor_source);
+      distinctSources = sources;
       if (sources.length > 0) {
         const parts = [];
         const hasDefra = sources.some(s => s.startsWith('DEFRA'));
@@ -169,223 +241,181 @@ router.get('/', requireRole('admin', 'editor'), async (req, res) => {
       `attachment; filename="ClearTrace-ESG-Report-${year}.pdf"`
     );
     doc.pipe(res);
+    ds.registerFonts(doc);
 
-    const GREEN  = '#1a7f5a';
-    const DARK   = '#1a2332';
-    const GREY   = '#6b7280';
-    const LIGHT  = '#f0f4f0';
-    const WIDTH  = doc.page.width  - 100;
+    const margin = 50;
+    const WIDTH  = doc.page.width - margin * 2;
 
-    // ── Cover / header ────────────────────────────────────────────────────
-    doc.rect(50, 50, WIDTH, 80).fill(GREEN);
-    doc.fillColor('#ffffff')
-       .font('Helvetica-Bold').fontSize(22)
-       .text('ClearTrace', 70, 68)
-       .font('Helvetica').fontSize(11)
-       .text('ESG Intelligence Platform', 70, 94);
+    // ── Cover page ───────────────────────────────────────────────────────
+    ds.drawCoverPage(doc, {
+      companyName,
+      period: `Reporting Year ${year}`,
+      headlineValue: totalCO2e,
+      generatedDate: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+    });
 
-    doc.fillColor('#ffffff')
-       .font('Helvetica-Bold').fontSize(13)
-       .text(`ESG Summary Report — ${year}`, 70, 68, { align: 'right', width: WIDTH - 20 })
-       .font('Helvetica').fontSize(9)
-       .text(companyName, 70, 90, { align: 'right', width: WIDTH - 20 })
-       .text(`Generated ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`,
-             70, 102, { align: 'right', width: WIDTH - 20 });
+    // ── Executive Summary ────────────────────────────────────────────────
+    doc.addPage();
+    let y = margin;
+    y = ds.drawSectionHeader(doc, 'Executive Summary', y);
 
-    // ── ESG Score ─────────────────────────────────────────────────────────
-    doc.moveDown(4);
-    doc.fillColor(DARK).font('Helvetica-Bold').fontSize(14).text('ESG Performance Score', 50);
-    doc.moveDown(0.4);
+    const scoreCard = ds.drawStatCard(doc, {
+      x: margin, y, width: WIDTH, height: 70,
+      label: `ESG Performance Score  —  Rating ${esgRating}`,
+      value: String(esgScore),
+      unit: `${entries} data entries recorded  ·  ${totalCO2e} tCO2e total`,
+      accentColor: ds.COLORS.teal,
+    });
+    y = scoreCard.bottom + 20;
 
-    doc.rect(50, doc.y, WIDTH, 60).fill(LIGHT);
-    const scoreY = doc.y + 10;
-    doc.fillColor(GREEN).font('Helvetica-Bold').fontSize(32).text(`${esgScore}`, 70, scoreY);
-    doc.fillColor(GREY).font('Helvetica').fontSize(10)
-       .text(`Rating: ${esgRating}`, 70, scoreY + 36)
-       .text(`${entries} data entries recorded`, 180, scoreY + 10)
-       .text(`Total GHG emissions: ${totalCO2e} tCO₂e`, 180, scoreY + 28);
+    y = ds.drawSectionHeader(doc, 'Emissions by Scope', y);
 
-    // ── Emissions by Scope ────────────────────────────────────────────────
-    doc.moveDown(5);
-    doc.fillColor(DARK).font('Helvetica-Bold').fontSize(14).text('Emissions by Scope');
-    doc.moveDown(0.4);
+    const scopeLabels  = { 1: 'Scope 1 — Direct', 2: 'Scope 2 — Energy', 3: 'Scope 3 — Value Chain' };
+    const scopeAccents = { 1: ds.COLORS.teal, 2: ds.COLORS.slateBlue, 3: ds.COLORS.amber };
+    const cardGap  = 12;
+    const cardW    = (WIDTH - cardGap * 2) / 3;
 
-    const scopeLabels = { 1: 'Scope 1 — Direct', 2: 'Scope 2 — Energy', 3: 'Scope 3 — Value Chain' };
-    const colW = WIDTH / 3;
+    // Honest per-card provenance: badge only when the scope actually has
+    // entries, using the same distinct-source list already computed above
+    // (no new aggregation — just reused for display).
+    const scopeBadge = (hasData) => {
+      if (!hasData || distinctSources.length === 0) return null;
+      if (distinctSources.length === 1) return ds.classifyFactorSource(distinctSources[0]);
+      return { label: 'Multiple sources', variant: 'custom' };
+    };
 
+    let scopeCardBottom = y;
     [1, 2, 3].forEach((s, i) => {
       const row = scopes.find(r => parseInt(r.scope) === s);
       const co2 = row ? parseFloat(row.total_co2e).toFixed(2) : '0.00';
-      const x   = 50 + i * colW;
-      doc.rect(x + 2, doc.y, colW - 4, 60).fill(i % 2 === 0 ? LIGHT : '#ffffff').stroke('#e5e7eb');
-      const boxY = doc.y - 60;
-      doc.fillColor(GREEN).font('Helvetica-Bold').fontSize(10)
-         .text(scopeLabels[s], x + 8, boxY + 8, { width: colW - 16 });
-      doc.fillColor(DARK).font('Helvetica-Bold').fontSize(20)
-         .text(`${co2}`, x + 8, boxY + 24, { width: colW - 16 });
-      doc.fillColor(GREY).font('Helvetica').fontSize(8)
-         .text('tCO₂e', x + 8, boxY + 46, { width: colW - 16 });
+      const x   = margin + i * (cardW + cardGap);
+      const card = ds.drawStatCard(doc, {
+        x, y, width: cardW,
+        label: scopeLabels[s], value: co2, unit: 'tCO2e',
+        accentColor: scopeAccents[s],
+        badge: scopeBadge(parseFloat(co2) > 0),
+      });
+      scopeCardBottom = card.bottom;
     });
+    y = scopeCardBottom + 24;
 
-    // ── Framework Status ──────────────────────────────────────────────────
-    doc.moveDown(5.5);
-    doc.fillColor(DARK).font('Helvetica-Bold').fontSize(14).text('Reporting Framework Status');
-    doc.moveDown(0.4);
+    // ── Reporting Framework Status ───────────────────────────────────────
+    y = ds.drawSectionHeader(doc, 'Reporting Framework Status', y);
 
     const fwNames = { GRI: 'Global Reporting Initiative', TCFD: 'Task Force on Climate Disclosures', SASB: 'Sustainability Accounting Standards', LOCAL: 'Local / Regulatory' };
-    const statusColors = { aligned: GREEN, partial: '#d97706', not_started: '#9ca3af' };
-    const statusLabels = { aligned: 'Aligned', partial: 'Partial', not_started: 'Not started' };
+    const statusStyles = {
+      aligned:     { color: ds.COLORS.teal,      label: 'Aligned' },
+      partial:     { color: ds.COLORS.amberDark, label: 'Partial' },
+      not_started: { color: ds.COLORS.gray,       label: 'Not started' },
+    };
 
     if (frameworks.length === 0) {
-      doc.fillColor(GREY).font('Helvetica').fontSize(10).text('No framework data recorded yet.');
+      y = ds.checkPageBreak(doc, y, 16, margin);
+      doc.fillColor(ds.COLORS.gray).font(ds.F('body')).fontSize(10).text('No framework data recorded yet.', margin, y);
+      y += 20;
     } else {
       frameworks.forEach(fw => {
-        const rowY = doc.y;
-        doc.rect(50, rowY, WIDTH, 28).fill(LIGHT).stroke('#e5e7eb');
-        doc.fillColor(DARK).font('Helvetica-Bold').fontSize(10)
-           .text(fw.framework, 60, rowY + 8);
-        doc.fillColor(GREY).font('Helvetica').fontSize(9)
-           .text(fwNames[fw.framework] || fw.framework, 120, rowY + 10);
-        const col = statusColors[fw.status] || GREY;
-        const lbl = statusLabels[fw.status]  || fw.status;
-        doc.fillColor(col).font('Helvetica-Bold').fontSize(9)
-           .text(lbl, 60, rowY + 8, { align: 'right', width: WIDTH - 20 });
-        doc.moveDown(1.4);
+        y = drawFrameworkRow(doc, margin, WIDTH, y, fw, fwNames, statusStyles);
       });
     }
+    y += 12;
 
-    // ── Water & Waste Metrics ─────────────────────────────────────────────
-    doc.moveDown(2);
-    doc.fillColor(DARK).font('Helvetica-Bold').fontSize(14).text('Water & Waste');
-    doc.moveDown(0.4);
+    // ── Water & Waste ─────────────────────────────────────────────────────
+    y = ds.drawSectionHeader(doc, 'Water & Waste', y);
 
-    const WATER_BLUE = '#1e6a9f';
-    const WASTE_GREEN = '#2d7a4f';
+    const hasWater = waterData && waterData.rows.length;
+    const hasWaste = wasteData && wasteData.rows.length;
 
-    if ((!waterData || !waterData.rows.length) && (!wasteData || !wasteData.rows.length)) {
-      doc.fillColor(GREY).font('Helvetica').fontSize(10)
-         .text('No water/waste data recorded for this period.');
+    if (!hasWater && !hasWaste) {
+      y = ds.checkPageBreak(doc, y, 16, margin);
+      doc.fillColor(ds.COLORS.gray).font(ds.F('body')).fontSize(10)
+         .text('No water/waste data recorded for this period.', margin, y);
+      y += 20;
     } else {
-      if (waterData && waterData.rows.length) {
-        doc.fillColor(GREY).font('Helvetica').fontSize(9).text(`Water — Period: ${waterData.period}`);
-        doc.moveDown(0.3);
+      if (hasWater) {
+        y = drawSubLabel(doc, margin, WIDTH, y, `Water — Period: ${waterData.period}`);
         for (const r of waterData.rows) {
           const val = r.metric_value !== null ? parseFloat(r.metric_value).toLocaleString() : '—';
-          const rowY = doc.y;
-          doc.rect(50, rowY, WIDTH, 20).fill(LIGHT).stroke('#e5e7eb');
-          doc.fillColor(DARK).font('Helvetica').fontSize(9)
-             .text(r.metric_key.replace(/_/g, ' '), 60, rowY + 6, { width: WIDTH * 0.6 });
-          doc.fillColor(WATER_BLUE).font('Helvetica-Bold').fontSize(9)
-             .text(val, 60, rowY + 6, { align: 'right', width: WIDTH - 20 });
-          doc.moveDown(1.1);
+          y = drawMetricRow(doc, margin, WIDTH, y, r.metric_key.replace(/_/g, ' '), val, REPORTED_VALUE_BADGE);
         }
-        doc.moveDown(0.3);
+        y += 8;
       }
-      if (wasteData && wasteData.rows.length) {
-        doc.fillColor(GREY).font('Helvetica').fontSize(9).text(`Waste — Period: ${wasteData.period}`);
-        doc.moveDown(0.3);
+      if (hasWaste) {
+        y = drawSubLabel(doc, margin, WIDTH, y, `Waste — Period: ${wasteData.period}`);
         for (const r of wasteData.rows) {
           const val = r.metric_value !== null ? parseFloat(r.metric_value).toLocaleString() : '—';
-          const rowY = doc.y;
-          doc.rect(50, rowY, WIDTH, 20).fill(LIGHT).stroke('#e5e7eb');
-          doc.fillColor(DARK).font('Helvetica').fontSize(9)
-             .text(r.metric_key.replace(/_/g, ' '), 60, rowY + 6, { width: WIDTH * 0.6 });
-          doc.fillColor(WASTE_GREEN).font('Helvetica-Bold').fontSize(9)
-             .text(val, 60, rowY + 6, { align: 'right', width: WIDTH - 20 });
-          doc.moveDown(1.1);
+          y = drawMetricRow(doc, margin, WIDTH, y, r.metric_key.replace(/_/g, ' '), val, REPORTED_VALUE_BADGE);
         }
       }
     }
+    y += 12;
 
-    // ── Social Metrics ────────────────────────────────────────────────────
-    doc.moveDown(2);
-    doc.fillColor(DARK).font('Helvetica-Bold').fontSize(14).text('Social Metrics');
-    doc.moveDown(0.4);
+    // ── Social Metrics ───────────────────────────────────────────────────
+    y = ds.drawSectionHeader(doc, 'Social Metrics', y);
 
     if (!socialData || !socialData.rows.length) {
-      doc.fillColor(GREY).font('Helvetica').fontSize(10).text('No social data recorded yet.');
+      y = ds.checkPageBreak(doc, y, 16, margin);
+      doc.fillColor(ds.COLORS.gray).font(ds.F('body')).fontSize(10).text('No social data recorded yet.', margin, y);
+      y += 20;
     } else {
-      doc.fillColor(GREY).font('Helvetica').fontSize(9).text(`Period: ${socialData.period}`);
-      doc.moveDown(0.3);
+      y = drawSubLabel(doc, margin, WIDTH, y, `Period: ${socialData.period}`);
 
-      // Group by category
       const socialByCategory = {};
       for (const r of socialData.rows) {
         if (!socialByCategory[r.category]) socialByCategory[r.category] = [];
         socialByCategory[r.category].push(r);
       }
-
       const socialGriMap = { 'Diversity & Inclusion': 'GRI 405', 'Health & Safety': 'GRI 403', 'Supply Chain': 'GRI 414' };
 
       for (const [cat, rows] of Object.entries(socialByCategory)) {
-        const gri = socialGriMap[cat] || '';
-        const catY = doc.y;
-        doc.rect(50, catY, WIDTH, 22).fill('#e8f5f0').stroke('#c3d9d0');
-        doc.fillColor(GREEN).font('Helvetica-Bold').fontSize(10).text(cat, 60, catY + 6);
-        if (gri) doc.fillColor(GREY).font('Helvetica').fontSize(8).text(gri, 60, catY + 6, { align: 'right', width: WIDTH - 20 });
-        doc.moveDown(1.2);
-
+        y = drawCategoryHeader(doc, margin, WIDTH, y, cat, socialGriMap[cat]);
         for (const r of rows) {
           const val = r.metric_value !== null ? parseFloat(r.metric_value).toString() : (r.metric_text || '—');
-          const rowY2 = doc.y;
-          doc.rect(50, rowY2, WIDTH, 20).fill(LIGHT).stroke('#e5e7eb');
-          doc.fillColor(DARK).font('Helvetica').fontSize(9).text(r.metric_key.replace(/_/g, ' '), 60, rowY2 + 6, { width: WIDTH * 0.6 });
-          doc.fillColor(GREEN).font('Helvetica-Bold').fontSize(9).text(val, 60, rowY2 + 6, { align: 'right', width: WIDTH - 20 });
-          doc.moveDown(1.1);
+          y = drawMetricRow(doc, margin, WIDTH, y, r.metric_key.replace(/_/g, ' '), val, REPORTED_VALUE_BADGE);
         }
-        doc.moveDown(0.3);
+        y += 8;
       }
     }
+    y += 12;
 
-    // ── Governance Metrics ────────────────────────────────────────────────
-    doc.moveDown(1);
-    doc.fillColor(DARK).font('Helvetica-Bold').fontSize(14).text('Governance Metrics');
-    doc.moveDown(0.4);
+    // ── Governance Metrics ───────────────────────────────────────────────
+    y = ds.drawSectionHeader(doc, 'Governance Metrics', y);
 
     if (!govData || !govData.rows.length) {
-      doc.fillColor(GREY).font('Helvetica').fontSize(10).text('No governance data recorded yet.');
+      y = ds.checkPageBreak(doc, y, 16, margin);
+      doc.fillColor(ds.COLORS.gray).font(ds.F('body')).fontSize(10).text('No governance data recorded yet.', margin, y);
+      y += 20;
     } else {
-      doc.fillColor(GREY).font('Helvetica').fontSize(9).text(`Period: ${govData.period}`);
-      doc.moveDown(0.3);
+      y = drawSubLabel(doc, margin, WIDTH, y, `Period: ${govData.period}`);
 
       const govByCategory = {};
       for (const r of govData.rows) {
         if (!govByCategory[r.category]) govByCategory[r.category] = [];
         govByCategory[r.category].push(r);
       }
-
       const govGriMap = { 'Board Composition': 'GRI 102', 'Anti-Bribery & Ethics': 'GRI 205' };
 
       for (const [cat, rows] of Object.entries(govByCategory)) {
-        const gri = govGriMap[cat] || '';
-        const catY = doc.y;
-        doc.rect(50, catY, WIDTH, 22).fill('#eef0f8').stroke('#c5cce0');
-        doc.fillColor('#3b5bdb').font('Helvetica-Bold').fontSize(10).text(cat, 60, catY + 6);
-        if (gri) doc.fillColor(GREY).font('Helvetica').fontSize(8).text(gri, 60, catY + 6, { align: 'right', width: WIDTH - 20 });
-        doc.moveDown(1.2);
-
+        y = drawCategoryHeader(doc, margin, WIDTH, y, cat, govGriMap[cat]);
         for (const r of rows) {
           const val = r.metric_value !== null ? parseFloat(r.metric_value).toString() : (r.metric_text || '—');
-          const rowY2 = doc.y;
-          doc.rect(50, rowY2, WIDTH, 20).fill(LIGHT).stroke('#e5e7eb');
-          doc.fillColor(DARK).font('Helvetica').fontSize(9).text(r.metric_key.replace(/_/g, ' '), 60, rowY2 + 6, { width: WIDTH * 0.6 });
-          doc.fillColor('#3b5bdb').font('Helvetica-Bold').fontSize(9).text(val, 60, rowY2 + 6, { align: 'right', width: WIDTH - 20 });
-          doc.moveDown(1.1);
+          y = drawMetricRow(doc, margin, WIDTH, y, r.metric_key.replace(/_/g, ' '), val, REPORTED_VALUE_BADGE);
         }
-        doc.moveDown(0.3);
+        y += 8;
       }
     }
 
     // ── Footer ────────────────────────────────────────────────────────────
-    doc.moveDown(2);
-    doc.moveTo(50, doc.y).lineTo(50 + WIDTH, doc.y).stroke(GREY);
-    doc.moveDown(0.4);
-    doc.fillColor(GREY).font('Helvetica').fontSize(8)
+    y = ds.checkPageBreak(doc, y, 40, margin);
+    y += 8;
+    doc.moveTo(margin, y).lineTo(margin + WIDTH, y).lineWidth(0.75).strokeColor(ds.COLORS.border).stroke();
+    y += 12;
+    doc.fillColor(ds.COLORS.gray).font(ds.F('body')).fontSize(8)
        .text(
          `This report was generated by the ClearTrace ESG Intelligence Platform. ` +
          `Emission factors: ${factorFooter}. ` +
          `© ${year} ClearTrace`,
-         50, doc.y, { align: 'center', width: WIDTH }
+         margin, y, { align: 'center', width: WIDTH }
        );
 
     doc.end();
