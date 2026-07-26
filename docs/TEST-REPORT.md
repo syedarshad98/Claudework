@@ -576,4 +576,218 @@ not investigated further here, not a numbered finding.
 | 7 | `routes/brsr.js:658-685` auto-stamps BRSR P6's `emission_factor_source` disclosure field with the same class of stale data as the original finding #3 — a hardcoded `'DEFRA 2023 (0.20493 kg CO₂e/kWh)'` string for UK-jurisdiction companies, and the (unchanged) `CEA_FACTORS`/`UAE_FACTORS` vintages for IN/AE. Surfaced during this pass's Step 1/3 investigation, not part of the original six. | **Tracked, reserved for the BRSR redesign workstream** — not fixed now, not forgotten. `routes/brsr.js` is BRSR-module code, not the general emissions-entry path this Phase 2 pass scoped itself to; fixing it here would mean reaching into a module earmarked for its own redesign rather than patching it piecemeal. Revisit alongside that workstream, using the same live-resolver pattern (`lib/factor-preview.js`/`resolveRegionFactor()`) finding #3 used. |
 
 **Phase 2 is closed.** Finding #7 is carried forward, untouched, reserved
-for the BRSR redesign workstream. **Phase 3 not started, per instructions.**
+for the BRSR redesign workstream.
+
+---
+
+## Phase 3: Data Integrity
+
+**Date:** 2026-07-26. **Scope:** every foreign-key relationship declared
+across `schema.sql` and all 18 migration files, tested live against a real
+PostgreSQL instance — not inferred from reading the SQL. Reframed from
+"tenant isolation" per your instruction: Phase 1's remediation already
+covered cross-tenant IDOR across all 18 routers; this phase is about the
+database's own referential integrity, a different question. **Report-only
+pass — no fixes.**
+
+### Step 1 — foreign-key map
+
+Every `REFERENCES` clause in the codebase, plus every same-named column
+that looks like a relationship but isn't declared as one.
+
+| Table.column | References | Constraint declared? | ON DELETE |
+|---|---|---|---|
+| `users.company_id` | `companies(id)` | Yes | CASCADE |
+| `emissions_entries.company_id` | `companies(id)` | Yes | CASCADE |
+| `emissions_entries.user_id` | `users(id)` | Yes | **undeclared → NO ACTION (blocks)** |
+| `emissions_entries.factor_source` | *(`emission_factors.factor_source_id`, logically)* | **No — plain TEXT, zero constraint** | n/a |
+| `framework_status.company_id` | `companies(id)` | Yes | CASCADE |
+| `audit_log.company_id` | `companies(id)` | Yes | CASCADE |
+| `audit_log.user_id` | `users(id)` | Yes | SET NULL |
+| `audit_log.record_id` | *(polymorphic — `record_type` selects the table)* | **No — can't be, by necessity** | n/a |
+| `validation_flags.company_id` | `companies(id)` | Yes | CASCADE |
+| `validation_flags.entry_id` | `emissions_entries(id)` | Yes | CASCADE |
+| `validation_flags.reviewed_by` | `users(id)` | Yes | SET NULL |
+| `locked_periods.company_id` | `companies(id)` | Yes | CASCADE |
+| `locked_periods.locked_by` | `users(id)` | Yes | SET NULL |
+| `water_metrics.company_id` / `waste_metrics.company_id` | `companies(id)` | Yes | CASCADE |
+| `water_metrics.entered_by` / `waste_metrics.entered_by` | `users(id)` | Yes | SET NULL |
+| `social_metrics.company_id` / `governance_metrics.company_id` | `companies(id)` | Yes | CASCADE |
+| `social_metrics.entered_by` / `governance_metrics.entered_by` | `users(id)` | Yes | SET NULL |
+| `team_invites.company_id` | `companies(id)` | Yes | CASCADE |
+| `team_invites.invited_by` | `users(id)` | Yes | CASCADE *(deletes the invite, not the inviter)* |
+| `baseline_emissions.company_id` | `companies(id)` | Yes | CASCADE |
+| `pending_invites.company_id` | `companies(id)` | Yes | CASCADE |
+| `company_recommendations.company_id` | `companies(id)` | Yes | CASCADE |
+| `company_recommendations.recommendation_id` | `recommendation_library(id)` | Yes | CASCADE |
+| `company_recommendations.updated_by` | `users(id)` | Yes | SET NULL |
+| `brsr_submissions.company_id` | `companies(id)` | Yes | CASCADE |
+| `brsr_submissions.submitted_by` / `.locked_by` | `users(id)` | Yes | **undeclared → NO ACTION (blocks)** |
+| `brsr_evidence_vault.company_id` | `companies(id)` | Yes | CASCADE |
+| `brsr_evidence_vault.submission_id` | `brsr_submissions(id)` | Yes | CASCADE |
+| `brsr_evidence_vault.uploaded_by` | `users(id)`, NOT NULL | Yes | **undeclared → NO ACTION (blocks)** |
+| `brsr_period_locks.company_id` | `companies(id)` | Yes | CASCADE |
+| `brsr_period_locks.submission_id` | `brsr_submissions(id)` | Yes | CASCADE |
+| `brsr_period_locks.actioned_by`, NOT NULL / `.locked_by`, `.unlock_requested_by` (nullable) | `users(id)` | Yes | **undeclared → NO ACTION (blocks)** |
+| `brsr_lock_audit.submission_id` | `brsr_submissions(id)` | Yes | CASCADE |
+| `brsr_lock_audit.performed_by` | `users(id)`, NOT NULL | Yes | **undeclared → NO ACTION (blocks)** |
+| `brsr_section_a.company_id` / `brsr_p6_environment.company_id` | `companies(id)` | Yes | CASCADE |
+| `brsr_section_a.submission_id` / `brsr_p6_environment.submission_id` | `brsr_submissions(id)` | Yes | CASCADE |
+| `brsr_section_a.entered_by` / `brsr_p6_environment.entered_by` | `users(id)`, NOT NULL | Yes | **undeclared → NO ACTION (blocks)** |
+| `brsr_p1_ethics` / `p2_products` / `p4_stakeholders` / `p7_policy` / `p8_growth` / `p9_consumers` — `.company_id` | `companies(id)` | Yes | CASCADE |
+| — same tables — `.submission_id` (all `UNIQUE`) | `brsr_submissions(id)` | Yes | CASCADE |
+| — same tables — `.entered_by` (nullable) | `users(id)` | Yes | **undeclared → NO ACTION (blocks)** |
+| `brsr_p3_employees.company_id` / `.submission_id` | `companies(id)` / `brsr_submissions(id)` | Yes | CASCADE |
+| `brsr_p3_employees.entered_by`, NOT NULL | `users(id)` | Yes | **undeclared → NO ACTION (blocks)** |
+| `brsr_p5_humanrights.company_id` / `.submission_id` (UNIQUE) | `companies(id)` / `brsr_submissions(id)` | Yes | CASCADE |
+| `brsr_p5_humanrights.entered_by` (nullable) | `users(id)` | Yes | **undeclared → NO ACTION (blocks)** |
+| `brsr_section_b.company_id` / `.submission_id` | `companies(id)` / `brsr_submissions(id)` | Yes | CASCADE |
+| `brsr_section_b.entered_by`, NOT NULL | `users(id)` | Yes | **undeclared → NO ACTION (blocks)** |
+| `benchmark_data`, `recommendation_library` | *(no `company_id` at all — global lookup tables)* | n/a | n/a |
+| `emission_factors` | *(nothing references it via a declared FK)* | n/a | n/a |
+
+**Every `company_id` column CASCADEs.** No exceptions found. **Every
+`*_by`/`entered_by`/`uploaded_by` column that specifies `ON DELETE` uses
+`SET NULL`** (audit-style columns — `reviewed_by`, `locked_by` on
+`locked_periods`, `entered_by` on the metrics tables, `updated_by`). **Every
+`*_by` column that omits `ON DELETE` entirely — 15 columns across
+`emissions_entries` and 11 BRSR tables — defaults to Postgres's `NO ACTION`,
+which blocks the delete rather than nulling or cascading.** That's not
+"silently NO ACTION with no thought behind it" in the sense of being
+inconsistent — it's the single largest pattern in the schema, applied
+uniformly to every "who did this" column added across nine different
+migration files by nine different authors/sessions, none of whom declared
+an explicit behavior. Whether that's the *intended* behavior is a separate
+question from whether it's *declared* — see Step 2.
+
+`emissions_entries.factor_source` is the one relationship that's real in
+the application's logic (Phase 2 established the whole "frozen history"
+guarantee depends on it staying a snapshot) but has **zero** DB-level
+enforcement — not because someone forgot, but because `emission_factors.
+factor_source_id` isn't a unique/PK column (the same id, e.g. `'defra-2023'`,
+is reused across many rows for different categories), so Postgres
+structurally couldn't accept an FK there even if one were declared. This
+is a deliberate design outcome, not an oversight — but it does mean nothing
+in the database stops the live `emission_factors` table from losing a row
+that history refers to by label. Tested in Step 2.
+
+### Step 2 — live cascade/orphan testing
+
+All three tests run against a disposable test tenant (`FK Test Co`,
+populated across every child table), not the seeded demo companies.
+
+**1. Delete a company.** `DELETE FROM companies WHERE id=3` — clean, no
+error. Verified with an explicit before/after row count across 9
+representative child tables (`users`, `emissions_entries`,
+`framework_status`, `water_metrics`, `baseline_emissions`, `team_invites`,
+`brsr_submissions`, `brsr_section_a`, `brsr_p6_environment`): every one
+went from its populated count to exactly `0`. **No orphans, no blocking —
+company deletion cascades correctly end to end**, including through the
+BRSR tables that didn't exist when `schema.sql` was first written.
+
+One caveat, not a DB-integrity bug but adjacent to "evidence attachments"
+specifically: `DELETE /api/brsr/evidence/:evidenceId` (`routes/brsr-
+evidence.js:140-173`) removes the file from Supabase Storage *before*
+deleting the DB row — but that cleanup is application code, not a DB
+trigger. A `DELETE FROM companies` (or a cascade into
+`brsr_evidence_vault` from any other direction) removes the **database
+row** for any evidence the company had, but never calls Supabase to delete
+the **actual file** — it can't; SQL cascades don't make HTTP calls. Today
+this is dormant risk rather than an active bug, because **there is no
+`DELETE /api/company` endpoint anywhere in the app** — company deletion is
+only possible via direct database access, which is exactly how this test
+performed it. If that ever changes, or if anyone deletes a company directly
+against the database with evidence files attached, those files become
+permanently orphaned in external storage with nothing in ClearTrace aware
+they still exist.
+
+**2. Delete a user with existing emissions entries / BRSR submissions
+attributed to them.** Realistic scenario: company continues to exist, an
+admin removes a team member via `DELETE /api/team/:userId`
+(`routes/team.js:150-170`), the target user has logged one emissions entry
+and is `brsr_submissions.submitted_by` on one submission.
+
+Result: **blocked**, both times, independently:
+```
+DELETE /api/team/:userId error: update or delete on table "users" violates
+foreign key constraint "emissions_entries_user_id_fkey" on table "emissions_entries"
+```
+surfaced to the admin as `500 {"error":"Failed to remove user"}` — no
+indication of why, no path to resolve it from the app. Removed the blocking
+emissions entry and retried: blocked again, this time by
+`brsr_submissions_submitted_by_fkey`, same generic `500`. **Every one of
+the 15 undeclared-`ON DELETE` columns from Step 1 is a live, independent
+way for this exact failure to happen** — any user who has ever logged an
+entry or touched any BRSR section becomes permanently un-removable from
+their team through the app, full stop, with no error message that would
+tell an admin why or what to do about it.
+
+Note the scope of this: it only blocks removing a user **while their
+company continues to exist**. Deleting the whole company (test 1, above)
+cascades through `users` too — by the time Postgres gets to the `users`
+row, everything that was blocking its deletion has already been cascaded
+away by the company-level `CASCADE`, so there's no conflict. The bug is
+specific to the "remove one team member, keep the company" path, which is
+also the only one the app actually exposes.
+
+**3. Delete an `emission_factors` row that historical entries reference
+via `factor_source_id`.** Per Step 1, nothing stops this — confirmed live.
+Created a real entry through the resolver (`id=140`, GB Grid Electricity,
+`emission_factor=0.143960`, `factor_source='defra-2026'`), then
+`DELETE FROM emission_factors WHERE id=28` (the exact row that resolved
+it) — **succeeded immediately, no error, no warning.** Two effects,
+checked separately:
+- Entry `140`'s own stored `emission_factor`/`factor_source`/`co2e_tonnes`
+  were **completely unchanged** — the frozen-history guarantee holds, but
+  because of the snapshot-on-write design (Phase 2), not because anything
+  in the database stopped the delete.
+- A **new** GB Grid Electricity submission, immediately after, failed with
+  `400 "No emission factor is available for category \"Grid Electricity
+  (UK)\" in region \"GB\"."` — every GB tenant's grid-electricity logging
+  was broken app-wide, silently, with nothing in the schema, a migration,
+  or an audit trail to explain why, until someone noticed the 400s and
+  traced it back. Restored the row immediately
+  (`region_factors_2026_patch_migration.sql` is idempotent — re-running it
+  re-inserted the exact same row) and confirmed resolution working again
+  before continuing.
+
+### Step 3 — orphan scan on current live data
+
+Independent of the deletion tests above — scanned every relationship from
+Step 1 against the database as it stands today (65 checks: every declared
+FK's column, plus the one undeclared one).
+
+**Every declared-constraint relationship: zero orphans**, across all 65
+checks — expected, since Postgres enforces these regardless of application
+code, but confirmed rather than assumed (full query and results captured
+in-session).
+
+**One real, already-existing orphan pattern found — the one relationship
+Step 1 flagged as unconstrained:**
+`emissions_entries.factor_source (unconstrained)` → **138 rows** whose
+`factor_source` value doesn't match any `factor_source_id` in the live
+`emission_factors` table. Traced to exactly the two seeded demo companies:
+`GreenTech Solutions Ltd` (84 rows) and `Verdant Group` (54 rows), both
+carrying the legacy label `'DEFRA 2023'` — a human-readable string from
+before the region-aware `emission_factors` table existed, never matching
+the machine-readable IDs (`'defra-2023'`, `'defra-2026'`, …) that table
+actually uses. A freshly-resolver-created entry in the same database
+(`factor_source='defra-2026'`) is correctly **not** counted — the scan
+distinguishes real matches from stale ones precisely. Functionally
+harmless today (nothing in the app joins on this column at runtime — it's
+read and displayed, never looked up), but it is a genuine, silent,
+already-existing inconsistency in the current data, exactly the kind Step
+3 was designed to surface.
+
+### Findings, ranked by severity
+
+| # | Severity | Finding |
+|---|---|---|
+| 1 | **High** | **`emission_factors` rows have zero delete protection.** No FK references this table from anywhere (structurally can't, since `factor_source_id` isn't unique). A single `DELETE` — a bad migration, a manual DB fix gone wrong, compromised DB access — silently breaks live factor resolution for an entire category/region, app-wide, for every tenant, with no error and nothing in any audit trail pointing at the cause. Live-verified: deleting the current GB Grid Electricity row broke every new GB grid-electricity submission instantly while leaving history untouched, which is the deceptive part — the one signal that would normally reveal a data problem (existing rows changing) never fires. |
+| 2 | **Medium** | **A user who has ever logged an emissions entry or touched any BRSR workflow can never be removed from their team through the app.** 15 columns across `emissions_entries` and 11 BRSR tables omit `ON DELETE`, defaulting to Postgres's `NO ACTION`. `DELETE /api/team/:userId` has no pre-check, so the admin gets a raw, unhelpful `500 {"error":"Failed to remove user"}` with no indication of which of 15 possible constraints fired or how to resolve it. In practice this affects nearly every active user, since logging one entry or touching BRSR once is enough to trigger it permanently. |
+| 3 | **Medium** | **BRSR evidence files in Supabase Storage aren't cleaned up by any DB-level cascade** — only `DELETE /api/brsr/evidence/:evidenceId`'s own application code does that. Since company deletion has no app endpoint at all (only reachable via direct DB access, as this test used), this is dormant today but becomes a real orphan-file risk the moment company deletion is exposed any other way. |
+| 4 | **Low** | **138 existing rows (both seeded demo tenants) already carry an orphaned `factor_source` label** (`'DEFRA 2023'`) that matches nothing in the live `emission_factors` table — confirmed via live orphan scan, not inferred. Harmless today (display-only field), but a real, pre-existing data-quality gap, not a hypothetical one. |
+| 5 | **Info** | Two structurally near-identical tables exist for pending team invitations — `team_invites` (`team_migration.sql`) and `pending_invites` (`onboarding_migration.sql`) — both `company_id`-scoped, serving overlapping purposes from two different onboarding paths. Not itself an integrity bug, but doubles the surface area for the same class of reasoning this phase covers. |
+| — | **Positive** | Company deletion — the single most consequential cascade in the schema — is completely correct: every one of 27 child tables (companies' full dependency graph) cascades cleanly with zero orphans, verified live, not assumed from the `ON DELETE CASCADE` clauses alone. |
+
+**Phase 4 not started, per instructions.**
