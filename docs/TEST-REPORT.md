@@ -526,6 +526,25 @@ unweakened — a manually crafted request with a spoofed `emission_factor:
 unaffected by anything touched this pass (`decideFactor()` itself was never
 modified). Full suite: **41/41 passing**, no regressions.
 
+**Confirmed no other consumer of `GET /api/emission-factors` exists,
+before treating the response-shape change as safe.** Grepped the whole
+repository — not just `dashboard.js` — for every reference to
+`emission-factors`, including case-insensitive `fetch(`/`axios` patterns,
+across `.js`, `.html`, `.md`, `.json`, `.toml`, `.sh` files, the backend
+`tests/` and `scripts/` directories, root-level configs, and the unrelated
+`backend/`/`frontend/` OpsCommand app. The only functional caller anywhere
+is `dashboard.js`'s own `loadLiveFactors()` — written in this same pass.
+One incidental hit: the stray root-level patch file
+`cleartrace-uae-scope3 2.txt` (already noted in `CLAUDE.md`'s C12 as a
+committed `git diff` against `db/emission_factors.js`, not source) touches
+the `emission_factors.js` *module* in its diff text, but has no connection
+to the HTTP endpoint and isn't executed or consumed by anything — dead
+text, not a caller. The shape change is safe by construction regardless:
+without `?region=`, the response is byte-identical to the old behavior
+(same raw `DEFRA_FACTORS` object) — no pre-existing caller could have been
+relying on the new `?region=` path, since the endpoint never read
+`req.query` before this pass.
+
 **Step 3 — finding #5 fixed (narrowed per your decision).** Confirmed via
 grep that `lookupFactor()` has zero callers anywhere and deleted it.
 `CEA_FACTORS`/`UAE_FACTORS` are kept — `routes/brsr.js` is a real caller —
@@ -539,20 +558,12 @@ still load and resolve correctly.
 **Step 4 — finding #6 left as-is.** No code touched. Remains tracked tied
 to finding #2 in the table below, not separately decided or actioned.
 
-**New finding surfaced during Step 1/3 investigation, not part of the
-original six:** `routes/brsr.js:658-685` auto-stamps BRSR P6's
-`emission_factor_source` disclosure field with the same class of stale data
-as the original finding #3 — a hardcoded `'DEFRA 2023 (0.20493 kg CO₂e/kWh)'`
-string for UK-jurisdiction companies, and `CEA_FACTORS`/`UAE_FACTORS`
-(unchanged, still 2023/current-at-migration-time vintage) for IN/AE. Not
-fixed in this pass — flagging it now so it isn't lost, same discipline as
-every other finding in this document. Also unrelated and pre-existing,
-noticed only because it errors on the same requests exercised while
-verifying this fix: `GET /api/onboarding/status` 500s with `column
-"industry_sector" does not exist` — a schema/route mismatch with no
-connection to emission factors, not investigated further here.
+Also noted while verifying this fix, unrelated and pre-existing:
+`GET /api/onboarding/status` 500s with `column "industry_sector" does not
+exist` — a schema/route mismatch with no connection to emission factors,
+not investigated further here, not a numbered finding.
 
-### Phase 2 — all 6 original findings, final status
+### Phase 2 — all findings, final status
 
 | # | Finding | Final status |
 |---|---|---|
@@ -562,7 +573,7 @@ connection to emission factors, not investigated further here.
 | 4 | Diesel reference value (~258) didn't match the system's actual output (251.92) | **Confirmed not a bug** — the reference was a stale figure in the test script itself; closed with no code change. |
 | 5 | Dead code (`lookupFactor()`, `CEA_FACTORS`, `UAE_FACTORS`) | **Fixed, narrowed on investigation** — `lookupFactor()` deleted (genuinely zero callers); `CEA_FACTORS`/`UAE_FACTORS` kept, since `routes/brsr.js` is a real caller that deletion would have broken. |
 | 6 | Two coexisting flight calculation paths (legacy flat vs. new banded) | **Tracked with #2** — not separately actioned; resolves naturally once #2's UI work decides whether to expose or deprecate the legacy categories. |
+| 7 | `routes/brsr.js:658-685` auto-stamps BRSR P6's `emission_factor_source` disclosure field with the same class of stale data as the original finding #3 — a hardcoded `'DEFRA 2023 (0.20493 kg CO₂e/kWh)'` string for UK-jurisdiction companies, and the (unchanged) `CEA_FACTORS`/`UAE_FACTORS` vintages for IN/AE. Surfaced during this pass's Step 1/3 investigation, not part of the original six. | **Tracked, reserved for the BRSR redesign workstream** — not fixed now, not forgotten. `routes/brsr.js` is BRSR-module code, not the general emissions-entry path this Phase 2 pass scoped itself to; fixing it here would mean reaching into a module earmarked for its own redesign rather than patching it piecemeal. Revisit alongside that workstream, using the same live-resolver pattern (`lib/factor-preview.js`/`resolveRegionFactor()`) finding #3 used. |
 
-**Phase 2 is closed.** One new finding (BRSR P6's own stale factor-source
-stamp, `routes/brsr.js:658-685`) is carried forward, untouched, for a future
-pass. **Phase 3 not started, per instructions.**
+**Phase 2 is closed.** Finding #7 is carried forward, untouched, reserved
+for the BRSR redesign workstream. **Phase 3 not started, per instructions.**
