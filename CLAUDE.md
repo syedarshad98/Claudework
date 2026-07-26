@@ -733,4 +733,42 @@ that file. It is a stray artifact, not source.
   `lib/vehicle-fuel.js` (fuel-type → factor-category mapping) are exactly
   that, added in Step 3. `lib/entry-method.js` is the shared dispatch point
   both routes/emissions.js and routes/upload.js call before decideFactor.
+- Flight and vehicle-fuel factor rows are no longer placeholder data —
+  `factor_source_id` is `defra-2026` (real DESNZ figures), not
+  `defra-flight-placeholder-2026`. Any doc text still describing the flight
+  table as unverified placeholder is now stale.
+- §5 rewrite (the standing promise above) can now proceed: the calculation
+  subsystems it needs to describe — `lib/flights.js`, `lib/vehicle-fuel.js`,
+  `lib/entry-method.js`, `lib/decide-factor.js`, `lib/factor-resolver.js`,
+  `lib/units.js` — are stable, not mid-change. Not rewritten in this pass
+  (close-out was scoped to "no new logic"); do it as its own pass.
+
+## CLOSURE NOTE — four originally-scoped bugs, closed with verified 2026 data
+
+For future reference if asked when this was fixed. All four bugs named at
+the start of this work are closed as of commit `e51a049`:
+
+1. **Client-supplied factor override** — `routes/emissions.js` honoured a
+   client-sent `emission_factor`, letting a caller dictate its own number.
+   Fixed: server-authoritative resolution (`lib/decide-factor.js`), client
+   values discarded and logged.
+2. **UK-first factor engine, silent region fallback, unit-mismatch near-zero
+   figures** — one hardcoded UK table, no unit reconciliation (10,000 L and
+   10 m³ of water gave a 1000× different answer). Fixed: region-aware
+   `emission_factors` DB table with a never-silent fallback chain
+   (`lib/factor-resolver.js`) and unit normalization before every multiply
+   (`lib/units.js`).
+3. **Vehicles distance-only** — no way to log fuel consumed instead of
+   distance driven. Fixed: fuel-basis method (`lib/vehicle-fuel.js`),
+   resolving against the same fuel-combustion rows Step 2 already
+   populated — no duplicate diesel/petrol data anywhere.
+4. **Flight calculation flat, and banded by tenant region instead of
+   route** — no banding, no cabin class, and (found during Step 3) UK
+   route-type naming was keyed to `company.region` instead of the actual
+   route. Fixed: `lib/flights.js` classifies by `touches_uk` /
+   `both_endpoints_uk`, independent of company region, banded/factored
+   against real DESNZ 2026 figures (`defra-2026`).
+
+Verified end-to-end against a real PostgreSQL instance at each step, not
+just the test stub. Full regression suite: 39/39 passing.
 
