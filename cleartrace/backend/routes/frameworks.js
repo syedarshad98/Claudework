@@ -1,6 +1,7 @@
-const express = require('express');
-const router  = express.Router();
-const db      = require('../db/database');
+const express     = require('express');
+const router      = express.Router();
+const db          = require('../db/database');
+const requireRole = require('../middleware/roles');
 
 // GET /api/frameworks
 router.get('/', async (req, res) => {
@@ -18,7 +19,7 @@ router.get('/', async (req, res) => {
 
 // PATCH /api/frameworks/:framework
 // Updates status for a given framework (GRI, TCFD, SASB, LOCAL)
-router.patch('/:framework', async (req, res) => {
+router.patch('/:framework', requireRole('admin', 'editor'), async (req, res) => {
   const framework = req.params.framework.toUpperCase();
   const { status, details } = req.body;
 

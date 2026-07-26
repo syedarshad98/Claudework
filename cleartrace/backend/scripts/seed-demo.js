@@ -11,6 +11,7 @@
  */
 
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const fs     = require('fs');
 const path   = require('path');
 
@@ -103,9 +104,12 @@ async function seedDemo(db) {
     await runMigrations(client);
 
     // ── 1. Company ──────────────────────────────────────────────────────────
+    // is_demo is set on this same INSERT (not left to demo_migration.sql's
+    // name-based UPDATE, which runs above via runMigrations() — before this
+    // row exists — and would otherwise match zero rows on a fresh database).
     const coRes = await client.query(
-      `INSERT INTO companies (name, industry, onboarding_complete, target_year, reduction_target_pct, alignment_standard)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO companies (name, industry, onboarding_complete, target_year, reduction_target_pct, alignment_standard, is_demo)
+       VALUES ($1, $2, $3, $4, $5, $6, true)
        RETURNING id`,
       ['Verdant Group', 'Professional Services', true, 2030, 45.00, 'SBTi']
     );
@@ -113,7 +117,11 @@ async function seedDemo(db) {
     console.log(`✓ Company created: Verdant Group (id: ${companyId})`);
 
     // ── 2. Users ────────────────────────────────────────────────────────────
-    const PASSWORD_HASH = await bcrypt.hash('Demo1234!', 10);
+    // Never a static, published plaintext password — DEMO_SEED_PASSWORD if
+    // the operator set one, otherwise a random password generated for this
+    // run and printed once below (not persisted anywhere in the repo).
+    const demoPassword  = process.env.DEMO_SEED_PASSWORD || crypto.randomBytes(9).toString('base64url');
+    const PASSWORD_HASH = await bcrypt.hash(demoPassword, 10);
 
     const usersToInsert = [
       { name: 'Sarah Mitchell', email: 'admin@verdantgroup.com',  role: 'admin'  },
@@ -469,12 +477,13 @@ async function seedDemo(db) {
     console.log('✓ Company target confirmed (−45% by 2030, SBTi)');
 
     await client.query('COMMIT');
+    const passwordNote = process.env.DEMO_SEED_PASSWORD ? '' : ' (generated — set DEMO_SEED_PASSWORD to pin it)';
     console.log('\n──────────────────────────────────────────────');
     console.log('Demo seeding complete.');
     console.log('');
-    console.log(`Admin:  admin@verdantgroup.com  / Demo1234!`);
-    console.log(`Editor: editor@verdantgroup.com / Demo1234!`);
-    console.log(`Viewer: viewer@verdantgroup.com / Demo1234!`);
+    console.log(`Admin:  admin@verdantgroup.com  / ${demoPassword}${passwordNote}`);
+    console.log(`Editor: editor@verdantgroup.com / ${demoPassword}${passwordNote}`);
+    console.log(`Viewer: viewer@verdantgroup.com / ${demoPassword}${passwordNote}`);
     console.log('──────────────────────────────────────────────\n');
 
   } catch (err) {

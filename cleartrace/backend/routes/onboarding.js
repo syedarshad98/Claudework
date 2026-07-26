@@ -1,8 +1,9 @@
-const express = require('express');
-const router  = express.Router();
-const fs      = require('fs');
-const path    = require('path');
-const db      = require('../db/database');
+const express     = require('express');
+const router      = express.Router();
+const fs          = require('fs');
+const path        = require('path');
+const db          = require('../db/database');
+const requireRole = require('../middleware/roles');
 
 // Run onboarding migration lazily on first use
 let migrated = false;
@@ -72,7 +73,7 @@ router.get('/status', async (req, res) => {
 });
 
 // PUT /api/onboarding/profile  â Step 1
-router.put('/profile', async (req, res) => {
+router.put('/profile', requireRole('admin', 'editor'), async (req, res) => {
   await ensureMigrated();
   const { name, industry, country, employeeCount, jurisdiction } = req.body;
 
@@ -102,7 +103,7 @@ router.put('/profile', async (req, res) => {
 });
 
 // PUT /api/onboarding/reporting  â Step 2
-router.put('/reporting', async (req, res) => {
+router.put('/reporting', requireRole('admin', 'editor'), async (req, res) => {
   await ensureMigrated();
   const { financialYearStart, frameworks } = req.body;
   // frameworks: array of { framework: 'GRI'|'TCFD'|'SASB'|'LOCAL', selected: true/false }
@@ -142,7 +143,7 @@ router.put('/reporting', async (req, res) => {
 });
 
 // PUT /api/onboarding/baseline  â Step 3 (optional)
-router.put('/baseline', async (req, res) => {
+router.put('/baseline', requireRole('admin', 'editor'), async (req, res) => {
   await ensureMigrated();
   const { baseline, year } = req.body;
   // baseline: [{ scope: 1, co2e_tonnes: 120.5 }, ...]
@@ -174,7 +175,7 @@ router.put('/baseline', async (req, res) => {
 });
 
 // PUT /api/onboarding/targets  â Step 4
-router.put('/targets', async (req, res) => {
+router.put('/targets', requireRole('admin', 'editor'), async (req, res) => {
   await ensureMigrated();
   const { reductionTargetPct, targetYear, alignmentStandard } = req.body;
 
@@ -208,7 +209,7 @@ router.put('/targets', async (req, res) => {
 });
 
 // PUT /api/onboarding/invites  â Step 5
-router.put('/invites', async (req, res) => {
+router.put('/invites', requireRole('admin', 'editor'), async (req, res) => {
   await ensureMigrated();
   const { invites } = req.body;
   // invites: [{ email: '...', role: 'editor'|'viewer'|'admin' }]
@@ -239,7 +240,7 @@ router.put('/invites', async (req, res) => {
 });
 
 // POST /api/onboarding/complete  â Mark onboarding done
-router.post('/complete', async (req, res) => {
+router.post('/complete', requireRole('admin', 'editor'), async (req, res) => {
   await ensureMigrated();
   try {
     await db.query(

@@ -1,6 +1,7 @@
 require('dotenv').config();
 const fs     = require('fs');
 const path   = require('path');
+const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const db     = require('./database');
 
@@ -8,6 +9,11 @@ async function seed() {
   // Run schema first
   const sql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
   await db.query(sql);
+
+  // is_demo normally arrives via demo_migration.sql, which this script does
+  // not run — add it here too so the flag can be set on the INSERT below,
+  // before any request can be served against a row that isn't flagged yet.
+  await db.query('ALTER TABLE companies ADD COLUMN IF NOT EXISTS is_demo BOOLEAN DEFAULT false');
 
   // Check if demo company already exists
   const exists = await db.query(
@@ -19,15 +25,19 @@ async function seed() {
     return;
   }
 
-  // Create demo company
+  // Create demo company — is_demo is set on the same INSERT so demoGuard
+  // blocks its writes from the first request onward, not after a later boot.
   const compRes = await db.query(
-    "INSERT INTO companies (name, industry, country) VALUES ($1, $2, $3) RETURNING id",
+    "INSERT INTO companies (name, industry, country, is_demo) VALUES ($1, $2, $3, true) RETURNING id",
     ['GreenTech Solutions Ltd', 'Manufacturing', 'United Kingdom']
   );
   const companyId = compRes.rows[0].id;
 
-  // Create demo admin user  (password: demo1234)
-  const hash = await bcrypt.hash('demo1234', 12);
+  // Demo credential: never a static, published plaintext password. Use
+  // DEMO_SEED_PASSWORD if the operator set one, otherwise generate a random
+  // one for this run and print it once (not persisted anywhere in the repo).
+  const password = process.env.DEMO_SEED_PASSWORD || crypto.randomBytes(9).toString('base64url');
+  const hash = await bcrypt.hash(password, 12);
   const userRes = await db.query(
     "INSERT INTO users (company_id, email, password_hash, role) VALUES ($1, $2, $3, 'admin') RETURNING id",
     [companyId, 'demo@cleartrace.io', hash]
@@ -123,7 +133,7 @@ async function seed() {
   console.log('Demo seed complete.');
   console.log('  Company : GreenTech Solutions Ltd');
   console.log('  Email   : demo@cleartrace.io');
-  console.log('  Password: demo1234');
+  console.log(`  Password: ${password}${process.env.DEMO_SEED_PASSWORD ? '' : ' (generated — set DEMO_SEED_PASSWORD to pin it)'}`);
   await db.end();
 }
 

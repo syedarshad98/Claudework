@@ -190,4 +190,61 @@ Everything else tested in Step 1 — unauthenticated access (18/18 correctly
 IDOR on `emissions`, `team`, `brsr`, and `brsr-evidence` (all correctly
 404/403 with no data leaked or altered) — passed.
 
+### Extended audit — deeper IDOR coverage and isolated auth-dependency test
+
+**Date:** 2026-07-26 (same day, follow-up pass). Branch consolidated onto
+`claude/cleartrace-pdf-redesign-t5r7qq` per instruction — the separate
+`claude/test-report-phase-1-xnjoas` branch was fast-forward merged into it
+and is no longer used.
+
+**Extended cross-tenant IDOR test, all remaining routers.** Priority given
+to `/api/frameworks`, `/api/onboarding`, `/api/company`, `/api/recommendations`
+(the four that had just failed the role-check test, on the theory that a
+missing role check and missing tenant check are the same class of bug).
+Live-tested cross-tenant access on every router with a real sub-resource id
+(`recommendations/:id/status`, `validation/flags/:id`,
+`validation/locked/:period`) and compared scoped output between two tenants
+for every router without one (`kpi`, `charts`, `targets`, `benchmarking`,
+`report`, `social`/`governance`/`water`/`waste`). **Result: no new
+cross-tenant IDOR found.** `frameworks`, `onboarding`, and `company` have no
+foreign-row-id attack surface at all — every write targets `req.companyId`
+directly with nothing to substitute. `recommendations` and `validation`
+both correctly scope with `WHERE id=$n AND company_id=$m`; live cross-tenant
+attempts returned `404`. One non-security quirk found:
+`DELETE /api/validation/locked/:period` against another tenant's period
+returns `200 {"unlocked":true}` (the query has no matching row, so it's a
+silent no-op) instead of `404` — misleading response, not a data leak; not
+fixed in this pass since it wasn't in scope.
+
+**Auth-dependency fail-open/closed test, isolated from the emissions crash
+bug.** `middleware/auth.js` (JWT verification) and `middleware/roles.js`
+(`requireRole`) were confirmed to have **zero external dependency** — both
+are synchronous, in-memory checks. Live-tested during a real DB outage:
+unauthenticated and tampered-JWT requests still correctly returned `401`.
+They cannot fail open because they have nothing to fail open on.
+`middleware/demoGuard.js` is the only auth-adjacent middleware with a real
+dependency (its `is_demo` DB lookup). To test it without the confound of
+the (now-fixed) emissions crash, the same live-outage test was re-run
+against `/api/team/invite` — a fully try/catch-wrapped handler unrelated to
+`isPeriodLocked()`. Result: the demo-flagged tenant's write was **not**
+blocked with the normal `403 Demo mode` — it proceeded past the guard and
+only failed later, cleanly, at its own DB call (`500`). Confirms
+`demoGuard` fails open on its own dependency as an independent fact, not
+merely as a side effect of finding #2.
+
+### Remediation pass
+
+All fixes below were verified against a live PostgreSQL instance with the
+same reproduction steps that originally found each bug — reproduce first,
+apply the fix, re-run the identical test, confirm the result flips.
+
+| # | Finding | Status | Verification |
+|---|---|---|---|
+| 1 | `demo@cleartrace.io` never `is_demo`-flagged; static plaintext password committed in the repo | **Fixed** | `db/seed.js` and `scripts/seed-demo.js` now set `is_demo = true` on the same `INSERT` that creates the company (no longer reliant on a later `UPDATE ... WHERE name = ...`). Both scripts now hash `process.env.DEMO_SEED_PASSWORD` if set, otherwise a `crypto.randomBytes(9)` password generated at seed time and printed once — never a hardcoded literal. Live-verified on a fresh database: `SELECT is_demo FROM companies` showed `true` for both seeded tenants immediately after seeding (no restart needed); login with the old hardcoded passwords (`demo1234`, `Demo1234!`) now returns `401 Invalid credentials`; login with the generated password succeeds and `demoGuard` blocks a subsequent write with `403 Demo mode`. |
+| 2 | Unhandled DB error in `routes/emissions.js` (`isPeriodLocked()` and sibling calls outside any `try/catch`) crashed the entire process for all tenants | **Fixed** | All four handlers in `routes/emissions.js` (`GET`, `POST`, `PATCH`, `DELETE`) now wrap their full body — including `ensureMigrated()`, `isPeriodLocked()`, and the company/jurisdiction lookup — in a single `try/catch`, with a new `isConnectionError()` helper returning `503` for connection-class errors (`ECONNREFUSED`, `ETIMEDOUT`, `ENOTFOUND`, `ECONNRESET`) instead of a generic `500`. `server.js` also registers `process.on('unhandledRejection', ...)` as a last-resort net that logs and does not exit, in case any other unguarded async path is found later. Verified by reproducing the original crash fresh on this branch (stopped PostgreSQL, POSTed as the demo-flagged tenant, confirmed `HTTP_CODE:000` and process death), then re-running the identical steps after the fix: response is now `503 {"error":"Service temporarily unavailable"}`, `ps` shows the process still running, and a follow-up request after restarting PostgreSQL succeeds normally — no restart of the app itself required. |
+| 3 | `demoGuard` not mounted on `/api/company`, `/api/recommendations`, `/api/frameworks`, `/api/onboarding` — demo-flagged tenants could write through these | **Fixed** | `server.js` now mounts `demoGuard` on all four. Verified live: a demo-flagged tenant's `PATCH /api/company/sector` and `PATCH /api/recommendations/:id/status`, which previously returned `200`, now return `403 Demo mode`; the same requests from a non-demo tenant still succeed (`200`), confirming no regression for legitimate writes. |
+| 4 | No role check at all on `PATCH /api/frameworks/:framework` and all six `/api/onboarding` write routes | **Fixed** | Added `requireRole('admin', 'editor')` to `frameworks.js`'s `PATCH /:framework` and to all six onboarding write routes (`/profile`, `/reporting`, `/baseline`, `/targets`, `/invites`, `/complete`). Re-ran the exact original live test — a `viewer` token renaming the company via `PUT /api/onboarding/profile` — with `demoGuard`'s effect isolated out (temporarily un-flagged the test tenant's `is_demo` so the role check, not the demo block, is what's under test): now returns `403 Access denied. Requires role: admin or editor.`, company name unchanged in the database; the same tenant's `admin` token still succeeds (`200`), confirming the check is a real role gate, not a blanket block. |
+| 5 | `logAction()` audit coverage is 3 of 21 route files (BRSR's 16 write endpoints, team, company, and seven others have zero audit trail) | **Deferred — explicitly tracked, not forgotten, not blocking Phase 2.** | No code changed. This is a larger, cross-cutting change (adding `logAction()` calls consistently across ~10 route files) that wasn't in this pass's scope; flagging again here so it isn't lost between phases. |
+| 6 | First-boot race: the intended demo tenant (`Verdant Group`) wasn't `is_demo`-flagged until the *second* server boot, because the startup migration's `UPDATE` ran before the post-listen seed created the row | **Fixed** | Same fix as #1 — `is_demo` is now set on the `INSERT` itself in `scripts/seed-demo.js`, not left to `demo_migration.sql`'s name-based `UPDATE` (which is left in place, harmless, as a backward-compatible safety net for databases seeded before this fix). Verified live on a completely fresh database: after a single `node server.js` boot (no restart), `SELECT is_demo FROM companies` showed `true` for `Verdant Group` immediately — the two-boot race no longer reproduces. |
+
 **Phase 2 (Calculation Completeness) not started, per instructions.**

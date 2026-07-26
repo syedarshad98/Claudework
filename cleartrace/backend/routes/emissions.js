@@ -35,23 +35,29 @@ async function isPeriodLocked(companyId, period) {
   return r.rows.length > 0;
 }
 
+// A DB outage should degrade a request to "temporarily unavailable", not
+// crash the process for every other tenant currently being served.
+function isConnectionError(err) {
+  return ['ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNRESET'].includes(err.code);
+}
+
 // ── GET /api/emissions ────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
-  await ensureMigrated();
-  const { page = 1, limit = 50, scope, period } = req.query;
-  const offset = (parseInt(page) - 1) * parseInt(limit);
-
-  const params  = [req.companyId];
-  const filters = ['e.company_id = $1'];
-  let   idx     = 2;
-
-  if (scope)  { filters.push(`e.scope = $${idx++}`);  params.push(parseInt(scope)); }
-  if (period) { filters.push(`e.period = $${idx++}`); params.push(period); }
-
-  const where = filters.join(' AND ');
-  params.push(parseInt(limit), offset);
-
   try {
+    await ensureMigrated();
+    const { page = 1, limit = 50, scope, period } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    const params  = [req.companyId];
+    const filters = ['e.company_id = $1'];
+    let   idx     = 2;
+
+    if (scope)  { filters.push(`e.scope = $${idx++}`);  params.push(parseInt(scope)); }
+    if (period) { filters.push(`e.period = $${idx++}`); params.push(period); }
+
+    const where = filters.join(' AND ');
+    params.push(parseInt(limit), offset);
+
     const result = await db.query(
       `SELECT e.id, e.category, e.scope, e.amount, e.unit, e.period,
               e.emission_factor, e.co2e_tonnes, e.source, e.notes, e.created_at,
@@ -82,67 +88,68 @@ router.get('/', async (req, res) => {
     res.json({ entries: result.rows, total: parseInt(countRes.rows[0].total) });
   } catch (err) {
     console.error('Emissions GET error:', err.message);
+    if (isConnectionError(err)) return res.status(503).json({ error: 'Service temporarily unavailable' });
     res.status(500).json({ error: 'Failed to fetch emissions' });
   }
 });
 
 // ── POST /api/emissions ───────────────────────────────────────────────────────
 router.post('/', requireRole('admin', 'editor'), async (req, res) => {
-  await ensureMigrated();
-  const {
-    category, scope, amount, unit, period, emission_factor, notes, region: reqRegion,
-    method, fuel_type, distance_km, cabin_class, touches_uk, both_endpoints_uk,
-    // factor_jurisdiction is accepted off the wire but never trusted — the
-    // server derives it from the resolved factor. See decideFactor().
-    factor_source: reqFactorSource,
-  } = req.body;
-
-  if (!category || scope == null || amount == null || !unit || !period) {
-    return res.status(400).json({ error: 'category, scope, amount, unit and period are required' });
-  }
-  if (![1, 2, 3].includes(parseInt(scope))) {
-    return res.status(400).json({ error: 'scope must be 1, 2 or 3' });
-  }
-  if (!/^\d{4}-\d{2}$/.test(period)) {
-    return res.status(400).json({ error: 'period must be YYYY-MM format' });
-  }
-  if (await isPeriodLocked(req.companyId, period)) {
-    return res.status(423).json({ error: `Period ${period} is locked. Contact an admin to unlock.` });
-  }
-
-  const compRow = await db.query('SELECT jurisdiction, region FROM companies WHERE id=$1', [req.companyId]);
-  const jurisdiction = compRow.rows[0]?.jurisdiction || 'UK';
-  const region = reqRegion || compRow.rows[0]?.region || defaultRegionFromJurisdiction(jurisdiction);
-
-  const methodFields = resolveMethodFields({
-    category, method, fuelType: fuel_type, distanceKm: distance_km, cabinClass: cabin_class,
-    touchesUk: touches_uk, bothEndpointsUk: both_endpoints_uk,
-  });
-  if (methodFields.error) return res.status(400).json({ error: methodFields.error });
-  const { lookupCategory, subtype, flightBand, substitutedCabinClass, substitutionReason } = methodFields;
-
-  if (substitutedCabinClass) {
-    console.warn(`[emissions] cabin_class substitution — company_id=${req.companyId} category="${category}": ${substitutionReason}`);
-  }
-
-  const decided = await decideFactor({
-    db, category, lookupCategory, subtype, region, unit,
-    clientFactor: emission_factor,
-    clientSource: reqFactorSource,
-    companyId:    req.companyId,
-  });
-  if (decided.error) return res.status(400).json({ error: decided.error });
-
-  const { ef, factorSource, factorJurisdiction, regionResolved, isFallback, fallbackReason } = decided;
-
-  const storedMethod          = method === 'fuel' ? 'fuel' : (method === 'distance' ? 'distance' : null);
-  const storedFuelType        = method === 'fuel' ? fuel_type : null;
-  const storedDistanceKm      = flightBand ? (distance_km != null ? parseFloat(distance_km) : null) : null;
-  const storedCabinClass      = flightBand ? cabin_class : null;
-  const storedTouchesUk       = flightBand ? !!touches_uk : null;
-  const storedBothEndpointsUk = flightBand ? (both_endpoints_uk === true) : null;
-
   try {
+    await ensureMigrated();
+    const {
+      category, scope, amount, unit, period, emission_factor, notes, region: reqRegion,
+      method, fuel_type, distance_km, cabin_class, touches_uk, both_endpoints_uk,
+      // factor_jurisdiction is accepted off the wire but never trusted — the
+      // server derives it from the resolved factor. See decideFactor().
+      factor_source: reqFactorSource,
+    } = req.body;
+
+    if (!category || scope == null || amount == null || !unit || !period) {
+      return res.status(400).json({ error: 'category, scope, amount, unit and period are required' });
+    }
+    if (![1, 2, 3].includes(parseInt(scope))) {
+      return res.status(400).json({ error: 'scope must be 1, 2 or 3' });
+    }
+    if (!/^\d{4}-\d{2}$/.test(period)) {
+      return res.status(400).json({ error: 'period must be YYYY-MM format' });
+    }
+    if (await isPeriodLocked(req.companyId, period)) {
+      return res.status(423).json({ error: `Period ${period} is locked. Contact an admin to unlock.` });
+    }
+
+    const compRow = await db.query('SELECT jurisdiction, region FROM companies WHERE id=$1', [req.companyId]);
+    const jurisdiction = compRow.rows[0]?.jurisdiction || 'UK';
+    const region = reqRegion || compRow.rows[0]?.region || defaultRegionFromJurisdiction(jurisdiction);
+
+    const methodFields = resolveMethodFields({
+      category, method, fuelType: fuel_type, distanceKm: distance_km, cabinClass: cabin_class,
+      touchesUk: touches_uk, bothEndpointsUk: both_endpoints_uk,
+    });
+    if (methodFields.error) return res.status(400).json({ error: methodFields.error });
+    const { lookupCategory, subtype, flightBand, substitutedCabinClass, substitutionReason } = methodFields;
+
+    if (substitutedCabinClass) {
+      console.warn(`[emissions] cabin_class substitution — company_id=${req.companyId} category="${category}": ${substitutionReason}`);
+    }
+
+    const decided = await decideFactor({
+      db, category, lookupCategory, subtype, region, unit,
+      clientFactor: emission_factor,
+      clientSource: reqFactorSource,
+      companyId:    req.companyId,
+    });
+    if (decided.error) return res.status(400).json({ error: decided.error });
+
+    const { ef, factorSource, factorJurisdiction, regionResolved, isFallback, fallbackReason } = decided;
+
+    const storedMethod          = method === 'fuel' ? 'fuel' : (method === 'distance' ? 'distance' : null);
+    const storedFuelType        = method === 'fuel' ? fuel_type : null;
+    const storedDistanceKm      = flightBand ? (distance_km != null ? parseFloat(distance_km) : null) : null;
+    const storedCabinClass      = flightBand ? cabin_class : null;
+    const storedTouchesUk       = flightBand ? !!touches_uk : null;
+    const storedBothEndpointsUk = flightBand ? (both_endpoints_uk === true) : null;
+
     const result = await db.query(
       `INSERT INTO emissions_entries
          (company_id, user_id, category, scope, amount, unit, period, emission_factor, source, notes,
@@ -184,102 +191,103 @@ router.post('/', requireRole('admin', 'editor'), async (req, res) => {
     });
   } catch (err) {
     console.error('Emissions POST error:', err.message);
+    if (isConnectionError(err)) return res.status(503).json({ error: 'Service temporarily unavailable' });
     res.status(500).json({ error: 'Failed to save entry' });
   }
 });
 
 // ── PATCH /api/emissions/:id ──────────────────────────────────────────────────
 router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
-  await ensureMigrated();
-  const id = parseInt(req.params.id);
-
-  const oldRes = await db.query(
-    'SELECT * FROM emissions_entries WHERE id=$1 AND company_id=$2',
-    [id, req.companyId]
-  );
-  if (!oldRes.rows.length) return res.status(404).json({ error: 'Entry not found' });
-  const oldEntry = oldRes.rows[0];
-
-  if (await isPeriodLocked(req.companyId, oldEntry.period) && req.query.force !== '1') {
-    return res.status(423).json({ error: `Period ${oldEntry.period} is locked.`, locked: true });
-  }
-
-  const {
-    category, scope, amount, unit, period, emission_factor, notes,
-    method, fuel_type, distance_km, cabin_class, touches_uk, both_endpoints_uk,
-  } = req.body;
-  const newPeriod = period || oldEntry.period;
-  if (newPeriod !== oldEntry.period && await isPeriodLocked(req.companyId, newPeriod)) {
-    return res.status(423).json({ error: `Target period ${newPeriod} is locked.`, locked: true });
-  }
-
-  const compRowP = await db.query('SELECT jurisdiction, region FROM companies WHERE id=$1', [req.companyId]);
-  const jurisdictionP = compRowP.rows[0]?.jurisdiction || 'UK';
-  const region = req.body.region || oldEntry.region || compRowP.rows[0]?.region || defaultRegionFromJurisdiction(jurisdictionP);
-
-  const effectiveCategory        = category || oldEntry.category;
-  const effectiveUnit            = unit || oldEntry.unit;
-  const effectiveMethod          = method !== undefined ? method : oldEntry.method;
-  const effectiveFuelType        = fuel_type !== undefined ? fuel_type : oldEntry.fuel_type;
-  const effectiveDistanceKm      = distance_km !== undefined ? distance_km : oldEntry.distance_km;
-  const effectiveCabinClass      = cabin_class !== undefined ? cabin_class : oldEntry.cabin_class;
-  const effectiveTouchesUk       = touches_uk !== undefined ? touches_uk : oldEntry.touches_uk;
-  const effectiveBothEndpointsUk = both_endpoints_uk !== undefined ? both_endpoints_uk : oldEntry.both_endpoints_uk;
-  const categoryChanged          = !!(category && category !== oldEntry.category);
-
-  const methodFields = resolveMethodFields({
-    category: effectiveCategory, method: effectiveMethod, fuelType: effectiveFuelType,
-    distanceKm: effectiveDistanceKm, cabinClass: effectiveCabinClass,
-    touchesUk: effectiveTouchesUk, bothEndpointsUk: effectiveBothEndpointsUk,
-  });
-  if (methodFields.error) return res.status(400).json({ error: methodFields.error });
-  const { lookupCategory, subtype, flightBand, substitutedCabinClass, substitutionReason } = methodFields;
-
-  if (substitutedCabinClass) {
-    console.warn(`[emissions] cabin_class substitution — company_id=${req.companyId} category="${effectiveCategory}": ${substitutionReason}`);
-  }
-
-  const decided = await decideFactor({
-    db, category: effectiveCategory, lookupCategory, subtype, region, unit: effectiveUnit,
-    // For a custom category the user's number is the mechanism; when this PATCH
-    // does not carry one, keep whatever the entry already had.
-    clientFactor: emission_factor != null ? emission_factor : oldEntry.emission_factor,
-    clientSource: undefined,
-    companyId:    req.companyId,
-  });
-
-  let ef, factorSource, factorJurisdiction, regionResolved, isFallback, fallbackReason;
-  if (decided.error) {
-    // Switching to an unresolvable category is a client error. Leaving an
-    // already-unresolvable category untouched is not — that would make legacy
-    // rows uneditable, so keep their stored factor.
-    if (categoryChanged) return res.status(400).json({ error: decided.error });
-    ef                 = parseFloat(oldEntry.emission_factor);
-    factorSource       = oldEntry.factor_source || null;
-    factorJurisdiction = oldEntry.factor_jurisdiction || null;
-    regionResolved     = oldEntry.region_resolved || null;
-    isFallback         = oldEntry.is_fallback_factor || false;
-    fallbackReason      = oldEntry.fallback_reason || null;
-  } else {
-    ({ ef, factorSource, factorJurisdiction, regionResolved, isFallback, fallbackReason } = decided);
-  }
-
-  if (emission_factor != null && Number(emission_factor) !== Number(ef)) {
-    console.warn(
-      `[emissions] rejected client-supplied factor fields — company_id=${req.companyId} ` +
-      `category="${effectiveCategory}" emission_factor=${emission_factor}; ` +
-      `server-resolved factor ${ef} used instead`
-    );
-  }
-
-  const storedMethod          = effectiveMethod === 'fuel' ? 'fuel' : (effectiveMethod === 'distance' ? 'distance' : null);
-  const storedFuelType        = effectiveMethod === 'fuel' ? effectiveFuelType : null;
-  const storedDistanceKm      = flightBand ? (effectiveDistanceKm != null ? parseFloat(effectiveDistanceKm) : null) : null;
-  const storedCabinClass      = flightBand ? effectiveCabinClass : null;
-  const storedTouchesUk       = flightBand ? !!effectiveTouchesUk : null;
-  const storedBothEndpointsUk = flightBand ? (effectiveBothEndpointsUk === true) : null;
-
   try {
+    await ensureMigrated();
+    const id = parseInt(req.params.id);
+
+    const oldRes = await db.query(
+      'SELECT * FROM emissions_entries WHERE id=$1 AND company_id=$2',
+      [id, req.companyId]
+    );
+    if (!oldRes.rows.length) return res.status(404).json({ error: 'Entry not found' });
+    const oldEntry = oldRes.rows[0];
+
+    if (await isPeriodLocked(req.companyId, oldEntry.period) && req.query.force !== '1') {
+      return res.status(423).json({ error: `Period ${oldEntry.period} is locked.`, locked: true });
+    }
+
+    const {
+      category, scope, amount, unit, period, emission_factor, notes,
+      method, fuel_type, distance_km, cabin_class, touches_uk, both_endpoints_uk,
+    } = req.body;
+    const newPeriod = period || oldEntry.period;
+    if (newPeriod !== oldEntry.period && await isPeriodLocked(req.companyId, newPeriod)) {
+      return res.status(423).json({ error: `Target period ${newPeriod} is locked.`, locked: true });
+    }
+
+    const compRowP = await db.query('SELECT jurisdiction, region FROM companies WHERE id=$1', [req.companyId]);
+    const jurisdictionP = compRowP.rows[0]?.jurisdiction || 'UK';
+    const region = req.body.region || oldEntry.region || compRowP.rows[0]?.region || defaultRegionFromJurisdiction(jurisdictionP);
+
+    const effectiveCategory        = category || oldEntry.category;
+    const effectiveUnit            = unit || oldEntry.unit;
+    const effectiveMethod          = method !== undefined ? method : oldEntry.method;
+    const effectiveFuelType        = fuel_type !== undefined ? fuel_type : oldEntry.fuel_type;
+    const effectiveDistanceKm      = distance_km !== undefined ? distance_km : oldEntry.distance_km;
+    const effectiveCabinClass      = cabin_class !== undefined ? cabin_class : oldEntry.cabin_class;
+    const effectiveTouchesUk       = touches_uk !== undefined ? touches_uk : oldEntry.touches_uk;
+    const effectiveBothEndpointsUk = both_endpoints_uk !== undefined ? both_endpoints_uk : oldEntry.both_endpoints_uk;
+    const categoryChanged          = !!(category && category !== oldEntry.category);
+
+    const methodFields = resolveMethodFields({
+      category: effectiveCategory, method: effectiveMethod, fuelType: effectiveFuelType,
+      distanceKm: effectiveDistanceKm, cabinClass: effectiveCabinClass,
+      touchesUk: effectiveTouchesUk, bothEndpointsUk: effectiveBothEndpointsUk,
+    });
+    if (methodFields.error) return res.status(400).json({ error: methodFields.error });
+    const { lookupCategory, subtype, flightBand, substitutedCabinClass, substitutionReason } = methodFields;
+
+    if (substitutedCabinClass) {
+      console.warn(`[emissions] cabin_class substitution — company_id=${req.companyId} category="${effectiveCategory}": ${substitutionReason}`);
+    }
+
+    const decided = await decideFactor({
+      db, category: effectiveCategory, lookupCategory, subtype, region, unit: effectiveUnit,
+      // For a custom category the user's number is the mechanism; when this PATCH
+      // does not carry one, keep whatever the entry already had.
+      clientFactor: emission_factor != null ? emission_factor : oldEntry.emission_factor,
+      clientSource: undefined,
+      companyId:    req.companyId,
+    });
+
+    let ef, factorSource, factorJurisdiction, regionResolved, isFallback, fallbackReason;
+    if (decided.error) {
+      // Switching to an unresolvable category is a client error. Leaving an
+      // already-unresolvable category untouched is not — that would make legacy
+      // rows uneditable, so keep their stored factor.
+      if (categoryChanged) return res.status(400).json({ error: decided.error });
+      ef                 = parseFloat(oldEntry.emission_factor);
+      factorSource       = oldEntry.factor_source || null;
+      factorJurisdiction = oldEntry.factor_jurisdiction || null;
+      regionResolved     = oldEntry.region_resolved || null;
+      isFallback         = oldEntry.is_fallback_factor || false;
+      fallbackReason      = oldEntry.fallback_reason || null;
+    } else {
+      ({ ef, factorSource, factorJurisdiction, regionResolved, isFallback, fallbackReason } = decided);
+    }
+
+    if (emission_factor != null && Number(emission_factor) !== Number(ef)) {
+      console.warn(
+        `[emissions] rejected client-supplied factor fields — company_id=${req.companyId} ` +
+        `category="${effectiveCategory}" emission_factor=${emission_factor}; ` +
+        `server-resolved factor ${ef} used instead`
+      );
+    }
+
+    const storedMethod          = effectiveMethod === 'fuel' ? 'fuel' : (effectiveMethod === 'distance' ? 'distance' : null);
+    const storedFuelType        = effectiveMethod === 'fuel' ? effectiveFuelType : null;
+    const storedDistanceKm      = flightBand ? (effectiveDistanceKm != null ? parseFloat(effectiveDistanceKm) : null) : null;
+    const storedCabinClass      = flightBand ? effectiveCabinClass : null;
+    const storedTouchesUk       = flightBand ? !!effectiveTouchesUk : null;
+    const storedBothEndpointsUk = flightBand ? (effectiveBothEndpointsUk === true) : null;
+
     const result = await db.query(
       `UPDATE emissions_entries
           SET category           = COALESCE($1, category),
@@ -338,30 +346,31 @@ router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
     res.json({ ...entry, locked: false, validation_status: issues.length > 0 ? 'warning' : 'ok' });
   } catch (err) {
     console.error('Emissions PATCH error:', err.message);
+    if (isConnectionError(err)) return res.status(503).json({ error: 'Service temporarily unavailable' });
     res.status(500).json({ error: 'Failed to update entry' });
   }
 });
 
 // ── DELETE /api/emissions/:id ─────────────────────────────────────────────────
 router.delete('/:id', requireRole('admin', 'editor'), async (req, res) => {
-  await ensureMigrated();
-  const id = parseInt(req.params.id);
-
-  const oldRes = await db.query(
-    'SELECT * FROM emissions_entries WHERE id=$1 AND company_id=$2',
-    [id, req.companyId]
-  );
-  if (!oldRes.rows.length) return res.status(404).json({ error: 'Entry not found' });
-  const oldEntry = oldRes.rows[0];
-
-  if (await isPeriodLocked(req.companyId, oldEntry.period) && req.query.force !== '1') {
-    return res.status(423).json({
-      error:  `Period ${oldEntry.period} is locked. Pass ?force=1 with admin role to override.`,
-      locked: true,
-    });
-  }
-
   try {
+    await ensureMigrated();
+    const id = parseInt(req.params.id);
+
+    const oldRes = await db.query(
+      'SELECT * FROM emissions_entries WHERE id=$1 AND company_id=$2',
+      [id, req.companyId]
+    );
+    if (!oldRes.rows.length) return res.status(404).json({ error: 'Entry not found' });
+    const oldEntry = oldRes.rows[0];
+
+    if (await isPeriodLocked(req.companyId, oldEntry.period) && req.query.force !== '1') {
+      return res.status(423).json({
+        error:  `Period ${oldEntry.period} is locked. Pass ?force=1 with admin role to override.`,
+        locked: true,
+      });
+    }
+
     await db.query('DELETE FROM emissions_entries WHERE id=$1 AND company_id=$2', [id, req.companyId]);
 
     await logAction({
@@ -375,6 +384,7 @@ router.delete('/:id', requireRole('admin', 'editor'), async (req, res) => {
     res.json({ deleted: true });
   } catch (err) {
     console.error('Emissions DELETE error:', err.message);
+    if (isConnectionError(err)) return res.status(503).json({ error: 'Service temporarily unavailable' });
     res.status(500).json({ error: 'Failed to delete entry' });
   }
 });
