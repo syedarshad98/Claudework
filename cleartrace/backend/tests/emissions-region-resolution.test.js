@@ -76,6 +76,52 @@ test('AE-AZ (no verified figure) falls back to AE-DU, flagged', async () => {
   assert.match(insert.params[14], /AE-AZ/, 'fallback_reason must name the requested region');
 });
 
+// Regression test for the Phase 2 remediation bug: an emirate-level region
+// (AE-DU) requesting Water Supply used to skip past the real, verified
+// country-level 'AE' row and land on the GB cross-region substitute
+// instead, because the old Tier 2 only ever looked up 'AE-DU' specifically
+// (built for electricity, wrongly applied to every category). The fix adds
+// a general "try the bare country code" tier before that subdivision-specific
+// one. See docs/TEST-REPORT.md Phase 2 for the live-tested writeup.
+test('AE-DU Water Supply resolves the real UAE country-level factor, not the GB substitute', async () => {
+  resetModules();
+  const { calls } = installDbStub();
+  const server = await startServer(EMISSIONS_ROUTER);
+
+  const res = await post(server.url, {
+    category: 'Water Supply', scope: 3, amount: 10, unit: 'm3', period: '2024-06', region: 'AE-DU',
+  });
+
+  await server.close();
+
+  assert.equal(res.status, 201, JSON.stringify(res.body));
+  const insert = findCall(calls, /INSERT INTO emissions_entries/i);
+  assert.equal(Number(insert.params[7]), 2.7, 'must resolve the real UAE desalination value, not GB (0.149)');
+  assert.equal(insert.params[9], 'uae-desalination-2024');
+  assert.equal(insert.params[11], 'AE-DU', 'requested region is preserved on the entry');
+  assert.equal(insert.params[12], 'AE', 'region_resolved must show the country-level row that answered');
+  assert.equal(insert.params[13], true, 'still a fallback — AE-DU itself has no water row — just the right one');
+  assert.match(insert.params[14], /country-level/, 'fallback_reason must describe a country-level fallback, not an unreviewed cross-region substitute');
+});
+
+test('AE-AZ Water Supply also resolves the country-level factor (general fix, not AE-DU-specific)', async () => {
+  resetModules();
+  const { calls } = installDbStub();
+  const server = await startServer(EMISSIONS_ROUTER);
+
+  const res = await post(server.url, {
+    category: 'Water Supply', scope: 3, amount: 10, unit: 'm3', period: '2024-06', region: 'AE-AZ',
+  });
+
+  await server.close();
+
+  assert.equal(res.status, 201, JSON.stringify(res.body));
+  const insert = findCall(calls, /INSERT INTO emissions_entries/i);
+  assert.equal(Number(insert.params[7]), 2.7);
+  assert.equal(insert.params[12], 'AE');
+  assert.equal(insert.params[13], true);
+});
+
 test('100 L diesel @ region=AE resolves the global-default factor, visibly labelled', async () => {
   resetModules();
   const { calls } = installDbStub();

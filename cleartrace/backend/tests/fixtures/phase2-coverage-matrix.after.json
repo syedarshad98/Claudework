@@ -1,0 +1,1363 @@
+{
+  "categories": {
+    "Grid Electricity": {
+      "GB": {
+        "status": 201,
+        "emission_factor": "0.143960",
+        "region_resolved": "GB",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-2026"
+      },
+      "IN": {
+        "status": 201,
+        "emission_factor": "0.711700",
+        "region_resolved": "IN",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "cea-v21.0"
+      },
+      "AE": {
+        "status": 201,
+        "emission_factor": "0.404100",
+        "region_resolved": "AE-DU",
+        "is_fallback_factor": true,
+        "fallback_reason": "No verified factor exists for region \"AE\" and category \"Grid Electricity\". Falling back to AE-DU (DEWA, Dubai) \u2014 the only emirate with a verified published figure in this dataset. Confirm before relying on this for non-Dubai sites.",
+        "factor_source": "uae-dewa"
+      },
+      "AE-DU": {
+        "status": 201,
+        "emission_factor": "0.404100",
+        "region_resolved": "AE-DU",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "uae-dewa"
+      },
+      "AE-AZ": {
+        "status": 201,
+        "emission_factor": "0.404100",
+        "region_resolved": "AE-DU",
+        "is_fallback_factor": true,
+        "fallback_reason": "No verified factor exists for region \"AE-AZ\" and category \"Grid Electricity\". Falling back to AE-DU (DEWA, Dubai) \u2014 the only emirate with a verified published figure in this dataset. Confirm before relying on this for non-Dubai sites.",
+        "factor_source": "uae-dewa"
+      },
+      "AE-SH": {
+        "status": 201,
+        "emission_factor": "0.404100",
+        "region_resolved": "AE-DU",
+        "is_fallback_factor": true,
+        "fallback_reason": "No verified factor exists for region \"AE-SH\" and category \"Grid Electricity\". Falling back to AE-DU (DEWA, Dubai) \u2014 the only emirate with a verified published figure in this dataset. Confirm before relying on this for non-Dubai sites.",
+        "factor_source": "uae-dewa"
+      },
+      "AE-NE": {
+        "status": 201,
+        "emission_factor": "0.404100",
+        "region_resolved": "AE-DU",
+        "is_fallback_factor": true,
+        "fallback_reason": "No verified factor exists for region \"AE-NE\" and category \"Grid Electricity\". Falling back to AE-DU (DEWA, Dubai) \u2014 the only emirate with a verified published figure in this dataset. Confirm before relying on this for non-Dubai sites.",
+        "factor_source": "uae-dewa"
+      }
+    },
+    "Water Supply": {
+      "GB": {
+        "status": 201,
+        "emission_factor": "0.149000",
+        "region_resolved": "GB",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-2023"
+      },
+      "IN": {
+        "status": 201,
+        "emission_factor": "0.149000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"IN\" or a global default for category \"Water Supply\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE": {
+        "status": 201,
+        "emission_factor": "2.700000",
+        "region_resolved": "AE",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "uae-desalination-2024"
+      },
+      "AE-DU": {
+        "status": 201,
+        "emission_factor": "2.700000",
+        "region_resolved": "AE",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists specifically for region \"AE-DU\" and category \"Water Supply\". Applying the country-level \"AE\" figure instead.",
+        "factor_source": "uae-desalination-2024"
+      },
+      "AE-AZ": {
+        "status": 201,
+        "emission_factor": "2.700000",
+        "region_resolved": "AE",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists specifically for region \"AE-AZ\" and category \"Water Supply\". Applying the country-level \"AE\" figure instead.",
+        "factor_source": "uae-desalination-2024"
+      },
+      "AE-SH": {
+        "status": 201,
+        "emission_factor": "2.700000",
+        "region_resolved": "AE",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists specifically for region \"AE-SH\" and category \"Water Supply\". Applying the country-level \"AE\" figure instead.",
+        "factor_source": "uae-desalination-2024"
+      },
+      "AE-NE": {
+        "status": 201,
+        "emission_factor": "2.700000",
+        "region_resolved": "AE",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists specifically for region \"AE-NE\" and category \"Water Supply\". Applying the country-level \"AE\" figure instead.",
+        "factor_source": "uae-desalination-2024"
+      }
+    },
+    "District Heating": {
+      "GB": {
+        "status": 201,
+        "emission_factor": "0.184000",
+        "region_resolved": "GB",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-2023"
+      },
+      "IN": {
+        "status": 201,
+        "emission_factor": "0.184000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"IN\" or a global default for category \"District Heating\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE": {
+        "status": 201,
+        "emission_factor": "0.184000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE\" or a global default for category \"District Heating\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-DU": {
+        "status": 201,
+        "emission_factor": "0.184000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-DU\" or a global default for category \"District Heating\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-AZ": {
+        "status": 201,
+        "emission_factor": "0.184000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-AZ\" or a global default for category \"District Heating\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-SH": {
+        "status": 201,
+        "emission_factor": "0.184000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-SH\" or a global default for category \"District Heating\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-NE": {
+        "status": 201,
+        "emission_factor": "0.184000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-NE\" or a global default for category \"District Heating\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      }
+    },
+    "Company Car (Diesel)": {
+      "GB": {
+        "status": 201,
+        "emission_factor": "0.171230",
+        "region_resolved": "GB",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-2023"
+      },
+      "IN": {
+        "status": 201,
+        "emission_factor": "0.171230",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"IN\" or a global default for category \"Company Car (Diesel)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE": {
+        "status": 201,
+        "emission_factor": "0.171230",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE\" or a global default for category \"Company Car (Diesel)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-DU": {
+        "status": 201,
+        "emission_factor": "0.171230",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-DU\" or a global default for category \"Company Car (Diesel)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-AZ": {
+        "status": 201,
+        "emission_factor": "0.171230",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-AZ\" or a global default for category \"Company Car (Diesel)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-SH": {
+        "status": 201,
+        "emission_factor": "0.171230",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-SH\" or a global default for category \"Company Car (Diesel)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-NE": {
+        "status": 201,
+        "emission_factor": "0.171230",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-NE\" or a global default for category \"Company Car (Diesel)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      }
+    },
+    "Company Car (Petrol)": {
+      "GB": {
+        "status": 201,
+        "emission_factor": "0.181100",
+        "region_resolved": "GB",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-2023"
+      },
+      "IN": {
+        "status": 201,
+        "emission_factor": "0.181100",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"IN\" or a global default for category \"Company Car (Petrol)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE": {
+        "status": 201,
+        "emission_factor": "0.181100",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE\" or a global default for category \"Company Car (Petrol)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-DU": {
+        "status": 201,
+        "emission_factor": "0.181100",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-DU\" or a global default for category \"Company Car (Petrol)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-AZ": {
+        "status": 201,
+        "emission_factor": "0.181100",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-AZ\" or a global default for category \"Company Car (Petrol)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-SH": {
+        "status": 201,
+        "emission_factor": "0.181100",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-SH\" or a global default for category \"Company Car (Petrol)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-NE": {
+        "status": 201,
+        "emission_factor": "0.181100",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-NE\" or a global default for category \"Company Car (Petrol)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      }
+    },
+    "Company Car (Average)": {
+      "GB": {
+        "status": 201,
+        "emission_factor": "0.170680",
+        "region_resolved": "GB",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-2023"
+      },
+      "IN": {
+        "status": 201,
+        "emission_factor": "0.170680",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"IN\" or a global default for category \"Company Car (Average)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE": {
+        "status": 201,
+        "emission_factor": "0.170680",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE\" or a global default for category \"Company Car (Average)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-DU": {
+        "status": 201,
+        "emission_factor": "0.170680",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-DU\" or a global default for category \"Company Car (Average)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-AZ": {
+        "status": 201,
+        "emission_factor": "0.170680",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-AZ\" or a global default for category \"Company Car (Average)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-SH": {
+        "status": 201,
+        "emission_factor": "0.170680",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-SH\" or a global default for category \"Company Car (Average)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-NE": {
+        "status": 201,
+        "emission_factor": "0.170680",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-NE\" or a global default for category \"Company Car (Average)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      }
+    },
+    "Refrigerants (R-134a)": {
+      "GB": {
+        "status": 201,
+        "emission_factor": "1430.000000",
+        "region_resolved": "GB",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-2023"
+      },
+      "IN": {
+        "status": 201,
+        "emission_factor": "1430.000000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"IN\" or a global default for category \"Refrigerants (R-134a)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE": {
+        "status": 201,
+        "emission_factor": "1430.000000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE\" or a global default for category \"Refrigerants (R-134a)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-DU": {
+        "status": 201,
+        "emission_factor": "1430.000000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-DU\" or a global default for category \"Refrigerants (R-134a)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-AZ": {
+        "status": 201,
+        "emission_factor": "1430.000000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-AZ\" or a global default for category \"Refrigerants (R-134a)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-SH": {
+        "status": 201,
+        "emission_factor": "1430.000000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-SH\" or a global default for category \"Refrigerants (R-134a)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-NE": {
+        "status": 201,
+        "emission_factor": "1430.000000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-NE\" or a global default for category \"Refrigerants (R-134a)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      }
+    },
+    "Refrigerants (R-410A)": {
+      "GB": {
+        "status": 201,
+        "emission_factor": "2088.000000",
+        "region_resolved": "GB",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-2023"
+      },
+      "IN": {
+        "status": 201,
+        "emission_factor": "2088.000000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"IN\" or a global default for category \"Refrigerants (R-410A)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE": {
+        "status": 201,
+        "emission_factor": "2088.000000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE\" or a global default for category \"Refrigerants (R-410A)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-DU": {
+        "status": 201,
+        "emission_factor": "2088.000000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-DU\" or a global default for category \"Refrigerants (R-410A)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-AZ": {
+        "status": 201,
+        "emission_factor": "2088.000000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-AZ\" or a global default for category \"Refrigerants (R-410A)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-SH": {
+        "status": 201,
+        "emission_factor": "2088.000000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-SH\" or a global default for category \"Refrigerants (R-410A)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-NE": {
+        "status": 201,
+        "emission_factor": "2088.000000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-NE\" or a global default for category \"Refrigerants (R-410A)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      }
+    },
+    "Business Travel (Car)": {
+      "GB": {
+        "status": 201,
+        "emission_factor": "0.170680",
+        "region_resolved": "GB",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-2023"
+      },
+      "IN": {
+        "status": 201,
+        "emission_factor": "0.170680",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"IN\" or a global default for category \"Business Travel (Car)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE": {
+        "status": 201,
+        "emission_factor": "0.170680",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE\" or a global default for category \"Business Travel (Car)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-DU": {
+        "status": 201,
+        "emission_factor": "0.170680",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-DU\" or a global default for category \"Business Travel (Car)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-AZ": {
+        "status": 201,
+        "emission_factor": "0.170680",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-AZ\" or a global default for category \"Business Travel (Car)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-SH": {
+        "status": 201,
+        "emission_factor": "0.170680",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-SH\" or a global default for category \"Business Travel (Car)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-NE": {
+        "status": 201,
+        "emission_factor": "0.170680",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-NE\" or a global default for category \"Business Travel (Car)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      }
+    },
+    "Business Travel (Rail)": {
+      "GB": {
+        "status": 201,
+        "emission_factor": "0.006040",
+        "region_resolved": "GB",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-2023"
+      },
+      "IN": {
+        "status": 201,
+        "emission_factor": "0.006040",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"IN\" or a global default for category \"Business Travel (Rail)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE": {
+        "status": 201,
+        "emission_factor": "0.006040",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE\" or a global default for category \"Business Travel (Rail)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-DU": {
+        "status": 201,
+        "emission_factor": "0.006040",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-DU\" or a global default for category \"Business Travel (Rail)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-AZ": {
+        "status": 201,
+        "emission_factor": "0.006040",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-AZ\" or a global default for category \"Business Travel (Rail)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-SH": {
+        "status": 201,
+        "emission_factor": "0.006040",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-SH\" or a global default for category \"Business Travel (Rail)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-NE": {
+        "status": 201,
+        "emission_factor": "0.006040",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-NE\" or a global default for category \"Business Travel (Rail)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      }
+    },
+    "Business Travel (Short-haul Flight)": {
+      "GB": {
+        "status": 201,
+        "emission_factor": "0.154770",
+        "region_resolved": "GB",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-2023"
+      },
+      "IN": {
+        "status": 201,
+        "emission_factor": "0.154770",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"IN\" or a global default for category \"Business Travel (Short-haul Flight)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE": {
+        "status": 201,
+        "emission_factor": "0.154770",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE\" or a global default for category \"Business Travel (Short-haul Flight)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-DU": {
+        "status": 201,
+        "emission_factor": "0.154770",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-DU\" or a global default for category \"Business Travel (Short-haul Flight)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-AZ": {
+        "status": 201,
+        "emission_factor": "0.154770",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-AZ\" or a global default for category \"Business Travel (Short-haul Flight)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-SH": {
+        "status": 201,
+        "emission_factor": "0.154770",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-SH\" or a global default for category \"Business Travel (Short-haul Flight)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-NE": {
+        "status": 201,
+        "emission_factor": "0.154770",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-NE\" or a global default for category \"Business Travel (Short-haul Flight)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      }
+    },
+    "Business Travel (Long-haul Flight)": {
+      "GB": {
+        "status": 201,
+        "emission_factor": "0.193040",
+        "region_resolved": "GB",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-2023"
+      },
+      "IN": {
+        "status": 201,
+        "emission_factor": "0.193040",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"IN\" or a global default for category \"Business Travel (Long-haul Flight)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE": {
+        "status": 201,
+        "emission_factor": "0.193040",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE\" or a global default for category \"Business Travel (Long-haul Flight)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-DU": {
+        "status": 201,
+        "emission_factor": "0.193040",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-DU\" or a global default for category \"Business Travel (Long-haul Flight)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-AZ": {
+        "status": 201,
+        "emission_factor": "0.193040",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-AZ\" or a global default for category \"Business Travel (Long-haul Flight)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-SH": {
+        "status": 201,
+        "emission_factor": "0.193040",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-SH\" or a global default for category \"Business Travel (Long-haul Flight)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-NE": {
+        "status": 201,
+        "emission_factor": "0.193040",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-NE\" or a global default for category \"Business Travel (Long-haul Flight)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      }
+    },
+    "Employee Commuting (Car)": {
+      "GB": {
+        "status": 201,
+        "emission_factor": "0.170680",
+        "region_resolved": "GB",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-2023"
+      },
+      "IN": {
+        "status": 201,
+        "emission_factor": "0.170680",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"IN\" or a global default for category \"Employee Commuting (Car)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE": {
+        "status": 201,
+        "emission_factor": "0.170680",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE\" or a global default for category \"Employee Commuting (Car)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-DU": {
+        "status": 201,
+        "emission_factor": "0.170680",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-DU\" or a global default for category \"Employee Commuting (Car)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-AZ": {
+        "status": 201,
+        "emission_factor": "0.170680",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-AZ\" or a global default for category \"Employee Commuting (Car)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-SH": {
+        "status": 201,
+        "emission_factor": "0.170680",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-SH\" or a global default for category \"Employee Commuting (Car)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-NE": {
+        "status": 201,
+        "emission_factor": "0.170680",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-NE\" or a global default for category \"Employee Commuting (Car)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      }
+    },
+    "Employee Commuting (Rail)": {
+      "GB": {
+        "status": 201,
+        "emission_factor": "0.006040",
+        "region_resolved": "GB",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-2023"
+      },
+      "IN": {
+        "status": 201,
+        "emission_factor": "0.006040",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"IN\" or a global default for category \"Employee Commuting (Rail)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE": {
+        "status": 201,
+        "emission_factor": "0.006040",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE\" or a global default for category \"Employee Commuting (Rail)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-DU": {
+        "status": 201,
+        "emission_factor": "0.006040",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-DU\" or a global default for category \"Employee Commuting (Rail)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-AZ": {
+        "status": 201,
+        "emission_factor": "0.006040",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-AZ\" or a global default for category \"Employee Commuting (Rail)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-SH": {
+        "status": 201,
+        "emission_factor": "0.006040",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-SH\" or a global default for category \"Employee Commuting (Rail)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-NE": {
+        "status": 201,
+        "emission_factor": "0.006040",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-NE\" or a global default for category \"Employee Commuting (Rail)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      }
+    },
+    "Waste (Landfill)": {
+      "GB": {
+        "status": 201,
+        "emission_factor": "0.587000",
+        "region_resolved": "GB",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-2023"
+      },
+      "IN": {
+        "status": 201,
+        "emission_factor": "0.587000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"IN\" or a global default for category \"Waste (Landfill)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE": {
+        "status": 201,
+        "emission_factor": "0.587000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE\" or a global default for category \"Waste (Landfill)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-DU": {
+        "status": 201,
+        "emission_factor": "0.587000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-DU\" or a global default for category \"Waste (Landfill)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-AZ": {
+        "status": 201,
+        "emission_factor": "0.587000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-AZ\" or a global default for category \"Waste (Landfill)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-SH": {
+        "status": 201,
+        "emission_factor": "0.587000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-SH\" or a global default for category \"Waste (Landfill)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-NE": {
+        "status": 201,
+        "emission_factor": "0.587000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-NE\" or a global default for category \"Waste (Landfill)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      }
+    },
+    "Waste (Recycled)": {
+      "GB": {
+        "status": 201,
+        "emission_factor": "0.021000",
+        "region_resolved": "GB",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-2023"
+      },
+      "IN": {
+        "status": 201,
+        "emission_factor": "0.021000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"IN\" or a global default for category \"Waste (Recycled)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE": {
+        "status": 201,
+        "emission_factor": "0.021000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE\" or a global default for category \"Waste (Recycled)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-DU": {
+        "status": 201,
+        "emission_factor": "0.021000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-DU\" or a global default for category \"Waste (Recycled)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-AZ": {
+        "status": 201,
+        "emission_factor": "0.021000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-AZ\" or a global default for category \"Waste (Recycled)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-SH": {
+        "status": 201,
+        "emission_factor": "0.021000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-SH\" or a global default for category \"Waste (Recycled)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-NE": {
+        "status": 201,
+        "emission_factor": "0.021000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-NE\" or a global default for category \"Waste (Recycled)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      }
+    },
+    "Waste (Composted)": {
+      "GB": {
+        "status": 201,
+        "emission_factor": "0.011000",
+        "region_resolved": "GB",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-2023"
+      },
+      "IN": {
+        "status": 201,
+        "emission_factor": "0.011000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"IN\" or a global default for category \"Waste (Composted)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE": {
+        "status": 201,
+        "emission_factor": "0.011000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE\" or a global default for category \"Waste (Composted)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-DU": {
+        "status": 201,
+        "emission_factor": "0.011000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-DU\" or a global default for category \"Waste (Composted)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-AZ": {
+        "status": 201,
+        "emission_factor": "0.011000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-AZ\" or a global default for category \"Waste (Composted)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-SH": {
+        "status": 201,
+        "emission_factor": "0.011000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-SH\" or a global default for category \"Waste (Composted)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-NE": {
+        "status": 201,
+        "emission_factor": "0.011000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-NE\" or a global default for category \"Waste (Composted)\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      }
+    },
+    "Water Treatment": {
+      "GB": {
+        "status": 201,
+        "emission_factor": "0.272000",
+        "region_resolved": "GB",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-2023"
+      },
+      "IN": {
+        "status": 201,
+        "emission_factor": "0.272000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"IN\" or a global default for category \"Water Treatment\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE": {
+        "status": 201,
+        "emission_factor": "0.272000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE\" or a global default for category \"Water Treatment\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-DU": {
+        "status": 201,
+        "emission_factor": "0.272000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-DU\" or a global default for category \"Water Treatment\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-AZ": {
+        "status": 201,
+        "emission_factor": "0.272000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-AZ\" or a global default for category \"Water Treatment\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-SH": {
+        "status": 201,
+        "emission_factor": "0.272000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-SH\" or a global default for category \"Water Treatment\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      },
+      "AE-NE": {
+        "status": 201,
+        "emission_factor": "0.272000",
+        "region_resolved": "GB",
+        "is_fallback_factor": true,
+        "fallback_reason": "No factor exists for region \"AE-NE\" or a global default for category \"Water Treatment\". Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute \u2014 this category has not been assessed for regional applicability.",
+        "factor_source": "defra-2023"
+      }
+    },
+    "Natural Gas": {
+      "GB": {
+        "status": 201,
+        "emission_factor": "2.022630",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default-2026-confirmed"
+      },
+      "IN": {
+        "status": 201,
+        "emission_factor": "2.022630",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default-2026-confirmed"
+      },
+      "AE": {
+        "status": 201,
+        "emission_factor": "2.022630",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default-2026-confirmed"
+      },
+      "AE-DU": {
+        "status": 201,
+        "emission_factor": "2.022630",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default-2026-confirmed"
+      },
+      "AE-AZ": {
+        "status": 201,
+        "emission_factor": "2.022630",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default-2026-confirmed"
+      },
+      "AE-SH": {
+        "status": 201,
+        "emission_factor": "2.022630",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default-2026-confirmed"
+      },
+      "AE-NE": {
+        "status": 201,
+        "emission_factor": "2.022630",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default-2026-confirmed"
+      }
+    },
+    "Diesel (Stationary)": {
+      "GB": {
+        "status": 201,
+        "emission_factor": "2.519200",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default-2026-confirmed"
+      },
+      "IN": {
+        "status": 201,
+        "emission_factor": "2.519200",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default-2026-confirmed"
+      },
+      "AE": {
+        "status": 201,
+        "emission_factor": "2.519200",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default-2026-confirmed"
+      },
+      "AE-DU": {
+        "status": 201,
+        "emission_factor": "2.519200",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default-2026-confirmed"
+      },
+      "AE-AZ": {
+        "status": 201,
+        "emission_factor": "2.519200",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default-2026-confirmed"
+      },
+      "AE-SH": {
+        "status": 201,
+        "emission_factor": "2.519200",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default-2026-confirmed"
+      },
+      "AE-NE": {
+        "status": 201,
+        "emission_factor": "2.519200",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default-2026-confirmed"
+      }
+    },
+    "Petrol (Stationary)": {
+      "GB": {
+        "status": 201,
+        "emission_factor": "2.162800",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default-2026-confirmed"
+      },
+      "IN": {
+        "status": 201,
+        "emission_factor": "2.162800",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default-2026-confirmed"
+      },
+      "AE": {
+        "status": 201,
+        "emission_factor": "2.162800",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default-2026-confirmed"
+      },
+      "AE-DU": {
+        "status": 201,
+        "emission_factor": "2.162800",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default-2026-confirmed"
+      },
+      "AE-AZ": {
+        "status": 201,
+        "emission_factor": "2.162800",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default-2026-confirmed"
+      },
+      "AE-SH": {
+        "status": 201,
+        "emission_factor": "2.162800",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default-2026-confirmed"
+      },
+      "AE-NE": {
+        "status": 201,
+        "emission_factor": "2.162800",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default-2026-confirmed"
+      }
+    },
+    "LPG": {
+      "GB": {
+        "status": 201,
+        "emission_factor": "1.554000",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default"
+      },
+      "IN": {
+        "status": 201,
+        "emission_factor": "1.554000",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default"
+      },
+      "AE": {
+        "status": 201,
+        "emission_factor": "1.554000",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default"
+      },
+      "AE-DU": {
+        "status": 201,
+        "emission_factor": "1.554000",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default"
+      },
+      "AE-AZ": {
+        "status": 201,
+        "emission_factor": "1.554000",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default"
+      },
+      "AE-SH": {
+        "status": 201,
+        "emission_factor": "1.554000",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default"
+      },
+      "AE-NE": {
+        "status": 201,
+        "emission_factor": "1.554000",
+        "region_resolved": "GLOBAL",
+        "is_fallback_factor": false,
+        "fallback_reason": null,
+        "factor_source": "defra-global-default"
+      }
+    }
+  },
+  "vehicle_fuel_basis": {
+    "diesel": {
+      "status": 201,
+      "emission_factor": "2.519200",
+      "region_resolved": "GLOBAL",
+      "is_fallback_factor": false,
+      "fallback_reason": null,
+      "factor_source": "defra-global-default-2026-confirmed"
+    },
+    "petrol": {
+      "status": 201,
+      "emission_factor": "2.162800",
+      "region_resolved": "GLOBAL",
+      "is_fallback_factor": false,
+      "fallback_reason": null,
+      "factor_source": "defra-global-default-2026-confirmed"
+    },
+    "lpg": {
+      "status": 201,
+      "emission_factor": "1.554000",
+      "region_resolved": "GLOBAL",
+      "is_fallback_factor": false,
+      "fallback_reason": null,
+      "factor_source": "defra-global-default"
+    },
+    "cng": {
+      "status": 400,
+      "error": "No emission factor is available for category \"CNG\" (entered as \"Company Car (Average)\") in region \"GB\"."
+    }
+  },
+  "flights": {
+    "domestic": {
+      "status": 201,
+      "emission_factor": "0.229280",
+      "region_resolved": "GLOBAL",
+      "is_fallback_factor": false,
+      "fallback_reason": null,
+      "factor_source": "defra-2026"
+    },
+    "uk-international-short:economy": {
+      "status": 201,
+      "emission_factor": "0.125760",
+      "region_resolved": "GLOBAL",
+      "is_fallback_factor": false,
+      "fallback_reason": null,
+      "factor_source": "defra-2026"
+    },
+    "uk-international-long:economy": {
+      "status": 201,
+      "emission_factor": "0.117040",
+      "region_resolved": "GLOBAL",
+      "is_fallback_factor": false,
+      "fallback_reason": null,
+      "factor_source": "defra-2026"
+    },
+    "international-non-uk:economy": {
+      "status": 201,
+      "emission_factor": "0.109160",
+      "region_resolved": "GLOBAL",
+      "is_fallback_factor": false,
+      "fallback_reason": null,
+      "factor_source": "defra-2026"
+    }
+  },
+  "cng_rejection": {
+    "distance_basis_no_category": {
+      "error": "No emission factor is available for category \"CNG\" in region \"GB\"."
+    }
+  },
+  "custom": {
+    "with_factor": {
+      "status": 201,
+      "emission_factor": "3.500000",
+      "region_resolved": "GB",
+      "is_fallback_factor": false,
+      "fallback_reason": null,
+      "factor_source": "user-supplied"
+    },
+    "without_factor": {
+      "status": 400,
+      "error": "Category \"Purchased Goods & Services\" has no published emission factor. Supply emission_factor."
+    }
+  }
+}

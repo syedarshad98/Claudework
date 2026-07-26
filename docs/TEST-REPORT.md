@@ -433,4 +433,35 @@ available two tiers earlier under `region=AE`.
 - **Finding #4** (258 vs 251.92) — need your call on which figure is
   correct before anything touches the diesel row.
 
+### Remediation pass
+
+Same discipline as Phase 1: reproduce first, apply the fix, re-run the
+identical check, confirm the result flips — plus a saved before/after
+fixture (`cleartrace/backend/tests/fixtures/`) so "no regression" is a
+byte-for-byte diff, not a re-read of the code.
+
+**Fixture methodology.** Before touching the resolver,
+`tests/fixtures/generate-coverage-matrix.py` re-ran Phase 2's full Step 1
+coverage matrix (every category × every region, plus vehicle fuel-basis,
+flights, CNG rejection, and the custom:true path) against a live server and
+saved the raw output as `tests/fixtures/phase2-coverage-matrix.before.json`
+(22 categories × 7 regions + 4 vehicle-fuel cases + 4 flight cases + 2
+custom-category cases). The same script, re-run after the fix, produced
+`phase2-coverage-matrix.after.json`. A structural diff between the two
+found **exactly 16 leaf differences, all four fields (`emission_factor`,
+`region_resolved`, `fallback_reason`, `factor_source`) on exactly the four
+cells that should have changed** — `Water Supply` at `AE-DU`, `AE-AZ`,
+`AE-SH`, `AE-NE`. Every other cell in the matrix, including the one the
+instructions specifically called out (`Grid Electricity` at `AE-DU` and
+`AE-AZ`), was confirmed byte-identical before and after.
+
+| # | Finding | Status | Verification |
+|---|---|---|---|
+| 1 | Explicit UAE emirate region codes (`AE-DU`/`AE-AZ`/`AE-SH`/`AE-NE`) got the wrong Water Supply factor — the resolver's declared-fallback tier hardcoded a lookup for `AE-DU` specifically, missing the real verified `AE`-level row | **Fixed — general fix, not a Water Supply special case.** | `lib/factor-resolver.js` gained a new Tier 2: any subdivision-shaped region (`'XX-YY'`) tries its bare country code (`'AE-DU'` → `'AE'`) before the old subdivision-specific fallback (now Tier 3) or the cross-region GB substitute (now Tier 5). Applies to any future `'XX-YY'` region, not just AE. Reproduced the original bug live first (`AE-DU` Water Supply → GB's 0.149, `isFallback: true`, "unreviewed cross-region substitute"), applied the fix, re-ran the identical request: now resolves the real `2.7` UAE desalination figure, `region_resolved: "AE"`, `isFallback: true` with an honest "country-level" reason — still flagged, just no longer wrong. Full-matrix fixture diff (above) confirms nothing else moved. Two new permanent regression tests added to `tests/emissions-region-resolution.test.js` (`AE-DU` and `AE-AZ` Water Supply); full suite run: **41/41 passing** (39 pre-existing + 2 new). |
+| 2 | Vehicle fuel-basis and the DESNZ-2026-banded flight system are functionally correct but unreachable from the dashboard UI — no form fields exist for `method`, `fuel_type`, `cabin_class`, `touches_uk`, or `both_endpoints_uk`, and `'Business Travel (Flight)'` is never offered as a category | **Deferred — logged as a separate, scheduled workstream, not built in this pass, per instruction.** | No UI code touched. This is a frontend build (new form fields, category picker, conditional logic), not a calculation fix, and was explicitly out of scope for this remediation round. |
+| 3 | Dashboard shows a stale "DEFRA 2023" grid-electricity badge and sends that superseded factor to the server on every submission (server correctly discards it, but it's noise + a misleading display) | **Not addressed this pass** — outside the four steps in this remediation round; still open. | — |
+| 4 | Diesel reference-value mismatch: this test's "~258 kg per 100L" reference didn't match the system's actual output (251.92 kg/100L) | **Closed — confirmed a test-script error, not a system bug. No code change.** | The ~258 figure was a stale pre-verification reference used when drafting the Phase 2 test script, not a value derived from any DESNZ/DEFRA source in this codebase. The system's 251.92 kg/100L is confirmed correct: unchanged since DEFRA 2023, and explicitly re-confirmed current by the 2026 patch migration's citation of the DESNZ 2026 Major Changes report ("Fuels — no major changes this year," 5%+ materiality threshold). Every path — manual, upload, vehicle fuel-basis — agrees on 251.92; the diesel row is untouched. |
+| 5 | Dead code: `lookupFactor()`, `CEA_FACTORS`, `UAE_FACTORS` in `db/emission_factors.js` have zero callers | **Not addressed this pass** — outside the four steps in this remediation round; still open. | — |
+| 6 | Two independent, non-deprecated flight calculation paths coexist (legacy flat categories vs. the new banded category) with no schema/UI signal that one supersedes the other | **Not addressed this pass** — directly related to #2 (the legacy path is the *only* one the UI can reach); tracked together with it, not separately fixed. | — |
+
 **Phase 3 not started, per instructions.**
