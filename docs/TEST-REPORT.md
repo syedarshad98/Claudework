@@ -1619,4 +1619,261 @@ whatever Phase 5 turns out to cover, rather than as an isolated one-line patch h
 | 9 | **High** | `PATCH /api/emissions/:id` doesn't enforce future-date rejection — fully bypasses the Step 1 fix via edit. | **Tracked, not fixed this pass.** Confirmed live. |
 | 10 | **Medium** | `GET /api/onboarding/status` 500s when `benchmark_migration.sql`'s columns don't yet exist on a fresh database. | **Tracked, not fixed this pass.** Reproduced live via a reversible column-drop test; root cause confirmed, connection to Phase 5 flagged. |
 
-**Phase 5 not started, per instructions.**
+---
+
+## Phase 5: Frontend Smoke Test
+
+**Date:** 2026-07-27. **Scope:** every page in the app, in a real Playwright
+Chromium session — console errors, broken requests, dead-end buttons — plus
+targeted verification of how Phases 3-4's backend fixes actually surface (or
+don't) in the UI. Report-only, no fixes, same rule as every phase.
+
+### Step 1 — baseline sweep
+
+**Methodology note, worth recording:** the first sweep attempt looked like a
+mass failure — every page after login redirected to `onboarding.html`, every
+API call aborted mid-flight. This was not a bug: `frontend/js/team.js:8` and
+17 other page scripts each carry `if (localStorage.getItem('ct_onboarding')
+!== 'complete') window.location.replace('/onboarding.html');` at the top of
+the file, and the test tenant (`Calc Test Co`) had never completed onboarding
+— correct, intended behavior, working exactly as designed. Completed
+onboarding via the real `POST /api/onboarding/complete` endpoint (the same
+call the wizard's own final step makes) to unblock the rest of the sweep,
+which is now a permanent, legitimate state change for this long-lived test
+tenant, not a reverted test artifact.
+
+**Pages checked** (real login via the actual form, then one real browser
+navigation per page, console + network listeners attached throughout):
+`login.html`, `index.html`, `onboarding.html`, `targets.html`,
+`benchmarking.html`, `recommendations.html`, `environment.html`,
+`reporting.html`, `data.html`, `social.html`, `governance.html`,
+`brsr-section-a.html`, `brsr-section-b.html`, `brsr-p1.html` through
+`brsr-p9.html` (9 pages), `audit.html`, `validation.html`, `team.html` — 25
+pages total.
+
+**Result: 24 of 25 load cleanly** — no console errors, no broken
+asset/network requests, beyond one universal, environment-level artifact
+(below). The one flagged page (`onboarding.html`) is not a bug either: once
+onboarding is complete, `prefill()` (`frontend/js/onboarding.js:308-310`)
+correctly `window.location.replace('/')`s back to the dashboard — the
+"timeout" in the harness is Playwright's `networkidle` wait getting confused
+by a mid-load redirect, not an application failure. Confirmed by checking the
+full result: final title and URL are the dashboard's, not an error page.
+
+**Environment artifact, not an app bug, noted for the record:** every page
+logs `net::ERR_CONNECTION_RESET` for
+`fonts.googleapis.com/css2?family=Cabinet+Grotesk...` — this sandbox has no
+outbound access to Google Fonts. Not a code defect, but worth flagging: a
+real deployment on a network with the same restriction would silently fall
+back to system fonts everywhere, a real (if minor) visual-polish risk that
+has nothing to do with `CLAUDE.md` or any phase's actual code.
+
+**New finding, discovered directly by this sweep (Finding 11 — High):** the
+dashboard's "Recommended Actions" panel and the full `recommendations.html`
+page both show the same recommendation repeated three times in a row,
+immediately, unmissably, on page load — not a rendering quirk, a genuine
+data-integrity bug. `SELECT title, COUNT(*) FROM recommendation_library
+GROUP BY title HAVING COUNT(*) > 1` returns **all 43 distinct
+recommendation titles, every single one present in exactly 3 identical
+copies** (129 total rows) — the entire library was seeded three times over,
+not just one row. `GET /api/recommendations/summary`'s `quick_wins` array
+confirmed this at the API level too: three byte-identical entries for
+"Register for the REGO (Renewable Energy Guarantee of Origin) scheme."
+Screenshotted live on `recommendations.html`: every card in both the "Quick
+Wins" and "Medium Term" sections appears exactly three times consecutively,
+and the page's own summary stat ("39 recommendations available") is
+inflated by the same 3x factor. This affects every company in the database
+identically (`recommendation_library` is a shared, non-tenant-scoped table),
+is visible on the single most prominent dashboard widget, and would be
+immediately, obviously wrong to any real user or stakeholder looking at the
+product for the first time.
+
+### Step 2 — do Phases 3-4's backend fixes actually surface correctly?
+
+**Team deactivation (Phase 3) — clean on both counts, live-verified.**
+Clicked "Remove" on a user with attributed activity (`delete-test@calctest.io`,
+who owns emissions entry 143) through the real UI: blocked with the expected
+"cannot be undone" confirm, then a second confirm offering deactivation
+instead, then a real `PATCH .../deactivate` call. Reloaded the page: the
+row now renders `Editor` `Inactive` (a distinct grey badge next to the role
+pill) with a `Reactivate` button in place of `Remove` — a clear, obvious
+state, not an ambiguous one. For the last-admin block: set up a genuine
+two-admin company, deactivated one via the UI's own `deactivateMember()`
+function, then — using the second admin's own still-valid session, now
+itself deactivated, the documented is_active-checked-only-at-login
+limitation — attempted to deactivate the sole remaining active admin.
+Screenshotted the result: a real, correctly-styled red toast reading
+*"Cannot deactivate the last active admin — this would lock the company out
+with no one able to log in and manage the team."* — the backend's actual
+error text, not a generic "Something went wrong." Test admin and its data
+removed afterward; team roster confirmed back to its original 2-user
+baseline.
+
+**Future-date rejection on CREATE (Phase 4 remediation part 2) — clean.**
+Filled the real dashboard form (`Grid Electricity (UK)`, `10 kWh`, period
+`June 2028`) and clicked `Calculate & Save Entry`. A pink-bordered banner
+appeared directly above the form reading exactly `period cannot be in the
+future` — the server's own message (`fb.textContent = data.error ||
+'Failed to save'`, `dashboard.js:631`), not a raw stack trace, not a generic
+"Failed to save," not a silent no-op. Confirmed no entry was created.
+
+**Future-date bypass on EDIT (Finding 9) — confirmed not reachable through
+the UI at all; API-only, exactly as flagged when the finding was written up.**
+`frontend/js/dashboard.js`'s entries table renders exactly one action per
+row — a delete button (`.del-btn`, `dashboard.js:376`) — there is no edit
+button, no edit form, no `PATCH` call anywhere in the frontend. A real user
+browsing the product has no path to Finding 9 at all; it is reachable only
+by someone calling the API directly, which doesn't change the finding's
+severity (a `PATCH` bypassing validation is still a real gap regardless of
+whether today's UI happens to expose it) but does narrow who can currently
+trigger it. Worth restating precisely since STEP 2 asked for exactly this
+distinction: **confirmed API-only, not UI-reachable, today.**
+
+**Provenance badges (Phase 4) — PDF-only by design; confirmed there is no
+browser equivalent to check, and confirmed why.** Searched the entire
+frontend for anything resembling the scope-level "DEFRA"/"Multiple sources"
+badge fixed in `report.js`: none exists. The dashboard's only
+factor-source-related UI element is `#defra-ef-badge`
+(`dashboard.js:515-524`) — a *pre-submit* preview on the entry form showing
+which factor *will* apply to a *new* entry, a different feature entirely,
+built before Phase 4 and untouched by it. The donut-chart legend
+(`leg-s1`/`leg-s2`/`leg-s3`, `dashboard.js:271-273`) shows only a value and
+a percentage, no source. This matches Phase 4 remediation part 2's own
+explicit scoping decision — "don't restructure `report.js`'s aggregate PDF
+view to add a per-entry loop" — the fix was always PDF-only by design, not
+a browser feature that might have regressed. Confirmed the one path that
+*does* reach the fixed badge — the dashboard's `Export PDF` button
+(`#export-btn`, wired at `dashboard.js:750`) — is present and has a real
+click handler, not a dead link.
+
+**Finding 10 (`/api/onboarding/status` 500) — identified exactly where it's
+called and exactly what a user sees, live, by reproducing the missing-column
+condition again (same reversible drop/restore as when the finding was
+written up) inside an actual browser session this time.** Two call sites,
+both already known from the code, both now visually confirmed:
+
+- `frontend/js/dashboard.js:406`, inside `loadOnboardingData()`, runs
+  unconditionally on **every dashboard page load** — not just onboarding.
+  With the 500 live, the dashboard rendered **completely normally** — no
+  crash, no blank page, no visible error banner anywhere on the page
+  (confirmed via a DOM scan for any error-styled element: none found). The
+  only visible difference from a correct render: the personalized subtitle
+  under "ESG Dashboard" — normally `FY Jan 2026–Dec 2027 ·
+  tester@calctest.io` — silently fell back to a generic `Reporting period:
+  2026 · tester@calctest.io`, because `loadOnboardingData()`'s `if (!res ||
+  !res.ok) return;` (`dashboard.js:407`) swallows the failure before ever
+  setting `companyJurisdiction` or the FY-range label. A real user would
+  almost certainly never notice.
+- `frontend/js/onboarding.js:304-305`, inside `prefill()`, runs on **every
+  load of the onboarding wizard itself**. With the 500 live, the wizard
+  rendered its normal Step 1 layout with every field at its placeholder
+  default (`Company Name` empty, `Industry` unselected, etc.) — the exact
+  same `if (!res || !res.ok) return;` early-return, before the code ever
+  checks `d.onboardingComplete` or fills in any saved value. For a
+  genuinely first-time user (nothing to prefill anyway) this is
+  **completely indistinguishable from correct behavior.** Only a returning
+  user with previously-saved progress would see anything off — their data
+  silently not reappearing — and even then it reads as "maybe it didn't
+  save," not as an error.
+
+Net finding, precisely: **not a blank page, not a stuck spinner, not a
+visible error — silent, graceful-looking degradation on both of the two
+pages that call it**, which is arguably worse for diagnosability (nothing
+ever tells anyone, including support staff looking at a user's screen, that
+anything failed) even though it's better for the immediate user experience
+than a hard crash would be. Restored the columns immediately after
+confirming both screenshots; full suite re-run clean (41/41) afterward.
+
+### Step 3 — known gaps, current UI state confirmed to match the report
+
+- **Vehicle fuel-basis / banded flights (Phase 2 findings #2/#6):** still
+  unreachable from any form. Confirmed via the same check as Phase 4 — zero
+  references to `fuel_type`, `cabin_class`, `method`, or `flight` in
+  `index.html` or `dashboard.js`. The backend calculation paths exist and
+  work (per `CLAUDE.md`'s closure note); the frontend gap Phase 2 originally
+  found is exactly as open as it was then. No new testing needed beyond
+  this confirmation, per instruction.
+- **CSV export (Phase 4 remediation part 2's new `GET /api/emissions/export`
+  endpoint):** confirmed no UI button, link, or reference to it exists
+  anywhere in the frontend (`grep` across every `.html`/`.js` file: zero
+  hits). Same category of gap as vehicle fuel-basis/flights — a real,
+  working backend capability with no product surface reaching it yet.
+  Tracked the same way.
+
+### Findings, ranked by severity
+
+| # | Severity | Finding |
+|---|---|---|
+| 11 | **High** | **The entire `recommendation_library` table is seeded three times over** — all 43 distinct recommendations exist in exactly 3 identical copies each (129 total rows), confirmed at both the database and API level. Every company sees every recommendation tripled, on the single most prominent dashboard widget ("Recommended Actions") and throughout the full Recommendations page, immediately and unmissably on page load. New finding, discovered directly by this phase's baseline sweep — not previously reported in any prior phase. |
+| — | **Confirmed, no code changed** | Team deactivation UI (state clarity + last-admin toast), future-date CREATE rejection, and the `Export PDF` button all surface their respective Phase 3/4 backend fixes cleanly in the real browser — verified live with screenshots, not inferred from code. |
+| — | **Confirmed, no code changed** | Finding 9 (`PATCH` future-date bypass) is real but has zero UI surface today — reachable only via direct API access, never through the product as it currently exists. |
+| — | **Confirmed, no code changed** | Finding 10 (`onboarding/status` 500) degrades silently and gracefully on both pages that call it (dashboard, onboarding wizard) — no crash, no visible error, which is good for the immediate user but bad for anyone trying to diagnose it after the fact. |
+| — | **Confirmed, no code changed** | Vehicle fuel-basis/banded flights and the new CSV export endpoint both remain real backend capabilities with zero UI surface — same category of gap, tracked the same way, per instruction. |
+| — | **Info** | The Google Fonts CDN is unreachable in this sandbox (`ERR_CONNECTION_RESET` on every page) — an environment/network artifact, not an application defect, but a real visual-polish risk on any deployment with the same restriction. |
+
+Full regression suite: **41/41 passing** throughout Phase 5 (no application
+code was touched — report-only, as instructed).
+
+---
+
+## Overall audit closeout — all 5 phases
+
+Five phases, one continuous test-first discipline throughout: reproduce
+live before fixing, re-verify live after, never guess at severity or status
+without evidence, stop and ask rather than silently reinterpret scope when
+a premise didn't hold (Phase 3's duplicate-table question, most visibly).
+
+**Total distinct numbered findings across the full audit: 32** — numbered
+independently within each phase (Phase 1: 8 numbered + 1 unnumbered; Phase
+2: 7; Phase 3: 6 numbered, non-contiguous — 1,2,3,4,5,8; Phase 4: 9
+numbered, non-contiguous — 1,2,3,4,5,6,7,9,10; Phase 5: 1 new, #11).
+
+| Phase | Scope | Findings | Fixed | Deferred/Tracked | Confirmed not a bug |
+|---|---|---|---|---|---|
+| 1 — Security & Access Control | AuthZ, tenant isolation, demo-account safety | 9 | 7 | 2 | 0 |
+| 2 — Calculation Completeness | Emission-factor resolution, unit handling, fallback logic | 7 | 3 (1 narrowed) | 3 | 1 |
+| 3 — Data Integrity | FK/cascade behavior, orphaned data, schema drift | 6 | 3 | 3 | 0 |
+| 4 — Reporting/Export Paths | PDF/CSV/chart generation, cross-surface consistency | 9 | 5 | 4 | 0 |
+| 5 — Frontend Smoke Test | Every page, live-browser verification of prior fixes | 1 | 0 | 1 | 0 |
+| **Total** | | **32** | **18** | **13** | **1** |
+
+**Final status, every finding, in one place:**
+
+- **Fixed and live-verified (18):** Phase 1 #1, #2, #3, #4, #6, #7, #8;
+  Phase 2 #1, #3, #5 (narrowed); Phase 3 #1, #2, #5; Phase 4 #1, #2, #3, #4,
+  #6. All reproduced live before the fix, all re-verified live after, full
+  regression suite green at every step.
+- **Deferred / explicitly tracked, not fixed by design or instruction (13):**
+  Phase 1 #5 (audit coverage), Phase 1 unnumbered (`DELETE
+  /validation/locked` misleading 200); Phase 2 #2 and #6 (vehicle
+  fuel-basis + flights UI — still open, reconfirmed unchanged in Phase 5),
+  Phase 2 #7 (BRSR stale factor-source stamp — same finding as Phase 4 #7;
+  only its *encoding* was fixed, in Phase 4; the stale content itself
+  stays reserved for the BRSR redesign workstream); Phase 3 #3 (BRSR
+  evidence storage orphans), Phase 3 #4 (138 orphaned rows — confirmed
+  demo-only, real but not worth fixing at this scope), Phase 3 #8 (invite
+  acceptance flow, High); Phase 4 #5 (`charts/breakdown` rounding), Phase 4
+  #7 (counted once, see Phase 2 #7 above), Phase 4 #9 (`PATCH` future-date
+  bypass, High — confirmed in Phase 5 to have zero UI surface today, API-
+  only), Phase 4 #10 (`onboarding/status` 500, Medium — confirmed in
+  Phase 5 to degrade silently on both call sites that use it, no fix
+  built); Phase 5 #11 (`recommendation_library` tripled, High — new,
+  discovered this phase, not fixed).
+- **Confirmed not a bug (1):** Phase 2 #4 (diesel reference value — the
+  test script's own reference figure was stale, not the system's output).
+
+Two additional, already-fixed backend capabilities were reconfirmed in
+Phase 5 to still have **no UI surface at all** — not separate numbered
+findings, the same open gap as Phase 2 #2/#6 above, tracked the same way:
+vehicle fuel-basis/banded flights, and Phase 4's new `GET
+/api/emissions/export` CSV endpoint.
+
+**What would need a Phase 6, if there were one** (not a recommendation to
+open one — just where the trail currently ends): Finding 11's
+`recommendation_library` triplication is the most user-visible thing left
+untouched; the `PATCH` future-date bypass (#9) and the last mile of the
+BRSR redesign workstream (encoding is now fixed, structure/palette/stale-
+data still pending) are the next-most load-bearing.
+
+**All 5 phases are closed. This concludes the full-application test
+report.**
