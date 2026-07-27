@@ -18,8 +18,20 @@ async function ensureMigrated() {
   const teamSql = fs.readFileSync(
     path.join(__dirname, '../db/team_migration.sql'), 'utf8'
   );
+  // GET /status selects companies.industry_sector / annual_revenue_gbp_m
+  // (both added by benchmark_migration.sql), but this router never applied
+  // that file itself — it only ever existed here because routes/benchmarking.js
+  // or routes/company.js happened to have already run first in the same
+  // process. On a genuinely fresh database where onboarding is the first
+  // route ever hit, that 500s. Same redundant-application pattern already
+  // used for team_migration.sql above (and already established codebase-
+  // wide per CLAUDE.md's Conflict C2) — safe to re-run, idempotent.
+  const benchmarkSql = fs.readFileSync(
+    path.join(__dirname, '../db/benchmark_migration.sql'), 'utf8'
+  );
   await db.query(sql);
   await db.query(teamSql);
+  await db.query(benchmarkSql);
   migrated = true;
 }
 

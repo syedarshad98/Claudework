@@ -1616,8 +1616,8 @@ whatever Phase 5 turns out to cover, rather than as an isolated one-line patch h
 
 | # | Severity | Finding | Status |
 |---|---|---|---|
-| 9 | **High** | `PATCH /api/emissions/:id` doesn't enforce future-date rejection — fully bypasses the Step 1 fix via edit. | **Tracked, not fixed this pass.** Confirmed live. |
-| 10 | **Medium** | `GET /api/onboarding/status` 500s when `benchmark_migration.sql`'s columns don't yet exist on a fresh database. | **Tracked, not fixed this pass.** Reproduced live via a reversible column-drop test; root cause confirmed, connection to Phase 5 flagged. |
+| 9 | **High** | `PATCH /api/emissions/:id` doesn't enforce future-date rejection — fully bypasses the Step 1 fix via edit. | **Fixed, verified.** See "Final remediation pass — closing findings #9, #10, #11" below. |
+| 10 | **Medium** | `GET /api/onboarding/status` 500s when `benchmark_migration.sql`'s columns don't yet exist on a fresh database. | **Fixed, verified.** See "Final remediation pass — closing findings #9, #10, #11" below. |
 
 ---
 
@@ -1814,6 +1814,122 @@ confirming both screenshots; full suite re-run clean (41/41) afterward.
 Full regression suite: **41/41 passing** throughout Phase 5 (no application
 code was touched — report-only, as instructed).
 
+**Finding 11's final status:** fixed, verified — see "Final remediation
+pass — closing findings #9, #10, #11" below.
+
+---
+
+### Final remediation pass — closing findings #9, #10, #11
+
+**Date:** 2026-07-27. Scope: close out the three findings still tracked as
+open after Phases 4 and 5 — Finding 9, Finding 10, Finding 11 — the last
+items keeping the audit from being fully closed. Same discipline as every
+fix before it in this engagement: reproduce live, fix, re-verify live, full
+regression suite.
+
+**Finding 9 — `PATCH` future-date bypass, closed.** Reproduced first, live,
+before touching any code: `PATCH`ed an existing entry's `period` to a fresh
+future date — accepted with a plain `200`, confirming the bypass was still
+exactly as described in Phase 4's write-up.
+
+Fix: `routes/emissions.js`'s `PATCH /:id` handler now calls the same
+`isFuturePeriod()` helper from `lib/period.js` that `POST /` and
+`routes/upload.js` already use — no second implementation. Added
+immediately after `newPeriod` is resolved:
+```js
+if (period && isFuturePeriod(newPeriod)) {
+  return res.status(400).json({ error: 'period cannot be in the future' });
+}
+```
+Guarded on `period` actually being present in the request body, not merely
+on `newPeriod` being a future date — an edit that only touches other fields
+(e.g. `amount`) on an entry must not be blocked by a `period` value it
+never submitted.
+
+Re-verified live: `PATCH` to a new future date → `400
+{"error":"period cannot be in the future"}`, stored period unchanged.
+`PATCH` to a valid past/current period → `200`, applied normally. `PATCH`
+changing only `amount` (`period` omitted from the body) → `200`, unaffected
+by the new check. `PATCH` to the current month — the same boundary `POST`
+allows — → `200`, matching `POST`'s existing boundary behavior exactly.
+Test entries removed after confirming.
+
+**Finding 10 — `onboarding/status` 500, closed at the root.** The Phase 4
+remediation side effect that had been masking this (an unrelated migration
+fix letting `benchmark_migration.sql` finally complete, which happened to
+backfill the missing columns for every company already in this long-lived
+database) was never a fix for the actual bug — a genuinely fresh database,
+with `onboarding.js`'s route hit first, would still 500.
+
+Reproduced twice, from two independent angles, before fixing: (1)
+temporarily dropped `companies.industry_sector` /
+`companies.annual_revenue_gbp_m` on this database, restarted the server
+fresh, hit `GET /api/onboarding/status` as the first request — `500`, same
+`column "industry_sector" does not exist` error as before; (2) created a
+brand-new, genuinely empty database (`cleartrace_freshtest`), ran a
+temporary server against it on a separate port, registered a new company,
+and hit `GET /api/onboarding/status` as that company's literal first API
+call — same `500`.
+
+Fix: `routes/onboarding.js`'s own `ensureMigrated()` now also applies
+`benchmark_migration.sql`, in addition to `onboarding_migration.sql` and
+`team_migration.sql`, so the route is self-sufficient regardless of whether
+`routes/benchmarking.js` or `routes/company.js` has ever run in the same
+process. Same redundant-application pattern already established
+codebase-wide (`CLAUDE.md`'s Conflict C2) — safe because every statement in
+`benchmark_migration.sql` is idempotent.
+
+Re-verified both ways: the reversible column-drop test now self-heals — the
+first request after the fix returns `200` and the columns exist
+afterward. The fresh, empty `cleartrace_freshtest` database also returned
+`200` on the very first `/api/onboarding/status` call, with
+`/api/benchmarking/sectors` and `PATCH /api/company/sector` both
+regression-checked clean on the same fresh database. Temporary database and
+server torn down afterward; main database confirmed back to its established
+baseline (`industry_sector`/`annual_revenue_gbp_m` NULL for all 3
+companies, unchanged from before this pass).
+
+**Finding 11 — triple-seeded `recommendation_library`, closed at the
+root.** Root cause: `recommendation_library` had no unique constraint
+besides the auto-generated `id`, and the seed `INSERT`'s
+`ON CONFLICT DO NOTHING` carried no target column list — with nothing to
+conflict against, it was silently inert. Every process restart that hit
+`routes/recommendations.js`'s lazy migration for the first time re-inserted
+a full second, third (by this pass, fourth) copy of all 43 rows with new
+ids. Row count had grown to 172 by the time this pass started (up from the
+129 first observed in Phase 5), confirming the bug compounds on every fresh
+deploy/restart rather than being a one-time seeding accident.
+
+Fix, in `db/recommendations_migration.sql`:
+1. A one-time de-duplication `DELETE` that keeps the lowest `id` per
+   `title` and drops the rest, run before the constraint is added. Checked
+   first that every existing `company_recommendations` row referencing a
+   to-be-dropped duplicate was `status = 'new'` (the default) — confirmed
+   true for all of them — so the `ON DELETE CASCADE` cleanup that follows
+   loses nothing meaningful; those rows are freshly re-created, still
+   `status = 'new'`, the next time `GET /api/recommendations` runs its gap
+   analysis for that company.
+2. A real `CREATE UNIQUE INDEX IF NOT EXISTS
+   idx_recommendation_library_title ON recommendation_library (title)`.
+3. The seed `INSERT`'s conflict clause corrected from
+   `ON CONFLICT DO NOTHING` to `ON CONFLICT (title) DO NOTHING`, now
+   actually targeting the new index.
+
+Verified live: restarted the server and re-triggered the lazy migration
+(`GET /api/recommendations/summary`) — `recommendation_library` dropped
+from 172 rows to exactly 43, zero duplicate titles, `company_recommendations`
+dropped from 73 to 30 rows (the cascade cleanup, safe as established
+above). Restarted a second time and re-triggered again to confirm
+idempotency — stayed at exactly 43, did not regrow. Confirmed via API:
+GreenTech's `GET /api/recommendations` returned 17 total / 17 unique
+titles; Calc Test Co's `quick_wins` array showed 3 genuinely distinct
+recommendations instead of the same one three times. Confirmed visually via
+Playwright: the dashboard's "Recommended Actions" widget and the full
+`recommendations.html` page both show only distinct recommendations, no
+repeats, across both the Quick Wins and Medium Term sections.
+
+**Regression suite after all three fixes, together: 41/41 passing.**
+
 ---
 
 ## Overall audit closeout — all 5 phases
@@ -1833,17 +1949,18 @@ numbered, non-contiguous — 1,2,3,4,5,6,7,9,10; Phase 5: 1 new, #11).
 | 1 — Security & Access Control | AuthZ, tenant isolation, demo-account safety | 9 | 7 | 2 | 0 |
 | 2 — Calculation Completeness | Emission-factor resolution, unit handling, fallback logic | 7 | 3 (1 narrowed) | 3 | 1 |
 | 3 — Data Integrity | FK/cascade behavior, orphaned data, schema drift | 6 | 3 | 3 | 0 |
-| 4 — Reporting/Export Paths | PDF/CSV/chart generation, cross-surface consistency | 9 | 5 | 4 | 0 |
-| 5 — Frontend Smoke Test | Every page, live-browser verification of prior fixes | 1 | 0 | 1 | 0 |
-| **Total** | | **32** | **18** | **13** | **1** |
+| 4 — Reporting/Export Paths | PDF/CSV/chart generation, cross-surface consistency | 9 | 7 | 2 | 0 |
+| 5 — Frontend Smoke Test | Every page, live-browser verification of prior fixes | 1 | 1 | 0 | 0 |
+| **Total** | | **32** | **21** | **10** | **1** |
 
 **Final status, every finding, in one place:**
 
-- **Fixed and live-verified (18):** Phase 1 #1, #2, #3, #4, #6, #7, #8;
+- **Fixed and live-verified (21):** Phase 1 #1, #2, #3, #4, #6, #7, #8;
   Phase 2 #1, #3, #5 (narrowed); Phase 3 #1, #2, #5; Phase 4 #1, #2, #3, #4,
-  #6. All reproduced live before the fix, all re-verified live after, full
-  regression suite green at every step.
-- **Deferred / explicitly tracked, not fixed by design or instruction (13):**
+  #6, #9, #10; Phase 5 #11. All reproduced live before the fix, all
+  re-verified live after, full regression suite green at every step —
+  #9, #10, and #11 closed in the final remediation pass, above.
+- **Deferred / explicitly tracked, not fixed by design or instruction (10):**
   Phase 1 #5 (audit coverage), Phase 1 unnumbered (`DELETE
   /validation/locked` misleading 200); Phase 2 #2 and #6 (vehicle
   fuel-basis + flights UI — still open, reconfirmed unchanged in Phase 5),
@@ -1853,12 +1970,7 @@ numbered, non-contiguous — 1,2,3,4,5,6,7,9,10; Phase 5: 1 new, #11).
   evidence storage orphans), Phase 3 #4 (138 orphaned rows — confirmed
   demo-only, real but not worth fixing at this scope), Phase 3 #8 (invite
   acceptance flow, High); Phase 4 #5 (`charts/breakdown` rounding), Phase 4
-  #7 (counted once, see Phase 2 #7 above), Phase 4 #9 (`PATCH` future-date
-  bypass, High — confirmed in Phase 5 to have zero UI surface today, API-
-  only), Phase 4 #10 (`onboarding/status` 500, Medium — confirmed in
-  Phase 5 to degrade silently on both call sites that use it, no fix
-  built); Phase 5 #11 (`recommendation_library` tripled, High — new,
-  discovered this phase, not fixed).
+  #7 (counted once, see Phase 2 #7 above).
 - **Confirmed not a bug (1):** Phase 2 #4 (diesel reference value — the
   test script's own reference figure was stale, not the system's output).
 
@@ -1868,12 +1980,16 @@ findings, the same open gap as Phase 2 #2/#6 above, tracked the same way:
 vehicle fuel-basis/banded flights, and Phase 4's new `GET
 /api/emissions/export` CSV endpoint.
 
-**What would need a Phase 6, if there were one** (not a recommendation to
-open one — just where the trail currently ends): Finding 11's
-`recommendation_library` triplication is the most user-visible thing left
-untouched; the `PATCH` future-date bypass (#9) and the last mile of the
-BRSR redesign workstream (encoding is now fixed, structure/palette/stale-
-data still pending) are the next-most load-bearing.
+**Nothing from this audit's numbered findings remains open and unaddressed.**
+Finding 11's `recommendation_library` triplication, the `PATCH`
+future-date bypass (#9), and the `onboarding/status` 500 (#10) — the three
+items that had kept the audit from being fully closed — are all fixed and
+live-verified as of the final remediation pass, above. What remains open is
+exactly the set of items explicitly deferred by design or instruction
+throughout the audit (the bullet list above) and the last mile of the BRSR
+redesign workstream (encoding is fixed; structure, palette, and the stale
+factor-source data itself remain out of scope).
 
-**All 5 phases are closed. This concludes the full-application test
+**All 5 phases, plus the final remediation pass that closed findings #9,
+#10, and #11, are complete. This concludes the full-application test
 report.**

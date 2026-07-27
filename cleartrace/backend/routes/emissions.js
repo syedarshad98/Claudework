@@ -270,6 +270,9 @@ router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
       method, fuel_type, distance_km, cabin_class, touches_uk, both_endpoints_uk,
     } = req.body;
     const newPeriod = period || oldEntry.period;
+    if (period && isFuturePeriod(newPeriod)) {
+      return res.status(400).json({ error: 'period cannot be in the future' });
+    }
     if (newPeriod !== oldEntry.period && await isPeriodLocked(req.companyId, newPeriod)) {
       return res.status(423).json({ error: `Target period ${newPeriod} is locked.`, locked: true });
     }

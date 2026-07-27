@@ -34,6 +34,30 @@ CREATE TABLE IF NOT EXISTS company_recommendations (
 CREATE INDEX IF NOT EXISTS idx_comp_recs_company ON company_recommendations(company_id);
 CREATE INDEX IF NOT EXISTS idx_comp_recs_status  ON company_recommendations(company_id, status);
 
+-- ── De-duplicate pre-existing triplicated rows before enforcing uniqueness ──────
+-- The seed INSERT below always carried an `ON CONFLICT DO NOTHING` clause, but
+-- with no target column list it had nothing to actually conflict against — this
+-- table had no unique constraint besides the auto-generated `id`, which never
+-- collides on insert. Every fresh-process restart that hit
+-- routes/recommendations.js's lazy migration for the first time re-inserted a
+-- full second, then third, copy of all ~43 rows with new ids. Confirmed live:
+-- 129 rows for 43 distinct titles, exactly 3 identical copies of each,
+-- discovered during Phase 5's frontend smoke test. Keeps the lowest id per
+-- title, drops the rest; any company_recommendations row pointing at a
+-- dropped duplicate cascade-deletes (ON DELETE CASCADE) and is re-created
+-- cleanly, with a fresh 'new' status, the next time GET /api/recommendations
+-- runs its gap analysis for that company — confirmed live before running this
+-- that every existing company_recommendations row was already status='new'
+-- (the default), so nothing meaningful is lost by this cleanup today.
+DELETE FROM recommendation_library rl
+ WHERE EXISTS (
+   SELECT 1 FROM recommendation_library rl2
+    WHERE rl2.title = rl.title AND rl2.id < rl.id
+ );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_recommendation_library_title
+  ON recommendation_library (title);
+
 -- ── Seed recommendation_library (40+ entries) ──────────────────────────────────
 INSERT INTO recommendation_library
   (title, description, scope, category, co2e_saving_min, co2e_saving_max,
@@ -311,4 +335,4 @@ VALUES
  ARRAY['Manufacturing','Retail','Technology','Healthcare','Hospitality','Construction','Transport & Logistics','Professional Services'],
  'all_sectors')
 
-ON CONFLICT DO NOTHING;
+ON CONFLICT (title) DO NOTHING;
