@@ -10,6 +10,18 @@ const ds          = require('../lib/pdf-design-system');
 // neutral tag rather than a fabricated calculation-source badge.
 const REPORTED_VALUE_BADGE = { label: 'Reported value', variant: 'reported' };
 
+// Same 2-decimal convention used everywhere else in this report, EXCEPT for
+// sub-1-tonne values, which need more precision than that to actually show
+// a genuine change — a real move from 0.00288 to 0.00144 tCO2e (a real 50%
+// drop) still reads as "0.00 to 0.00" at 2 decimals, which looks like no
+// change happened at all. Only used for the Highlights page's YoY prose,
+// where showing the real magnitude of a computed change matters more than
+// matching the headline total's fixed 2-decimal display everywhere else.
+function formatTonnes(v) {
+  if (v === 0) return '0.00';
+  return Math.abs(v) < 1 ? v.toFixed(4) : v.toFixed(2);
+}
+
 // Small gray label line above a group of rows (e.g. "Water — Period: 2024-06").
 function drawSubLabel(doc, margin, width, y, text) {
   y = ds.checkPageBreak(doc, y, 16, margin);
@@ -153,6 +165,78 @@ router.get('/', requireRole('admin', 'editor'), async (req, res) => {
       }
     } catch (_) { /* column may not exist on older deployments — keep default */ }
 
+    // ── Highlights page data ─────────────────────────────────────────────
+    // Stat 1: % of Scope 1+2 tCO2e backed by a resolved, non-fallback
+    // factor_source. "Resolved" = factor_source is set at all (not a legacy
+    // row that predates the column); "non-fallback" = is_fallback_factor is
+    // not TRUE — a legacy row with no is_fallback_factor value yet (NULL,
+    // predating region_factors_migration.sql) is treated as not-a-known-
+    // fallback rather than penalized for a gap in older data, mirroring how
+    // report.js already treats a NULL factor_source elsewhere in this file.
+    let factorCoveragePct = null; // null = no Scope 1/2 data to compute a % from
+    let factorCoverageResolved = 0;
+    let factorCoverageTotal    = 0;
+    try {
+      const covRow = await db.query(
+        `SELECT
+            COALESCE(SUM(co2e_tonnes), 0) AS total_co2e,
+            COALESCE(SUM(co2e_tonnes) FILTER (
+              WHERE factor_source IS NOT NULL AND COALESCE(is_fallback_factor, FALSE) = FALSE
+            ), 0) AS resolved_co2e
+           FROM emissions_entries
+          WHERE company_id = $1 AND scope IN (1, 2)`,
+        [companyId]
+      );
+      factorCoverageTotal    = parseFloat(covRow.rows[0].total_co2e);
+      factorCoverageResolved = parseFloat(covRow.rows[0].resolved_co2e);
+      if (factorCoverageTotal > 0) {
+        factorCoveragePct = parseFloat((factorCoverageResolved / factorCoverageTotal * 100).toFixed(1));
+      }
+    } catch (_) { /* is_fallback_factor may not exist on older deployments */ }
+
+    // Stat 2: largest scope-level YoY change, only between two ADJACENT
+    // calendar years that both actually have data for this company — not
+    // "today's year vs last calendar year," since a company's most recent
+    // data may not be from the current year at all (a lapsed reporter).
+    // Only scopes with a non-zero prior-year total are eligible, since a
+    // percentage change from zero is undefined, not "infinite good news."
+    let yoyHighlight = null; // null = no genuine adjacent prior period
+    try {
+      const yearRows = await db.query(
+        `SELECT SUBSTRING(period, 1, 4) AS yr, scope,
+                COALESCE(SUM(co2e_tonnes), 0) AS total
+           FROM emissions_entries
+          WHERE company_id = $1
+          GROUP BY yr, scope`,
+        [companyId]
+      );
+      const byYear = {};
+      yearRows.rows.forEach(r => {
+        if (!byYear[r.yr]) byYear[r.yr] = { 1: 0, 2: 0, 3: 0 };
+        byYear[r.yr][parseInt(r.scope)] = parseFloat(r.total);
+      });
+      const years = Object.keys(byYear).sort();
+      if (years.length > 0) {
+        const latestYear = years[years.length - 1];
+        const priorYear  = String(parseInt(latestYear, 10) - 1);
+        if (byYear[priorYear]) {
+          const scopeLabels = { 1: 'Scope 1', 2: 'Scope 2', 3: 'Scope 3' };
+          let best = null;
+          [1, 2, 3].forEach(s => {
+            const current = byYear[latestYear][s];
+            const prior   = byYear[priorYear][s];
+            if (prior > 0) {
+              const changePct = parseFloat(((current - prior) / prior * 100).toFixed(1));
+              if (!best || Math.abs(changePct) > Math.abs(best.changePct)) {
+                best = { scope: s, label: scopeLabels[s], current, prior, changePct };
+              }
+            }
+          });
+          if (best) yoyHighlight = { ...best, latestYear, priorYear };
+        }
+      }
+    } catch (_) { /* defensive, matches the try/catch discipline used above */ }
+
     const scopes     = scopeRows.rows;
     const frameworks = fwRows.rows;
     const totals     = entryRows.rows[0];
@@ -268,10 +352,91 @@ router.get('/', requireRole('admin', 'editor'), async (req, res) => {
       generatedDate: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
     });
 
-    // ── Executive Summary ────────────────────────────────────────────────
+    // ── Highlights ────────────────────────────────────────────────────────
+    // Real, computed stats only — every number below is derived from this
+    // company's own data, never an assumed/fabricated figure. Each block
+    // degrades to an honest empty state when the underlying data doesn't
+    // exist yet (a company's first reporting period, or no Scope 1/2 data
+    // at all), rather than showing a zero-value or invented "change."
     doc.addPage();
     let y = margin;
+    y = ds.drawSectionHeader(doc, 'Highlights', y);
+
+    if (factorCoveragePct !== null) {
+      const fullyResolved = factorCoveragePct >= 99.95;
+      const remainderPct  = parseFloat((100 - factorCoveragePct).toFixed(1));
+      y = ds.drawHighlightBlock(doc, {
+        x: margin, y, width: WIDTH, margin,
+        accentColor: fullyResolved ? ds.COLORS.teal : ds.COLORS.amber,
+        eyebrow: 'Factor Source Coverage',
+        value: factorCoveragePct.toFixed(1),
+        valueUnit: '%',
+        headline: fullyResolved
+          ? 'Every Scope 1 and 2 tonne is backed by a resolved, non-fallback factor.'
+          : `${remainderPct}% of Scope 1 and 2 emissions relied on a fallback-tier factor.`,
+        body: `${factorCoverageResolved.toFixed(2)} of ${factorCoverageTotal.toFixed(2)} tCO2e across Scope 1 ` +
+              `and 2 resolved to a verified, region-specific or global emission factor, without falling back ` +
+              `to an unreviewed cross-region substitute.` +
+              (fullyResolved ? '' : ' The remainder used a fallback-tier factor — see the per-entry CSV export for exactly which entries.'),
+      }).bottom;
+    } else {
+      y = ds.drawHighlightBlock(doc, {
+        x: margin, y, width: WIDTH, margin,
+        accentColor: ds.COLORS.gray,
+        eyebrow: 'Factor Source Coverage',
+        headline: 'No Scope 1 or 2 emissions recorded yet.',
+        body: 'Once Scope 1 or 2 entries are logged, this section will show what share of that total resolved ' +
+              'to a verified factor source rather than an unreviewed fallback.',
+      }).bottom;
+    }
+    y += 16;
+
+    if (yoyHighlight) {
+      const { label, current, prior, changePct, latestYear, priorYear } = yoyHighlight;
+      const increased = changePct >= 0;
+      y = ds.drawHighlightBlock(doc, {
+        x: margin, y, width: WIDTH, margin,
+        accentColor: increased ? ds.COLORS.amber : ds.COLORS.teal,
+        eyebrow: 'Largest Year-on-Year Change',
+        value: `${increased ? '+' : ''}${changePct}`,
+        valueUnit: '%',
+        headline: `${label} ${increased ? 'increased' : 'decreased'} the most year-on-year, ${priorYear} to ${latestYear}.`,
+        body: `${label} moved from ${formatTonnes(prior)} tCO2e in ${priorYear} to ${formatTonnes(current)} tCO2e in ` +
+              `${latestYear} — the largest scope-level swing of any scope with data in both periods.`,
+      }).bottom;
+    } else {
+      const noDataAtAll = entries === 0;
+      y = ds.drawHighlightBlock(doc, {
+        x: margin, y, width: WIDTH, margin,
+        accentColor: ds.COLORS.gray,
+        eyebrow: 'Largest Year-on-Year Change',
+        headline: 'Not enough data yet for a year-on-year comparison.',
+        body: noDataAtAll
+          ? 'No emissions data has been recorded yet. Year-on-year change will appear here automatically once ' +
+            'two reporting periods exist.'
+          : "This is currently this company's first recorded reporting period. Year-on-year change will appear " +
+            'here automatically once a second period exists.',
+      }).bottom;
+    }
+
+    // ── Executive Summary — rebalanced hierarchy (v2): one dominant hero
+    // total, ESG score as a supporting stat beneath it, Scope 1/2/3 demoted
+    // to a slim strip rather than three equally-weighted cards. ───────────
+    doc.addPage();
+    y = margin;
     y = ds.drawSectionHeader(doc, 'Executive Summary', y);
+
+    y = ds.drawHeroMetric(doc, {
+      x: margin, y, width: WIDTH,
+      label: 'Total GHG Emissions',
+      value: totalCO2e,
+      unit: 'tCO2e',
+      valueFontSize: 44,
+      unitFontSize:  14,
+    });
+    y += 6;
+    doc.moveTo(margin, y).lineTo(margin + 90, y).lineWidth(2.5).strokeColor(ds.COLORS.amber).stroke();
+    y += 20;
 
     const scoreCard = ds.drawStatCard(doc, {
       x: margin, y, width: WIDTH, height: 70,
@@ -286,10 +451,8 @@ router.get('/', requireRole('admin', 'editor'), async (req, res) => {
 
     const scopeLabels  = { 1: 'Scope 1 — Direct', 2: 'Scope 2 — Energy', 3: 'Scope 3 — Value Chain' };
     const scopeAccents = { 1: ds.COLORS.teal, 2: ds.COLORS.slateBlue, 3: ds.COLORS.amber };
-    const cardGap  = 12;
-    const cardW    = (WIDTH - cardGap * 2) / 3;
 
-    // Honest per-card provenance: badge only when the scope actually has
+    // Honest per-segment provenance: badge only when the scope actually has
     // entries, using that scope's OWN distinct-source list — not the
     // company-wide one, which would falsely show "Multiple sources" on a
     // single-source scope just because a *different* scope uses a different
@@ -301,24 +464,20 @@ router.get('/', requireRole('admin', 'editor'), async (req, res) => {
       return { label: 'Multiple sources', variant: 'custom' };
     };
 
-    let scopeCardBottom = y;
-    [1, 2, 3].forEach((s, i) => {
+    const scopeSegments = [1, 2, 3].map(s => {
       const row = scopes.find(r => parseInt(r.scope) === s);
       const co2 = row ? parseFloat(row.total_co2e).toFixed(2) : '0.00';
       // hasData checks the raw value, not the rounded display string — a
       // real non-zero scope total that happens to round to "0.00" must
       // still show its real source, not silently drop the badge.
       const hasData = row ? parseFloat(row.total_co2e) > 0 : false;
-      const x   = margin + i * (cardW + cardGap);
-      const card = ds.drawStatCard(doc, {
-        x, y, width: cardW,
+      return {
         label: scopeLabels[s], value: co2, unit: 'tCO2e',
         accentColor: scopeAccents[s],
         badge: scopeBadge(s, hasData),
-      });
-      scopeCardBottom = card.bottom;
+      };
     });
-    y = scopeCardBottom + 24;
+    y = ds.drawScopeStrip(doc, { x: margin, y, width: WIDTH, segments: scopeSegments }).bottom + 24;
 
     // ── Reporting Framework Status ───────────────────────────────────────
     y = ds.drawSectionHeader(doc, 'Reporting Framework Status', y);
