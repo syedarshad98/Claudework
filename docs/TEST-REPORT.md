@@ -941,4 +941,274 @@ Tracked here explicitly for that reason. No code changed.
 | 5 | Two structurally near-identical tables for pending team invitations | **Fixed, premise corrected first** — both tables were live (not one dead), for different purposes; flagged and confirmed before acting. Consolidated onto `team_invites` with an `is_onboarding_draft` discriminator; `pending_invites` dropped after confirming it was empty. Verified live in both directions (draft never leaks to the Team page, real invites never leak into onboarding) plus full suite: 41/41 passing. |
 | 8 | **New finding, discovered during Finding 5's investigation.** **Team invites have no acceptance/redemption flow.** `POST /api/team/invite` (`routes/team.js:88-98`) creates a `team_invites` row with a real random `token`, but nothing anywhere ever reads that token back. `POST /api/auth/register` (`routes/auth.js:17-61`) unconditionally `INSERT`s a brand-new `companies` row and always sets the new user's role to `'admin'` (`routes/auth.js:31-39`) — it never checks `team_invites` for a pending row matching the registering email, by token or otherwise. Confirmed by grepping every route file: no handler queries `team_invites.token`, and no frontend page (`register.html` or otherwise) reads a `?token=`-style parameter. The one case that *does* work is an invite for an email that already has an account elsewhere (`routes/team.js:75-84` moves that existing user into the new company directly) — but for the much more common case of inviting someone brand new, the invite is pure UI theater: the invitee gets no email (no email-sending code exists either), and even if they somehow learned about it and registered with the invited address, they'd land in their own new company as its admin, not in the inviting company at any role. **Severity: High** — this is a core piece of the team-management feature not functioning at all, not a data-integrity edge case, discovered incidentally while confirming Finding 5's table consolidation didn't change invite semantics. | **Tracked, not fixed this pass** — this is new, separate feature work (an accept-invite endpoint/page that consumes the token and joins the inviting company instead of creating one, plus actually sending the invite email), not a Phase 3 data-integrity remediation. No code changed for this finding. |
 
-**Phase 3 is closed. Phase 4 not started, per instructions.**
+**Phase 3 is closed.**
+
+---
+
+## Phase 4: Reporting/Export Paths
+
+**Date:** 2026-07-27. **Scope:** every endpoint that generates a PDF, CSV, chart, or
+aggregated view of tenant data. Report-only — no fixes, same rule as every phase so
+far.
+
+### Step 1 — surface inventory (mapped before any testing)
+
+| Surface | Route | Type | Auth |
+|---|---|---|---|
+| ESG summary report | `GET /api/report` (`routes/report.js:79`) | PDF (PDFKit, streamed) | `auth, demoGuard`, `admin`/`editor` |
+| BRSR regulatory filing | `GET /api/brsr/report/:submissionId` (`routes/brsr.js:1772`) | PDF (PDFKit, streamed) | `auth, demoGuard`, `admin`/`editor` |
+| 12-month scope trend | `GET /api/charts/trend` (`routes/charts.js:7`) | JSON aggregate | `auth` |
+| All-time scope breakdown | `GET /api/charts/breakdown` (`routes/charts.js:48`) | JSON aggregate | `auth` |
+| ESG score + KPI cards | `GET /api/kpi` (`routes/kpi.js:7`) | JSON aggregate | `auth` |
+| Sector list | `GET /api/benchmarking/sectors` (`routes/benchmarking.js:76`) | JSON lookup | `auth` |
+| Benchmark comparison | `GET /api/benchmarking/summary` (`routes/benchmarking.js:199`) | JSON aggregate | `auth` |
+| Per-scope benchmark | `GET /api/benchmarking/breakdown` (`routes/benchmarking.js:229`) | JSON aggregate | `auth` |
+| Gap-analysis recommendations | `GET /api/recommendations` (`routes/recommendations.js:24`) | JSON aggregate | `auth, demoGuard` |
+| Recommendations summary | `GET /api/recommendations/summary` (`routes/recommendations.js:106`) | JSON aggregate | `auth, demoGuard` |
+| Live factor preview | `GET /api/emission-factors?region=` (`server.js:36`) | JSON aggregate | public (no auth) |
+
+**No raw data/CSV export of emissions entries exists anywhere in the app.** The only
+CSV-related code is `downloadTemplate()` in `frontend/js/dashboard.js:733` — a static,
+blank template for the *upload* feature, containing no tenant data at all. Grepped the
+whole `routes/` and `frontend/js/` trees for `csv`/`export`/`download`/`blob` — the
+only other hits are the two PDF `Content-Disposition: attachment` headers above and
+the unrelated evidence-file downloads in `brsr-evidence.js` (uploaded files, not
+generated exports). This absence is itself relevant to Step 3, below.
+
+### Step 2 — live generation and verification
+
+Environment: real PostgreSQL, three live tenants with real data —
+`GreenTech Solutions Ltd` (demo, 84 entries, single `factor_source='DEFRA 2023'`
+company-wide), `Calc Test Co` (non-demo, 4 entries split across two different
+`factor_source` values on two different scopes — chosen specifically to stress the
+provenance-badge logic), plus one throwaway zero-entry company and one throwaway
+500-entry company created and destroyed for the edge-case tests in Step 4.
+
+**`report.js`.** Generated real PDFs for both tenants, rendered to PNG (`pdftoppm`).
+Scope totals cross-checked against direct SQL aggregation — exact match in every
+case: GreenTech's Executive Summary (`324.22 tCO2e total`, `159.66`/`122.76`/`41.80`
+per scope) matches `SELECT scope, SUM(co2e_tonnes) ... GROUP BY scope` exactly;
+Calc Test Co (`0.02 tCO2e total`) likewise. The underlying numbers are correct.
+
+The **provenance badge**, however, is wrong in two independent, live-reproduced ways:
+
+1. **False "Multiple sources."** `distinctSources` (`routes/report.js:123-129`) is
+   computed **once, company-wide** — `SELECT DISTINCT factor_source FROM
+   emissions_entries WHERE company_id=$1`, with no `scope` filter — then the exact
+   same list is reused for all three scope cards (`routes/report.js:281-285`). Live on
+   Calc Test Co: Scope 1 has exactly one entry, one source
+   (`defra-global-default-2026-confirmed`); Scope 2 has three entries, all one source
+   (`defra-2026`). Both scopes are internally single-source. But because the *company*
+   has two distinct sources total (one per scope), **both** scope cards show
+   "Multiple sources" — confirmed visually in the rendered PDF. Checked this against
+   every `(company, scope)` pair in the live database (`GROUP BY company_id, scope`,
+   `COUNT(DISTINCT factor_source)`): **every single one currently equals 1.** "Multiple
+   sources" is not merely occasionally wrong — as implemented, it is never currently
+   correct for any real scope in this database, and fires purely because of scope
+   contamination from the rest of the company's data. The code's own comment
+   (`routes/report.js:278-280`, "Honest per-card provenance... no new aggregation —
+   just reused") states the intent this defeats.
+2. **Silently suppressed badge on genuine non-zero data.** The `hasData` gate that
+   decides whether to draw *any* badge (`routes/report.js:296`) is
+   `parseFloat(co2) > 0`, where `co2` is the **already-`.toFixed(2)`-rounded display
+   string** (`routes/report.js:290`), not the underlying value. Live on Calc Test Co:
+   Scope 2's true total is `0.00432` tCO2e (three real entries, non-zero,
+   correctly attributed) — but `(0.00432).toFixed(2)` is `"0.00"`,
+   `parseFloat("0.00") > 0` is `false`, so `hasData` is `false` and **no badge is
+   drawn at all** for a scope that has real, correctly-sourced data. Confirmed
+   visually: the Scope 2 card in the rendered PDF carries no badge, while Scope 1
+   (whose rounded total happens to clear zero) incorrectly carries "Multiple sources"
+   per point 1.
+
+**Empty-state and large-dataset behavior of `report.js`** were clean — see Step 4.
+
+**`brsr.js` report.** Generated a real 28-page PDF for a live submission (Calc Test
+Co, financial year 2026-27), rendered every relevant page to PNG.
+
+- Confirmed **Phase 2 Finding #7 is still present, unfixed, exactly as expected** ("known,
+  not fixed this pass"). Saved a real Scope 2 value via the actual
+  `PUT /api/brsr/p6/:id` endpoint (not a direct DB write) to trigger the auto-stamp;
+  for this UK-jurisdiction company it wrote `disclosures.emission_factor_source =
+  "DEFRA 2023 (0.20493 kg CO₂e/kWh)"` (`routes/brsr.js:675`) — the same stale 2023
+  figure Finding #7 named. New to this pass: confirmed this stale value is not just
+  stored in the DB/API, it is **visibly rendered in the actual generated PDF**
+  (page 11, "Emission Factor Source: DEFRA 2023 (0.20493 kg CO₂e/kWh)"), which
+  Phase 2's investigation didn't check at the PDF-render layer.
+- **New finding, not previously documented:** the entire BRSR PDF renders pervasive
+  garbled characters wherever a non-ASCII glyph appears — every em dash and every
+  subscript/currency symbol. The Table of Contents shows `"Section A â€" General
+  Disclosures"` instead of `"Section A — General Disclosures"` on every one of its 11
+  rows; the P6 Environment page shows `"Scope 2 — Current FY (tCO ‚e)"` and
+  `"GHG Intensity (tCO ‚e/ ¹ cr)"` instead of `"tCO₂e"` / `"₹ cr"`; the stale factor
+  string itself renders as `"DEFRA 2023 (0.20493 kg COâ‚‚e/kWh)"`. Confirmed visually
+  in the rendered PNG (not a `pdftotext` extraction artifact — the corruption is in
+  the actual glyphs on the page). Traced to source: the same double-encoded UTF-8
+  byte sequences are already visible in `routes/brsr.js`'s own code comments when read
+  directly (`ââ P6 helpers ââ` instead of `── P6 helpers ──`), so this
+  originates in how the source `.js` files were saved, not in PDFKit's rendering.
+  Numeric figures themselves are unaffected — only punctuation, unit subscripts, and
+  the ₹ symbol — but for a document meant for real SEBI regulatory submission,
+  garbled em dashes and units throughout every section is a visible, real defect.
+
+**`charts.js` / `benchmarking.js` / `kpi.js` — manual aggregate verification.**
+
+- `charts/breakdown`: correct in substance, but its displayed `total`
+  (`routes/charts.js:66`) is the **sum of three already-`ROUND(...,3)`-rounded
+  per-scope SQL values**, not `ROUND()` of the true unrounded total. Demonstrated live
+  on Calc Test Co: true total is `0.024546` (`ROUND(0.024546,3) = 0.025`), but the
+  endpoint returns `0.024` — the sum of `0.020 + 0.004 + 0`. A small, real,
+  mathematically-demonstrable discrepancy, not a rounding artifact of display alone.
+- `charts/trend`: for Calc Test Co, **every one of the 12 months returns zero** for
+  every scope, despite the company having four real, correctly-recorded entries. Root
+  cause: the entries carry `period` values of `2027-10`, `2027-11`, `2028-01`,
+  `2028-03` — all in the future relative to the server's current date (2026-07) —
+  which fall entirely outside the endpoint's fixed trailing-12-month window
+  (`routes/charts.js:11-16`). Confirmed this is a fully reachable path, not a test-only
+  artifact: `routes/emissions.js:116-117` validates `period` only against the regex
+  `/^\d{4}-\d{2}$/` — there is no bounds check anywhere rejecting a future period, so
+  any real user (a typo, or deliberate pre-logging) can produce this.
+- `kpi.js`: same root cause, narrower window. Every one of the four KPI cards
+  (energy/fuel/water/waste) filters strictly to the current or previous calendar
+  month (`routes/kpi.js:15-17,87-130`); none of Calc Test Co's entries match either,
+  so all four show `0` despite real, non-zero underlying data.
+- `benchmarking.js`: see the dedicated finding below — this is the most severe result
+  of this phase.
+
+**`benchmarking.js` — live hang, root-caused.** `GET /api/benchmarking/summary`
+(and `/sectors`, `/breakdown`) do not return — confirmed with a 15-second timeout,
+repeatable on every call, not a one-off. Investigated via `pg_stat_activity` (no
+blocking query at rest — ruled out a stuck lock) and by re-running
+`benchmark_migration.sql` directly against the live table: it fails deterministically,
+every time, single-connection, no concurrency involved, with
+`duplicate key value violates unique constraint
+"idx_benchmark_sector_scope_jurisdiction"`. Bisected the file block by block to find
+the exact statement: the "backfill" `UPDATE` at `db/benchmark_migration.sql:48-54`,
+intended to normalise legacy pre-jurisdiction rows —
+
+```sql
+UPDATE benchmark_data
+   SET jurisdiction = 'UK', data_status = 'verified', intensity_unit = 'tCO2e_per_gbp_m'
+ WHERE jurisdiction IS DISTINCT FROM 'UK' OR data_status IS DISTINCT FROM 'verified'
+    OR intensity_unit IS DISTINCT FROM 'tCO2e_per_gbp_m';
+```
+
+— has a `WHERE` clause that, once the file has ever successfully seeded the
+India-derived rows (`jurisdiction='IN'`, inserted later in the same file, lines
+115-151), **also matches those IN rows** (their jurisdiction is, correctly,
+`'IN' ≠ 'UK'`) and resets them back to `jurisdiction='UK'` — immediately colliding
+with the pre-existing UK row for the same `(industry_sector, scope)` on the unique
+index. The file is not actually idempotent, despite the codebase-wide convention
+(`CLAUDE.md` §4, `server.js:58`) that every migration must be safe to re-run.
+
+This is not a one-time failure: because `await ensureMigrated()`
+(`routes/benchmarking.js:7-14`) is called **before** the route handler's own
+`try/catch`, the rejection is never caught, Express never sends a response, and the
+request hangs forever — a live, empirical instance of the exact gap `CLAUDE.md` §3
+already describes in the abstract ("no `next(err)` call in any route... an unhandled
+rejection in a handler will hang the request"). And because `benchmark_migration.sql`
+is independently, lazily re-applied by **two separate call sites** with their own
+`migrated` flags — `routes/benchmarking.js:11` and `routes/company.js:12`, already
+flagged as Conflict C2 in Phase 2 — the *second* of those two call sites to ever run
+in a process's life re-executes the whole file from scratch, hits the now-populated
+India rows, and dies here. Confirmed the blast radius extends past benchmarking
+itself: `PATCH /api/company/sector` (`routes/company.js:19`, same shared migration)
+hangs identically. Because the corruption trigger is the **data**, not an in-memory
+flag, this is not a transient race that clears on restart — the same failure will
+recur on literally the first request to either route after every future server boot,
+for as long as the India rows exist. This is, right now, a full and permanent outage
+of the benchmarking feature (and of company sector/revenue editing) in this database.
+
+To still exercise the underlying comparison-query logic for Step 2 (since the route
+itself cannot complete), set a test company's `industry_sector`/
+`annual_revenue_gbp_m` via direct SQL — the same effect the hung `PATCH
+/api/company/sector` would have had — bypassing only the broken migration gate, not
+fixing it, and reverted this test-setup change afterward. With that in place, the
+query logic itself checks out, but exposed a **second, compounding issue** layered
+underneath: `getCompanyBenchmarkData`'s emissions query
+(`routes/benchmarking.js:126-133`) filters to `period LIKE '<current-year>-%'` — even
+narrower than `charts/trend`'s 12-month window — so it too returns zero for Calc Test
+Co's future-dated entries. Same root cause as the `charts/trend`/`kpi.js` gaps above.
+
+**`recommendations.js`.** Hit live against GreenTech: `GET /api/recommendations`
+returned 34 real, gap-analysis-driven recommendations with 6 matched triggers
+(`no_renewable_energy`, `high_business_travel`, `missing_supplier_audit`, etc.);
+`GET /api/recommendations/summary` returned correctly in 41ms. No issues found.
+
+**`GET /api/emission-factors?region=GB`.** Still correctly live-resolving
+(`0.14396`/`defra-2026`), consistent with Phase 2's fix. No regression.
+
+### Step 3 — cross-surface consistency
+
+Picked three real GreenTech entries across three categories: id 4 (Grid Electricity,
+`11.332584` tCO2e), id 5 (Business Travel, `2.092326` tCO2e), id 7 (Water Usage,
+`0.028563` tCO2e).
+
+- `GET /api/emissions` — what the dashboard's entries table
+  (`frontend/js/dashboard.js:354-378`) actually consumes — returns `co2e_tonnes` and
+  `emission_factor` for all three, byte-exact against the database.
+- But `GET /api/emissions`'s `SELECT` (`routes/emissions.js:64-65`) **does not include
+  `factor_source` at all** — confirmed by listing every key in the live response:
+  `id, category, scope, amount, unit, period, emission_factor, co2e_tonnes, source,
+  notes, created_at, locked, validation_status`. `source` here is the entry's
+  input method (`'manual'`/`'upload'`), not provenance. The dashboard's per-entry
+  table has no way to show which emission factor sourced any given entry — not a
+  rendering choice, the data never leaves the server.
+- `report.js`'s PDF has **no per-entry breakdown at all** — only the scope-level
+  aggregate cards and their (already-documented-as-buggy) badge. None of the three
+  picked entries appears individually anywhere in the PDF.
+- No raw data/CSV export of emissions entries exists (confirmed in Step 1).
+
+**Conclusion:** of the three surfaces the instructions named — dashboard UI, `report.js`
+PDF, raw/CSV export — only the dashboard operates at individual-entry granularity at
+all, and even it omits `factor_source`. The other two don't support an entry-level
+comparison in any form, so "does the same factor_source appear identically across all
+three" isn't a check that can fail or pass — it's structurally unanswerable, because
+two of the three surfaces never carry that value to begin with. Separately, the
+future-period issue from Step 2 produces a real, numeric same-company divergence:
+`report.js` and `charts/breakdown` (both all-time, unwindowed) show Calc Test Co's
+correct non-zero totals, while `charts/trend`, `kpi.js`, and `benchmarking.js` all
+show zero for the exact same underlying entries — with nothing in any of those views
+telling the user why the numbers disagree.
+
+### Step 4 — edge cases
+
+**Zero-entry company.** Registered a fresh company (`Empty State Co`) through the
+real `/api/auth/register` flow — no seeding, no shortcuts. `GET /api/report`
+returned `200` in `0.3s`, a clean 2-page PDF: `"0 data entries recorded · 0.00 tCO2e
+total"`, all three scope cards at `0.00` with no badges (consistent with the
+`hasData` gate above — correctly `false` for a true zero), every optional section
+showing its "not recorded yet" message. No crash, no blank/broken page. Company
+deleted afterward.
+
+**Deactivated-user attribution (Phase 3's `is_active`).** Deactivated Calc Test Co's
+user 8, who has an emissions entry attributed to them (`id=143`), via the real
+`PATCH /api/team/:userId/deactivate` route. Re-fetched `GET /api/report` — the
+company's totals were unchanged, entry 143 remained fully present via `GET
+/api/emissions` (unfiltered by `is_active`), scoped and attributed exactly as before.
+Deactivation correctly touches only login, never data or its visibility, matching
+Phase 3's documented design intent. Reactivated the user afterward to restore state.
+
+**Large dataset (500 entries).** Bulk-inserted 500 real (non-generated-column)
+emissions rows across all three scopes and seven categories into a throwaway company.
+`GET /api/report` completed in `0.3s`, returned a correct `13.95 tCO2e total`
+(exact match against direct SQL: `5.99 + 2.02 + 5.94`), still **exactly 2 pages** —
+`report.js` never renders a per-entry table, so its page count is independent of
+entry volume by construction. No timeout, no pagination break. This is a clean
+result, but it also reinforces the Step 3 finding: at no dataset size does this
+report ever expose entry-level detail. Test data and company deleted afterward; full
+suite re-run clean (41/41 — no application code was touched this phase).
+
+### Findings, ranked by severity
+
+| # | Severity | Finding |
+|---|---|---|
+| 1 | **Critical** | **`GET /api/benchmarking/{sectors,summary,breakdown}` and `PATCH /api/company/{sector,revenue}` hang indefinitely — a live, current, and permanent outage, not a transient bug.** `db/benchmark_migration.sql`'s backfill `UPDATE` (lines 48-54) is not actually idempotent: once its own India-derived rows exist, re-running the file resets their `jurisdiction` back to `'UK'`, colliding with the pre-existing UK row on `idx_benchmark_sector_scope_jurisdiction` and throwing. Because `ensureMigrated()` is awaited outside the route's `try/catch`, the rejection is never caught and Express never responds — confirmed via repeated 15s timeouts. Two independent lazy-migration call sites (`routes/benchmarking.js`, `routes/company.js` — Phase 2's Conflict C2) mean the second one to ever run in a process's life triggers this, and it recurs on every future boot since the trigger is the row data itself, not an in-memory flag. |
+| 2 | **High** | **`report.js`'s scope-level provenance badge is wrong in two independent, live-confirmed ways.** Its `distinctSources` list is computed company-wide, not per-scope, so "Multiple sources" fires on a scope with only one source whenever a *different* scope uses a different source elsewhere in the company — confirmed never currently accurate for any real `(company, scope)` pair in the live database. Separately, the badge's `hasData` gate checks the already-`.toFixed(2)`-rounded display string rather than the true value, so a scope with real non-zero data whose rounded total is `"0.00"` gets no badge at all — provenance silently omitted for real data. |
+| 3 | **Medium** | **Entries with a future-dated `period` (a fully reachable path — no validation rejects it) silently vanish from date-windowed views while remaining correct in all-time ones.** `charts/trend` (trailing 12 months), `kpi.js` (current/previous month only), and `benchmarking.js`'s own comparison query (current calendar year only) all show zero for real, correctly-recorded entries outside their window, while `report.js` and `charts/breakdown` (both all-time) correctly include them — with no indication anywhere that the numbers on different dashboard widgets for the same company disagree, or why. |
+| 4 | **Medium** | **No surface in the product shows an individual entry's category, tCO2e figure, and `factor_source` together.** `GET /api/emissions` (what the dashboard's own entries table consumes) never selects `factor_source` at all; `report.js`'s PDF has no per-entry breakdown, only scope aggregates; no raw data/CSV export of emissions entries exists anywhere (only a blank upload *template*, unrelated to real data). Per-entry provenance traceability cannot be verified by a user through the product at any dataset size — confirmed at 0, 4, 84, and 500 entries. |
+| 5 | **Low** | **`charts/breakdown`'s displayed `total` is the sum of three already-rounded per-scope values, not the rounded true total**, producing small but real, demonstrable discrepancies (`0.024` returned vs. `0.025` = the correctly-rounded true total of `0.024546`, live on Calc Test Co). |
+| 6 | **Low** | **The BRSR PDF export renders pervasive garbled characters throughout the entire document** — every em dash and every subscript/currency symbol (—, ₂, ₹), confirmed visually in the rendered pages, not a text-extraction artifact. Traced to mis-encoded UTF-8 bytes already present in the backend source files (visible even in code comments). Numeric figures are unaffected; only punctuation and unit/currency symbols are corrupted — but this is now visually confirmed present in a document intended for real SEBI regulatory submission, not previously documented at the PDF-render layer. |
+| 7 | **Info — known, tracked** | Phase 2 Finding #7 (BRSR P6's stale hardcoded `'DEFRA 2023 (0.20493 kg CO₂e/kWh)'` emission-factor-source stamp) is confirmed still present, unfixed, exactly as expected — and now additionally confirmed to appear in the actual rendered PDF output itself, not just the DB/API, which the original Phase 2 pass didn't check. |
+| — | **Positive** | `report.js` handles a zero-entry company and a 500-entry company both cleanly and quickly (0.3s each, correct totals, no crash, no pagination break); Phase 3's user deactivation correctly leaves report totals and entry visibility completely untouched, confirmed live. |
+
+**Phase 4 is closed. Phase 5 not started, per instructions.**
