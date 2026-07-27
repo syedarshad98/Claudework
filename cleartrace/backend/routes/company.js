@@ -17,7 +17,6 @@ async function ensureMigrated() {
 // ── PATCH /api/company/sector ────────────────────────────────────────────────
 // Admin only. Updates industry_sector and optional annual_revenue_gbp_m.
 router.patch('/sector', requireRole('admin'), async (req, res) => {
-  await ensureMigrated();
   const { industry_sector, annual_revenue_gbp_m, annual_revenue_inr_cr } = req.body;
 
   if (!industry_sector) {
@@ -25,6 +24,7 @@ router.patch('/sector', requireRole('admin'), async (req, res) => {
   }
 
   try {
+    await ensureMigrated();
     await db.query(
       `UPDATE companies
           SET industry_sector       = $1,
@@ -46,7 +46,6 @@ router.patch('/sector', requireRole('admin'), async (req, res) => {
 // ── PATCH /api/company/revenue ────────────────────────────────────────────────
 // Admin only. Updates annual_revenue_gbp_m separately if needed.
 router.patch('/revenue', requireRole('admin'), async (req, res) => {
-  await ensureMigrated();
   const { annual_revenue_gbp_m } = req.body;
 
   if (annual_revenue_gbp_m == null || isNaN(parseFloat(annual_revenue_gbp_m))) {
@@ -54,6 +53,7 @@ router.patch('/revenue', requireRole('admin'), async (req, res) => {
   }
 
   try {
+    await ensureMigrated();
     await db.query(
       'UPDATE companies SET annual_revenue_gbp_m = $1 WHERE id = $2',
       [parseFloat(annual_revenue_gbp_m), req.companyId]

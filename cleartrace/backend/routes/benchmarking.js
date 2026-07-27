@@ -74,8 +74,8 @@ function trajectoryStatus(currentCo2e, baselineCo2e, targetPct, targetYear) {
 
 // ── GET /api/benchmarking/sectors ────────────────────────────────────────────
 router.get('/sectors', async (req, res) => {
-  await ensureMigrated();
   try {
+    await ensureMigrated();
     const r = await db.query(
       `SELECT DISTINCT industry_sector FROM benchmark_data ORDER BY industry_sector`
     );
@@ -197,8 +197,8 @@ async function getCompanyBenchmarkData(companyId) {
 
 // ── GET /api/benchmarking/summary ────────────────────────────────────────────
 router.get('/summary', async (req, res) => {
-  await ensureMigrated();
   try {
+    await ensureMigrated();
     const data = await getCompanyBenchmarkData(req.companyId);
     if (data.sector_required) return res.json({ sector_required: true });
 
@@ -227,8 +227,8 @@ router.get('/summary', async (req, res) => {
 
 // ── GET /api/benchmarking/breakdown ──────────────────────────────────────────
 router.get('/breakdown', async (req, res) => {
-  await ensureMigrated();
   try {
+    await ensureMigrated();
     const data = await getCompanyBenchmarkData(req.companyId);
     if (data.sector_required) return res.json({ sector_required: true });
 

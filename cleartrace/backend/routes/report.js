@@ -119,6 +119,9 @@ router.get('/', requireRole('admin', 'editor'), async (req, res) => {
     // Collect distinct factor sources used in this report period
     let factorFooter = 'DEFRA 2023 (UK)';
     let distinctSources = [];
+    // Per-scope source lists — a genuinely per-card badge (see scopeBadge below)
+    // needs to know which sources appear *within that scope*, not company-wide.
+    let sourcesByScope = { 1: [], 2: [], 3: [] };
     try {
       const sourceRows = await db.query(
         `SELECT DISTINCT factor_source FROM emissions_entries
@@ -136,6 +139,17 @@ router.get('/', requireRole('admin', 'editor'), async (req, res) => {
           parts.push(`${cs} (India Grid, CEA CO₂ Baseline Database)`);
         }
         factorFooter = parts.join('; ');
+      }
+
+      const scopeSourceRows = await db.query(
+        `SELECT scope, ARRAY_AGG(DISTINCT factor_source) AS sources
+           FROM emissions_entries
+          WHERE company_id=$1 AND factor_source IS NOT NULL
+          GROUP BY scope`,
+        [companyId]
+      );
+      for (const row of scopeSourceRows.rows) {
+        sourcesByScope[parseInt(row.scope)] = row.sources;
       }
     } catch (_) { /* column may not exist on older deployments — keep default */ }
 
@@ -276,11 +290,14 @@ router.get('/', requireRole('admin', 'editor'), async (req, res) => {
     const cardW    = (WIDTH - cardGap * 2) / 3;
 
     // Honest per-card provenance: badge only when the scope actually has
-    // entries, using the same distinct-source list already computed above
-    // (no new aggregation — just reused for display).
-    const scopeBadge = (hasData) => {
-      if (!hasData || distinctSources.length === 0) return null;
-      if (distinctSources.length === 1) return ds.classifyFactorSource(distinctSources[0]);
+    // entries, using that scope's OWN distinct-source list — not the
+    // company-wide one, which would falsely show "Multiple sources" on a
+    // single-source scope just because a *different* scope uses a different
+    // source elsewhere in the company.
+    const scopeBadge = (scope, hasData) => {
+      const sources = sourcesByScope[scope] || [];
+      if (!hasData || sources.length === 0) return null;
+      if (sources.length === 1) return ds.classifyFactorSource(sources[0]);
       return { label: 'Multiple sources', variant: 'custom' };
     };
 
@@ -288,12 +305,16 @@ router.get('/', requireRole('admin', 'editor'), async (req, res) => {
     [1, 2, 3].forEach((s, i) => {
       const row = scopes.find(r => parseInt(r.scope) === s);
       const co2 = row ? parseFloat(row.total_co2e).toFixed(2) : '0.00';
+      // hasData checks the raw value, not the rounded display string — a
+      // real non-zero scope total that happens to round to "0.00" must
+      // still show its real source, not silently drop the badge.
+      const hasData = row ? parseFloat(row.total_co2e) > 0 : false;
       const x   = margin + i * (cardW + cardGap);
       const card = ds.drawStatCard(doc, {
         x, y, width: cardW,
         label: scopeLabels[s], value: co2, unit: 'tCO2e',
         accentColor: scopeAccents[s],
-        badge: scopeBadge(parseFloat(co2) > 0),
+        badge: scopeBadge(s, hasData),
       });
       scopeCardBottom = card.bottom;
     });

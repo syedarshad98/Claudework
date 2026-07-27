@@ -42,16 +42,20 @@ DROP INDEX IF EXISTS idx_benchmark_sector_scope;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_benchmark_sector_scope_jurisdiction
   ON benchmark_data (industry_sector, scope, jurisdiction);
 
--- ── 5. Backfill existing rows so all columns are explicitly set ───────────────
--- (Rows added before these columns existed will already have the NOT NULL DEFAULT
--- values, but this UPDATE makes intent explicit and is safe to re-run.)
-UPDATE benchmark_data
-   SET jurisdiction   = 'UK',
-       data_status    = 'verified',
-       intensity_unit = 'tCO2e_per_gbp_m'
- WHERE jurisdiction   IS DISTINCT FROM 'UK'
-    OR data_status    IS DISTINCT FROM 'verified'
-    OR intensity_unit IS DISTINCT FROM 'tCO2e_per_gbp_m';
+-- ── 5. (removed) ────────────────────────────────────────────────────────────
+-- Phase 4 remediation: this step used to be a backfill UPDATE resetting
+-- jurisdiction/data_status/intensity_unit to the UK/verified defaults for any
+-- row not already matching them. It was never actually needed — step 3's
+-- ALTER TABLE ... ADD COLUMN ... NOT NULL DEFAULT already backfills every
+-- pre-existing row with those exact defaults the moment the column is added,
+-- which is what the step's own comment already said ("rows added before
+-- these columns existed will already have the NOT NULL DEFAULT values").
+-- The only rows it could ever actually match, on any run after the first,
+-- were the intentionally-different India rows inserted in step 7 below
+-- (jurisdiction='IN') — so re-running the file reset them back to 'UK' and
+-- collided with the pre-existing UK row on idx_benchmark_sector_scope_jurisdiction,
+-- throwing a duplicate-key error on every subsequent invocation. Removed
+-- rather than narrowed: it had no remaining legitimate purpose to preserve.
 
 -- ── 6. UK benchmark seed data: 8 sectors × 3 scopes = 24 rows ────────────────
 -- Intensity: tCO2e per £1m revenue  |  Absolute: tCO2e

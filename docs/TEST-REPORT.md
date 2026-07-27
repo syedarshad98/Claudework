@@ -1211,4 +1211,181 @@ suite re-run clean (41/41 — no application code was touched this phase).
 | 7 | **Info — known, tracked** | Phase 2 Finding #7 (BRSR P6's stale hardcoded `'DEFRA 2023 (0.20493 kg CO₂e/kWh)'` emission-factor-source stamp) is confirmed still present, unfixed, exactly as expected — and now additionally confirmed to appear in the actual rendered PDF output itself, not just the DB/API, which the original Phase 2 pass didn't check. |
 | — | **Positive** | `report.js` handles a zero-entry company and a 500-entry company both cleanly and quickly (0.3s each, correct totals, no crash, no pagination break); Phase 3's user deactivation correctly leaves report totals and entry visibility completely untouched, confirmed live. |
 
-**Phase 4 is closed. Phase 5 not started, per instructions.**
+**Phase 4 is closed.**
+
+---
+
+### Phase 4 remediation, part 1: fixes + clarifications
+
+**Date:** 2026-07-27.
+
+#### Step 1 — benchmarking hang (Critical) — fixed
+
+**Was this already documented?** Checked first, as instructed. `CLAUDE.md`'s Phase 0
+architecture recon does document the *enabling mechanism* — Conflict C2 names
+`benchmark_migration.sql` being applied by both `routes/benchmarking.js:11` and
+`routes/company.js:12` behind independent `migrated` flags, "so the same DDL executes
+several times per process" — and §3 separately documents the general
+"no `next(err)`... an unhandled rejection will hang the request" gap. **Neither piece
+of pre-existing documentation states that this combination actually breaks anything.**
+C2 characterises the repeated execution as an inefficiency, not a crash; nothing in
+`CLAUDE.md` mentions "duplicate key," a hang, or `idx_benchmark_sector_scope_jurisdiction`
+anywhere. So: the *architecture that made this possible* was known and unresolved: not
+newly discovered. The *concrete, live, currently-reproducing consequence* — that this
+specific migration is non-idempotent and that this specific route path hangs forever
+because of it — was first found and diagnosed in Phase 4, not previously documented.
+
+**Reproduced fresh**, live, before touching anything: `GET /api/benchmarking/summary`
+timed out at 15s (`curl` exit 28, `HTTP:000`), repeatable.
+
+**Fixed the non-idempotent backfill.** `db/benchmark_migration.sql`'s step 5 — a
+`backfill UPDATE` resetting `jurisdiction`/`data_status`/`intensity_unit` to the
+UK/verified defaults for any row not already matching them — was removed entirely
+rather than narrowed. It had no remaining legitimate purpose: step 3's
+`ALTER TABLE ... ADD COLUMN ... NOT NULL DEFAULT` already backfills every pre-existing
+row with those exact defaults the moment the column is added (Postgres does this
+automatically), which the step's own comment already said. The only rows it could
+ever actually match, on any run after the first, were the intentionally-different
+India rows inserted later in the same file — so re-running it reset them back to
+`'UK'` and collided with the pre-existing UK row on the unique index. Full reasoning
+left in the file as a comment at the (now-empty) step 5.
+
+**Added error handling.** `await ensureMigrated()` was being awaited *before* each
+route handler's own `try/catch` in both `routes/benchmarking.js` (`/sectors`,
+`/summary`, `/breakdown`) and `routes/company.js` (`/sector`, `/revenue`) — moved
+inside the existing `try` block in all five handlers, so any future migration failure
+is now caught by the same `catch` that already handles query errors and returns the
+existing clean `500` message, instead of the promise rejection escaping uncaught and
+the request hanging forever.
+
+**Verified, in order:**
+1. Applied the fix, restarted the server, confirmed `/api/benchmarking/{sectors,summary,breakdown}` and `PATCH /api/company/{sector,revenue}` all respond correctly (`sectors` in 39ms; `summary`/`breakdown` return real comparison data once a sector is set, e.g. `"benchmark_status":"below_median"`).
+2. **Confirmed the fix is durable across a restart** — not just an in-memory flag reset. Killed and restarted the server fresh and hit `/api/benchmarking/summary` as the *very first* request of the new process: `200` in 47ms. This matters because the original bug's trigger was the row data itself, not process state — a fix that only cleared the in-memory `migrated` flag would have hung again on this exact test.
+3. **Confirmed the error-handling half separately**, deliberately: temporarily appended a guaranteed-failing statement (`SELECT 1/0;`) to a scratch copy of the migration file, restarted the server, and hit `/api/benchmarking/sectors` and `PATCH /api/company/sector` — both returned a clean `500 {"error":"Failed to fetch sectors"}` / `{"error":"Failed to update sector"}` in ~20-30ms, not a hang. Restored the correct file and restarted again to confirm normal operation resumed.
+4. Full regression suite: **41/41 passing.**
+
+#### Step 2 — provenance badge accuracy (treated as High) — fixed
+
+Reproduced both bugs fresh first, on the current code, before applying any fix:
+generated Calc Test Co's report PDF and confirmed the same failures documented in the
+original Phase 4 pass still reproduce identically — Scope 1 (single entry, single
+source) shows a false "Multiple sources" badge purely because Scope 2 uses a
+*different* source elsewhere in the company; Scope 2 (three entries, real non-zero
+total `0.00432`) shows **no badge at all**, because its `.toFixed(2)` display string
+`"0.00"` fails the `> 0` gate.
+
+**Fixed both, in `routes/report.js`:**
+- Added a per-scope distinct-source query (`GROUP BY scope`) alongside the existing
+  company-wide one (which the footer text still legitimately needs), and changed
+  `scopeBadge` to look up sources for the *specific scope* being drawn, not the
+  whole company's list.
+- Changed the `hasData` gate to check the raw `parseFloat(row.total_co2e) > 0`
+  instead of the already-rounded display string, so a real non-zero total that
+  happens to round to `"0.00"` still shows its real source.
+
+**Verified:** re-rendered Calc Test Co's report to PNG — Scope 1 now correctly shows
+a single "DEFRA" badge (its one real source), Scope 2 now correctly shows the same
+"DEFRA" badge too (its real source, previously suppressed) despite its displayed
+value still reading `0.00`, Scope 3 correctly still shows no badge (genuinely zero).
+Regression-checked GreenTech (single source company-wide *and* per-scope) — output
+byte-for-byte unchanged from before the fix, as expected. Full suite: **41/41.**
+
+#### Step 3 — clarifications (not fixed, as instructed)
+
+**(a) Why can no surface show category + tCO2e + factor_source together?**
+Checked precisely — this is **a missing query, not a schema limitation**, though the
+answer differs by surface:
+
+- **Dashboard/API (`GET /api/emissions`): a trivial missing column, nothing else.**
+  `emissions_entries.factor_source` exists, is populated on every insert
+  (`routes/emissions.js:157-163`), and is even returned once — `POST
+  /api/emissions`'s `RETURNING *` includes it, and `frontend/js/dashboard.js:639-642`
+  shows it in a success toast for 5 seconds after saving. But `GET /api/emissions`
+  (`routes/emissions.js:64-65`) — the *only* other read path, used by
+  `loadEntries()` every time the table renders — hand-picks a narrower column list
+  that omits `e.factor_source`. No JOIN, no schema change, no new query needed:
+  the column is sitting in the same row as `category` and `co2e_tonnes` already
+  selected. There is also no per-entry detail `GET /:id` route at all (only
+  `GET /`, `PATCH /:id`, `DELETE /:id`), so after that 5-second toast fades, no API
+  call exists that can retrieve it again for that entry.
+- **`report.js`'s PDF: architectural, not a query gap.** It only ever runs
+  `GROUP BY scope` aggregate queries — there is no per-entry loop anywhere in its
+  code. Adding entry-level provenance here isn't a missing `SELECT` column; it would
+  need a new report section (e.g., an entries appendix) that doesn't exist today.
+- **Raw/CSV export: the feature is simply absent.** Nothing to add a column to.
+
+So: the dashboard gap is a one-line fix; the PDF gap needs a design decision; the
+export gap needs a feature built from nothing. Not fixed this pass, per instruction.
+
+**(b) Is a future-dated entry ever legitimate?** Checked every layer for evidence of
+intent and found none. The UI's period input is a plain HTML5 `<input type="month">`
+with **no `max` attribute** (`frontend/index.html:354`) — a user can freely scroll
+forward to any future year in the native picker. Server-side, `routes/emissions.js:116-117`
+validates `period` only against `/^\d{4}-\d{2}$/` — format, not bounds.
+The database column is `period TEXT NOT NULL` (`db/schema.sql:31`) with no `CHECK`
+constraint. `lib/validate.js`'s rules cover duplicates and amount spikes, nothing
+about date plausibility. The app already has a **separate, purpose-built mechanism**
+for forward-looking figures — `reduction_target_pct`/`target_year`/`baseline_emissions`
+(the targets/baseline feature) — which is conceptually distinct from
+`emissions_entries` (named, and structured with generated `co2e_tonnes`, as a table of
+*actual measured* records, not projections). The existence of period-locking
+(`locked_periods`, closing out a period for audit finality) further implies periods
+are meant to represent closed, historical reporting windows, not open-ended
+placeholders. **No evidence anywhere of intended support for future-dated entries** —
+every mechanism that touches `period` treats it as a plain string with a format
+check and nothing else. This reads as an unvalidated input path, not a considered
+product decision. Not fixed this pass, per instruction — reported for a decision.
+
+#### Step 4 — BRSR encoding corruption, severity read (read-only, as instructed)
+
+Rendered the current BRSR PDF fresh (both GreenTech's and Calc Test Co's live
+submissions) and scanned every page. Precise characterisation:
+
+- **Not unreadable, not opaque garbage.** Every numeric figure, date, and financial
+  year renders perfectly — confirmed across both submissions. Only punctuation
+  (em dashes) and two specific Unicode symbols (the CO₂ subscript, the ₹ rupee sign)
+  are affected, and only wherever the source text actually uses them.
+- **Two distinct, separate corruption patterns, from two different causes:**
+  1. **Em dashes and the auto-stamped disclosure string render as literal mojibake**
+     (`"Principle 6 â€" Environment"`, `"DEFRA 2023 (0.20493 kg COâ‚‚e/kWh)"`) — the
+     source `.js` files already contain double-encoded UTF-8 bytes (the same
+     corruption is visible in `routes/brsr.js`'s own code comments), so PDFKit is
+     faithfully rendering already-broken input.
+  2. **Field-label unit symbols render as a dropped/substituted glyph, not mojibake**
+     (`"tCO₂e"` → `"tCO ,e"`, `"₹ cr"` → `"¹ cr"`) — visually confirmed on the P6
+     GHG-intensity rows. This looks less like garbage and more like a spacing
+     glitch, which is arguably a subtler problem: a careless reader could misread
+     `"¹ cr"` as a real value rather than immediately recognising corruption.
+  3. Every page count that surfaced any corruption at all was small and predictable
+     — the Table of Contents (11 rows, always) and specifically the P6 GHG-intensity
+     /currency-unit labels (only present when Scope 2 data has been entered — a
+     GreenTech submission with no P6 data saved yet showed **zero** corrupted lines
+     anywhere outside the TOC). Every other section — Section A/B, P1-P5, P7-P9, all
+     narrative and tabular content that doesn't use these three specific characters
+     — renders completely clean.
+- **Net read:** real, visible, and would look unprofessional to a careful reviewer of
+  a real SEBI filing — but narrow, predictable, confined to punctuation/units, and
+  never touches a reported figure. This is a judgment call for you: whether "visibly
+  wrong in a regulatory document" is itself enough to jump the BRSR-redesign queue,
+  independent of whether it's "unreadable." No code touched, per instruction.
+
+#### Step 5 — charts/breakdown rounding-composition bug (logged only)
+
+| # | Severity | Finding | Status |
+|---|---|---|---|
+| — | **Low** | `charts/breakdown`'s displayed `total` is the sum of three already-`ROUND(...,3)`-rounded per-scope SQL values, not `ROUND()` of the true unrounded total — demonstrated live on Calc Test Co: `0.024` returned vs. `0.025` (the correctly-rounded true total of `0.024546`). | **Tracked, not fixed this pass.** Logged here per instruction; no code touched. |
+
+#### Remediation summary
+
+| Step | Item | Outcome |
+|---|---|---|
+| 1 | Benchmarking hang (Critical) | **Fixed.** Non-idempotent backfill removed; `ensureMigrated()` error handling added to both affected route files; durability across restart and clean-failure-on-collision both independently verified live. C2's *mechanism* was already documented and unresolved; the *hang itself* was new to Phase 4. |
+| 2 | Provenance badge (High) | **Fixed.** Per-scope source computation; raw-value `hasData` gate. Both bugs reproduced fresh before the fix, both confirmed resolved after, visually, via rendered PNG. |
+| 3a | Entry-level provenance gap | **Clarified, not fixed.** A trivial missing column at the API layer; an architectural gap at the PDF layer; an absent feature for export. Three different problems, not one. |
+| 3b | Future-dated entries | **Clarified, not fixed.** No evidence of intent anywhere in the stack; reads as an unvalidated input path. |
+| 4 | BRSR encoding corruption | **Assessed, not fixed.** Real but narrow — punctuation/unit symbols only, never reported figures; two distinct root causes. Decision on redesign-queue priority left to you. |
+| 5 | `charts/breakdown` rounding | **Logged only**, per instruction. |
+
+Full regression suite after Steps 1-2: **41/41 passing.**
+
+**Phase 5 not started, per instructions.**
