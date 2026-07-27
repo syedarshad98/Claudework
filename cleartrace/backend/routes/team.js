@@ -182,9 +182,14 @@ router.delete('/:userId', requireRole('admin'), async (req, res) => {
 });
 
 // ── PATCH /api/team/:userId/deactivate ────────────────────────────────────────
-// Admin only. Cannot deactivate yourself. Revokes login (checked at
-// /api/auth/login) without touching the user row or any FK-attributed
-// history — the real fix for a user DELETE blocked by existing activity.
+// Admin only. Cannot deactivate yourself, and cannot deactivate the company's
+// last remaining active admin — either would leave the company with no one
+// who can log in and manage the team (self-deactivation blocks the acting
+// admin specifically; this blocks the case where a *different* admin
+// deactivates the last one, including themselves via another admin).
+// Revokes login (checked at /api/auth/login) without touching the user row
+// or any FK-attributed history — the real fix for a user DELETE blocked by
+// existing activity.
 router.patch('/:userId/deactivate', requireRole('admin'), async (req, res) => {
   await ensureMigrated();
   const targetId = parseInt(req.params.userId);
@@ -194,6 +199,25 @@ router.patch('/:userId/deactivate', requireRole('admin'), async (req, res) => {
   }
 
   try {
+    const targetRes = await db.query(
+      'SELECT role FROM users WHERE id = $1 AND company_id = $2',
+      [targetId, req.companyId]
+    );
+    if (!targetRes.rows.length) return res.status(404).json({ error: 'User not found.' });
+
+    if (targetRes.rows[0].role === 'admin') {
+      const activeAdmins = await db.query(
+        `SELECT COUNT(*)::int AS count FROM users
+          WHERE company_id = $1 AND role = 'admin' AND is_active = true`,
+        [req.companyId]
+      );
+      if (activeAdmins.rows[0].count <= 1) {
+        return res.status(400).json({
+          error: 'Cannot deactivate the last active admin — this would lock the company out with no one able to log in and manage the team.',
+        });
+      }
+    }
+
     const r = await db.query(
       'UPDATE users SET is_active = false WHERE id = $1 AND company_id = $2 RETURNING id',
       [targetId, req.companyId]

@@ -863,6 +863,26 @@ dependency to every authenticated request — an existing 7-day JWT for a
 just-deactivated user remains valid until it naturally expires. Documented
 here as an accepted limitation, not a gap discovered later.
 
+**Finding 2 addendum — last-active-admin lockout guard.** Checked whether
+deactivation could zero out a company's active admins entirely: no such
+guard existed — only self-deactivation was blocked. Added the same
+pattern to `routes/team.js`'s `PATCH /:userId/deactivate`: before
+flipping the flag, if the target is an admin, count that company's
+currently-active admins; if the target is the last one, return `400`
+("Cannot deactivate the last active admin — this would lock the company
+out with no one able to log in and manage the team") instead of
+proceeding. Tested live on a fresh single-admin company
+(`SoloAdmin Co`): the literal single-admin case is caught by the
+pre-existing self-deactivation check, so to verify the *new* guard
+specifically (not just re-confirm the old one), promoted a second user to
+admin in the same company, deactivated one of the two (allowed — two
+active admins before the call), then had the just-deactivated admin's
+still-valid session (a live demonstration of the documented
+login-only-check limitation above) attempt to deactivate the one
+remaining active admin — blocked with the new message, count-checked
+correctly at 1. Confirmed the surviving admin's login still works
+afterward. Full suite re-run: **41/41 passing**.
+
 **Finding 4 — orphan scope confirmed, no fix built.** Traced all 138
 orphaned `factor_source` rows by `company_id` against `companies.is_demo`:
 100% land on the two seeded demo tenants (`GreenTech Solutions Ltd`,
@@ -915,9 +935,10 @@ Tracked here explicitly for that reason. No code changed.
 | # | Finding | Final status |
 |---|---|---|
 | 1 | `emission_factors` rows have zero delete protection | **Fixed** — `BEFORE DELETE` trigger blocks any hard delete of a row where `valid_to IS NULL` (the active vintage), at the database level, independent of which path attempts it. Reproduced the original break live, confirmed the trigger blocks it with a clear, actionable error, confirmed the correct supersede pattern (`UPDATE valid_to` + `INSERT`) is unaffected. |
-| 2 | A user with any attributed activity can never be removed through the app, and the failure surfaces as a raw, unexplained `500` | **Fixed** — clean `409` with a specific message replaces the raw `500`; `is_active` deactivation built as the real remedy (revokes login, preserves the user row and all FK-attributed history, `NO ACTION` FK behavior left exactly as-is). Verified live: clean error on delete-with-activity, `403` on login after deactivation, restored on reactivation. |
+| 2 | A user with any attributed activity can never be removed through the app, and the failure surfaces as a raw, unexplained `500` | **Fixed** — clean `409` with a specific message replaces the raw `500`; `is_active` deactivation built as the real remedy (revokes login, preserves the user row and all FK-attributed history, `NO ACTION` FK behavior left exactly as-is). Verified live: clean error on delete-with-activity, `403` on login after deactivation, restored on reactivation. **Addendum:** also added a last-active-admin lockout guard on `PATCH /:userId/deactivate`, same pattern as the pre-existing self-deactivation guard — blocks deactivating a company's sole remaining active admin. Verified live with a two-admin test company (deactivating down to the last admin is allowed; a further attempt to deactivate that last one is blocked with a specific `400`); full suite re-run: 41/41 passing. |
 | 3 | BRSR evidence files in Supabase Storage aren't cleaned up by any DB-level cascade | **Logged only, per instruction** — explicitly reframed as a compliance/assurance-review risk (these are uploaded evidentiary documents, not incidental files), not merely storage hygiene. Not fixed this pass. |
 | 4 | 138 orphaned `factor_source` rows exist with no live match | **Confirmed demo-only** — all 138 rows traced to the two seeded demo tenants; zero on any non-demo tenant. Treated as low-priority seed-data drift per instruction; no migration/backfill built. |
 | 5 | Two structurally near-identical tables for pending team invitations | **Fixed, premise corrected first** — both tables were live (not one dead), for different purposes; flagged and confirmed before acting. Consolidated onto `team_invites` with an `is_onboarding_draft` discriminator; `pending_invites` dropped after confirming it was empty. Verified live in both directions (draft never leaks to the Team page, real invites never leak into onboarding) plus full suite: 41/41 passing. |
+| 8 | **New finding, discovered during Finding 5's investigation.** **Team invites have no acceptance/redemption flow.** `POST /api/team/invite` (`routes/team.js:88-98`) creates a `team_invites` row with a real random `token`, but nothing anywhere ever reads that token back. `POST /api/auth/register` (`routes/auth.js:17-61`) unconditionally `INSERT`s a brand-new `companies` row and always sets the new user's role to `'admin'` (`routes/auth.js:31-39`) — it never checks `team_invites` for a pending row matching the registering email, by token or otherwise. Confirmed by grepping every route file: no handler queries `team_invites.token`, and no frontend page (`register.html` or otherwise) reads a `?token=`-style parameter. The one case that *does* work is an invite for an email that already has an account elsewhere (`routes/team.js:75-84` moves that existing user into the new company directly) — but for the much more common case of inviting someone brand new, the invite is pure UI theater: the invitee gets no email (no email-sending code exists either), and even if they somehow learned about it and registered with the invited address, they'd land in their own new company as its admin, not in the inviting company at any role. **Severity: High** — this is a core piece of the team-management feature not functioning at all, not a data-integrity edge case, discovered incidentally while confirming Finding 5's table consolidation didn't change invite semantics. | **Tracked, not fixed this pass** — this is new, separate feature work (an accept-invite endpoint/page that consumes the token and joins the inviting company instead of creating one, plus actually sending the invite email), not a Phase 3 data-integrity remediation. No code changed for this finding. |
 
 **Phase 3 is closed. Phase 4 not started, per instructions.**
