@@ -1388,4 +1388,151 @@ submissions) and scanned every page. Precise characterisation:
 
 Full regression suite after Steps 1-2: **41/41 passing.**
 
-**Phase 5 not started, per instructions.**
+---
+
+### Phase 4 remediation, part 2: fixes for the open clarifications
+
+**Date:** 2026-07-27.
+
+#### Step 1 — reject future-dated entries at the point of entry — fixed
+
+Reproduced the gap fresh first: `POST /api/emissions` with `period: "2028-06"`
+against a real tenant was accepted (`201`), and the same cross-view inconsistency
+from the original findings reproduced identically — `charts/breakdown` (all-time)
+picked up the new entry, `charts/trend` (trailing 12 months) stayed at zero for it.
+Deleted the test entry before fixing.
+
+Added `lib/period.js` — a single `isFuturePeriod(period)` helper, shared by both
+entry points rather than duplicated, matching the existing pattern of shared small
+helpers in this codebase (`lib/entry-method.js`'s `resolveMethodFields` is imported
+by both `routes/emissions.js` and `routes/upload.js` the same way). Rejects any
+period strictly later than the current calendar month; the current month itself is
+allowed, since mid-month logging as data is collected is the normal case, not
+something to block.
+
+Wired in at both points named in the instruction:
+- `routes/emissions.js`'s `POST /` — returns `400 {"error":"period cannot be in the
+  future"}`, placed right after the existing `period` format check, before the
+  period-lock check.
+- `routes/upload.js`'s per-row validation — pushes `"Row N: period cannot be in the
+  future"` and `continue`s to the next row, exactly matching how every other row-level
+  validation failure in that file already works (a rejected row with a reported
+  reason, not a silent drop, not blocking the rest of the file).
+
+**Verified:** `2028-06` and `2026-08` (next month) both rejected with the new `400`;
+`2026-07` (current month) and `2025-01` (past) both still accepted normally. A CSV
+with one future-dated row and one valid row correctly imported the valid row and
+reported the future one as a per-row error (`"imported":1,"errors":["Row 2: period
+cannot be in the future"]`). Confirmed existing entries are unaffected — `GET
+/api/emissions` still returns all pre-existing rows (including the Phase 3-era
+future-dated ones already in the database, since this only gates new writes, not a
+retroactive filter). Full suite: 41/41.
+
+**Noted, not fixed — out of the instructed scope:** `PATCH /api/emissions/:id` does
+not run this check at all (it never validated `period`'s format either, before or
+after this change), and could still be used to move an existing entry to a future
+period via direct API access. Confirmed the frontend never exposes an edit-period UI
+(dashboard.js only creates via `POST` and removes via `DELETE`), so this isn't
+reachable through the product — but it is a live gap for anyone calling the API
+directly. Flagged here for the record; not touched, since the instruction named only
+the manual entry and upload paths.
+
+#### Step 2 — entry-level audit export + the one-line API fix — fixed
+
+**(a) The missing column.** `routes/emissions.js`'s `GET /` now selects
+`e.factor_source` alongside the columns it already had — the exact one-line gap
+identified in Step 3 of the prior remediation pass. Verified live: every entry
+returned by `GET /api/emissions` now carries its real `factor_source`, matching the
+database exactly (spot-checked all four of Calc Test Co's entries byte-for-byte
+against a direct query).
+
+**(b) New CSV export endpoint.** Added `GET /api/emissions/export` — one row per
+emissions entry for the authenticated company, columns `category, tco2e,
+factor_source, region, period`. Scoped narrowly, as instructed: a new route in
+`routes/emissions.js`, not a rebuild of `report.js`'s aggregate PDF (which stays
+scope-level, unchanged) and not a new dependency (RFC 4180 field escaping is a
+5-line inline helper — no `csv-stringify` package added for a 5-column export). Not
+paginated, since an export is meant to be the full record, not a page of it. Region
+uses `COALESCE(region_resolved, region)` — the region that actually determined the
+paired `factor_source`, not just whatever was originally submitted, so the two
+columns can't disagree with each other in an edge case where a fallback substitution
+occurred.
+
+**Verified with real data:** GreenTech's export returned 85 lines (1 header + 84
+rows, matching its entry count exactly); Calc Test Co's 4-row export matched a
+direct `SELECT` on `emissions_entries` field-for-field, including `region_resolved`
+values (`GB`, `GLOBAL`). Confirmed CSV escaping is correct and doesn't crash on
+`NULL` factor_source/region or on a category containing a comma and embedded quotes
+(`Custom, "Special" Category` round-tripped as `"Custom, ""Special"" Category"` —
+inserted directly via SQL to test the escaping path, since the app's own category
+validation wouldn't accept a made-up category; cleaned up afterward). Full suite:
+41/41.
+
+#### Step 3 — BRSR encoding fix — fixed, contained to text only
+
+Reproduced the corruption fresh first (`brsr-before.pdf`, byte-identical to the
+originally-documented output) before changing anything.
+
+**Root cause 1 — em dashes: source-file double-encoding.** `routes/brsr.js`'s
+`tocSections` array (11 titles) and its three `efSource` disclosure strings
+contained literal double-encoded UTF-8 bytes for "—" (confirmed at the byte level:
+`C3 A2 C2 80 C2 94` where `E2 80 94`, the correct UTF-8 em dash, should have been).
+Located each corrupted line via its stable, uncorrupted anchor text (`key: 'secA'`,
+`efSource = \`CEA`, etc.) and replaced the full line with freshly, correctly-encoded
+text — a real em dash renders fine via PDFKit's default WinAnsi-encoded Helvetica,
+so restoring the correct character was the complete fix for this root cause, nothing
+else needed changing.
+
+**Root cause 2 — the CO₂ subscript and ₹ rupee sign: a font limitation, not a source
+encoding problem.** Checked precisely before touching anything: `lib/brsr-p6-fields.js`'s
+field labels already contained *correctly*-encoded UTF-8 "₂" and "₹" characters —
+confirmed by reading the raw file, unlike `routes/brsr.js`'s genuinely corrupted
+bytes. The actual cause is that every font call in the BRSR PDF path
+(`lib/brsr-pdf-helpers.js`, `lib/brsr-pdf-sections.js`) is a bare `.font('Helvetica')`
+/`.font('Helvetica-Bold')` — PDFKit's built-in WinAnsi-encoded Standard-14 font, which
+has no glyph for U+2082 (subscript two) or U+20B9 (₹) and silently drops/substitutes
+them. A correctly-encoded ₂/₹ would have rendered exactly as broken as the corrupted
+one did. Fixed the same way `report.js` already avoids this exact problem elsewhere
+in the app: replaced "tCO₂e" → "tCO2e" and "₹ cr"/"(₹)" → "INR cr"/"(INR)" in every
+`label` actually drawn in the PDF (`lib/brsr-p6-fields.js`, plus — found via a
+broader scan once the first instance was confirmed — `brsr-p1-fields.js`,
+`brsr-p5-fields.js`, `brsr-p8-fields.js`, `brsr-section-a-fields.js`, all of which
+had the identical unrenderable-character problem in fields that hadn't been
+populated for the test submissions yet, so the corruption wasn't visible in the
+original Phase 4 render but would have hit identically once used). Left every
+`unit:` field (e.g. `unit: 'tCO₂e'`) untouched — confirmed via grep that `unit` is
+never rendered anywhere in the PDF, only `label` is, so touching it would be outside
+"a contained text-encoding correction."
+
+**What was deliberately left alone, per instruction:** no layout, palette, table
+structure, or font-loading code touched — the fix is entirely string content.
+Finding #7's substance (the stale 2023/CEA/UAE vintages themselves) is untouched —
+confirmed the UK string still reads `'DEFRA 2023 (0.20493 kg CO2e/kWh)'`, same stale
+figure, only the encoding fixed. `CEA_FACTORS`/`UAE_FACTORS` themselves not opened.
+
+**Verified:** re-rendered the TOC — all 11 rows now show a correct "—", confirmed
+visually (PNG) and via `pdftotext` (zero "â" occurrences, down from 11). Re-rendered
+P6 — "Scope 2 — Current FY (tCO2e)", "GHG Intensity (tCO2e/INR cr) — Current FY" all
+render clean. The stamped "Emission Factor Source" line still showed the *old*
+corrupted text on first re-render — not a bug, the value was already persisted in the
+database from before the fix; re-saving Scope 2 through the real `PUT
+/api/brsr/p6/:id` endpoint re-stamped it clean (`DEFRA 2023 (0.20493 kg CO2e/kWh)`)
+on the next render, confirming the code fix, not just a display artifact. GreenTech's
+submission regression-checked clean too (0 "â" occurrences, was 11). Page count
+unchanged (28 pages), confirming no structural change. Full suite: 41/41.
+
+### Phase 4 — all findings, final status
+
+| # | Finding | Final status |
+|---|---|---|
+| 1 | Benchmarking hang (Critical) | **Fixed** — non-idempotent migration backfill removed, error handling added to both affected route files, durability across restart and clean-failure-on-collision both verified live. |
+| 2 | Provenance badge (High) | **Fixed** — per-scope source computation, raw-value `hasData` gate. Both bugs reproduced fresh, both fixes visually confirmed. |
+| 3 | Future-dated entries silently diverge across views (Medium) | **Fixed** — rejected at both entry points (manual, upload) with a clean `400`/per-row error, matching the existing validation pattern. `PATCH /:id` noted as an unaddressed, API-only gap, out of the instructed scope. |
+| 4 | No surface shows category+tCO2e+factor_source together (Medium) | **Fixed** — the missing `factor_source` column added to `GET /api/emissions` (one line); a new, narrowly-scoped `GET /api/emissions/export` CSV endpoint added as the actual per-entry audit surface. `report.js` deliberately left as scope-aggregate only, per instruction — a per-entry loop there would make it less readable, not more correct. |
+| 5 | `charts/breakdown` rounding-composition bug (Low) | **Logged only**, per instruction. Not fixed. |
+| 6 | BRSR PDF encoding corruption (Low) | **Fixed, contained to text only** — both root causes (source double-encoding for em dashes, font limitation for ₂/₹) corrected with the minimal string-level change each required. Layout, palette, structure, fonts, and Finding #7's stale-data substance all untouched. |
+| 7 | BRSR P6 stale hardcoded factor-source stamp (Info, Phase 2 Finding #7) | **Still reserved for the BRSR redesign workstream, unchanged.** Only its *encoding* was touched in this pass (finding 6, above) — the stale 2023/CEA/UAE figures themselves were not opened. |
+
+Full regression suite after all of Steps 1-3: **41/41 passing.**
+
+**Phase 4 is fully closed. Phase 5 not started, per instructions.**

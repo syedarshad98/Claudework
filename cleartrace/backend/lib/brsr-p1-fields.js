@@ -27,7 +27,7 @@ module.exports = [
           { key: 'type',       label: 'Type',             type: 'select', options: ['Penalty/Fine','Settlement','Compounding Fee','Imprisonment','Punishment'] },
           { key: 'principle',  label: 'NGRBC Principle',  type: 'select', options: ['P1','P2','P3','P4','P5','P6','P7','P8','P9'] },
           { key: 'authority',  label: 'Regulatory Authority', type: 'text' },
-          { key: 'amount',     label: 'Amount (₹)',        type: 'number', precision: 2 },
+          { key: 'amount',     label: 'Amount (INR)',        type: 'number', precision: 2 },
           { key: 'case_brief', label: 'Brief of Case',    type: 'text' },
           { key: 'appeal',     label: 'Appeal preferred?', type: 'select', options: ['Yes','No'] },
         ]

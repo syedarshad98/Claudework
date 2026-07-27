@@ -24,7 +24,7 @@ module.exports = [
           { key: 'district',    label: 'District',        type: 'text' },
           { key: 'pafs',        label: 'No. of PAFs',     type: 'number', precision: 0 },
           { key: 'pct_covered', label: '% PAFs covered',  type: 'number', precision: 1 },
-          { key: 'amount_paid', label: 'Amount paid (₹)', type: 'number', precision: 2 },
+          { key: 'amount_paid', label: 'Amount paid (INR)', type: 'number', precision: 2 },
         ]
       },
       { key: 'e3_community_grievance', label: 'Community grievance redressal mechanism (E3)', type: 'textarea' },
@@ -63,7 +63,7 @@ module.exports = [
         columns: [
           { key: 'state',    label: 'State',                type: 'text' },
           { key: 'district', label: 'Aspirational District', type: 'text' },
-          { key: 'amount',   label: 'Amount spent (₹)',     type: 'number', precision: 2 },
+          { key: 'amount',   label: 'Amount spent (INR)',     type: 'number', precision: 2 },
         ]
       },
       { key: 'l3_preferential_procurement', label: 'Preferential procurement from marginalized groups? (L3)', type: 'select', options: ['Yes','No'] },

@@ -6,6 +6,7 @@ const { validateEntry, saveFlags } = require('../lib/validate');
 const requireRole                  = require('../middleware/roles');
 const { decideFactor, defaultRegionFromJurisdiction } = require('../lib/decide-factor');
 const { resolveMethodFields } = require('../lib/entry-method');
+const { isFuturePeriod }      = require('../lib/period');
 
 // ── Lazy migration ────────────────────────────────────────────────────────────
 let migrated = false;
@@ -63,6 +64,7 @@ router.get('/', async (req, res) => {
     const result = await db.query(
       `SELECT e.id, e.category, e.scope, e.amount, e.unit, e.period,
               e.emission_factor, e.co2e_tonnes, e.source, e.notes, e.created_at,
+              e.factor_source,
               CASE WHEN lp.id IS NOT NULL THEN true ELSE false END AS locked,
               COALESCE(
                 (SELECT CASE
@@ -95,6 +97,51 @@ router.get('/', async (req, res) => {
   }
 });
 
+// RFC 4180 field escaping — wrap in quotes and double any embedded quotes
+// whenever a value contains a comma, quote, or newline.
+function csvField(value) {
+  const s = value == null ? '' : String(value);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+// ── GET /api/emissions/export ─────────────────────────────────────────────────
+// One row per emissions entry for this company: category, tCO2e, factor_source,
+// region, period — the entry-level provenance no other surface shows together
+// (report.js is scope-aggregate only; the dashboard table never carried
+// factor_source). Not paginated — an export is meant to be the full record.
+router.get('/export', async (req, res) => {
+  try {
+    await ensureMigrated();
+    const result = await db.query(
+      `SELECT category, co2e_tonnes, factor_source,
+              COALESCE(region_resolved, region) AS region, period
+         FROM emissions_entries
+        WHERE company_id = $1
+        ORDER BY period DESC, created_at DESC`,
+      [req.companyId]
+    );
+
+    const header = ['category', 'tco2e', 'factor_source', 'region', 'period'];
+    const lines  = [header.join(',')];
+    for (const row of result.rows) {
+      lines.push([
+        csvField(row.category),
+        csvField(row.co2e_tonnes),
+        csvField(row.factor_source),
+        csvField(row.region),
+        csvField(row.period),
+      ].join(','));
+    }
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="cleartrace-emissions-export.csv"');
+    res.send(lines.join('\r\n') + '\r\n');
+  } catch (err) {
+    console.error('Emissions export error:', err.message);
+    res.status(500).json({ error: 'Failed to generate export' });
+  }
+});
+
 // ── POST /api/emissions ───────────────────────────────────────────────────────
 router.post('/', requireRole('admin', 'editor'), async (req, res) => {
   try {
@@ -115,6 +162,9 @@ router.post('/', requireRole('admin', 'editor'), async (req, res) => {
     }
     if (!/^\d{4}-\d{2}$/.test(period)) {
       return res.status(400).json({ error: 'period must be YYYY-MM format' });
+    }
+    if (isFuturePeriod(period)) {
+      return res.status(400).json({ error: 'period cannot be in the future' });
     }
     if (await isPeriodLocked(req.companyId, period)) {
       return res.status(423).json({ error: `Period ${period} is locked. Contact an admin to unlock.` });

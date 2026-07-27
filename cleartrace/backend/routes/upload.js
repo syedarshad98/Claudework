@@ -10,6 +10,7 @@ const requireRole = require('../middleware/roles');
 const { decideFactor, defaultRegionFromJurisdiction } = require('../lib/decide-factor');
 const { resolveMethodFields }      = require('../lib/entry-method');
 const { logAction, getIp }         = require('../lib/audit');
+const { isFuturePeriod }           = require('../lib/period');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -126,6 +127,10 @@ router.post('/', requireRole('admin', 'editor'), upload.single('file'), async (r
     }
     if (!/^\d{4}-\d{2}$/.test(period)) {
       errors.push(`Row ${rowNum}: period must be YYYY-MM format`);
+      continue;
+    }
+    if (isFuturePeriod(period)) {
+      errors.push(`Row ${rowNum}: period cannot be in the future`);
       continue;
     }
 

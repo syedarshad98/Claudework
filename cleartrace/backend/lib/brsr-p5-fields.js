@@ -67,9 +67,9 @@ module.exports = [
           ],
           columns: [
             { key: 'male_no',       label: 'Male — Number',                    type: 'number' },
-            { key: 'male_median',   label: 'Male — Median Remuneration (₹)',   type: 'number' },
+            { key: 'male_median',   label: 'Male — Median Remuneration (INR)',   type: 'number' },
             { key: 'female_no',     label: 'Female — Number',                  type: 'number' },
-            { key: 'female_median', label: 'Female — Median Remuneration (₹)', type: 'number' },
+            { key: 'female_median', label: 'Female — Median Remuneration (INR)', type: 'number' },
           ]
         }
       },

@@ -666,13 +666,13 @@ router.put('/p6/:id', requireRole('admin', 'editor'), async (req, res) => {
       if (jurisdiction === 'IN') {
         const latestKey = CEA_FACTORS.latest;
         const ver       = CEA_FACTORS.versions[latestKey];
-        efSource = `CEA ${latestKey} â FY ${ver.fy} (${ver.gridEF} tCOâ/MWh)`;
+        efSource = `CEA ${latestKey} — FY ${ver.fy} (${ver.gridEF} tCO2/MWh)`;
       } else if (jurisdiction === 'AE') {
         const latestKey = UAE_FACTORS.latest;
         const ver       = UAE_FACTORS.versions[latestKey];
-        efSource = `${ver.utility} Grid Emission Factor â FY ${ver.fy} (${ver.gridEF} tCOâe/MWh)`;
+        efSource = `${ver.utility} Grid Emission Factor — FY ${ver.fy} (${ver.gridEF} tCO2e/MWh)`;
       } else {
-        efSource = 'DEFRA 2023 (0.20493 kg COâe/kWh)';
+        efSource = 'DEFRA 2023 (0.20493 kg CO2e/kWh)';
       }
 
       await db.query(
@@ -1871,17 +1871,17 @@ router.get('/report/:submissionId', requireRole('admin', 'editor'), async (req, 
 
     // Placeholder â will be filled in after rendering all sections
     const tocSections = [
-      { title: 'Section A â General Disclosures',            key: 'secA' },
-      { title: 'Section B â Management and Process Disclosures', key: 'secB' },
-      { title: 'Principle 1 â Ethics, Transparency & Accountability', key: 'p1' },
-      { title: 'Principle 2 â Sustainable Products & Services',       key: 'p2' },
-      { title: 'Principle 3 â Employee Well-being',                   key: 'p3' },
-      { title: 'Principle 4 â Stakeholder Responsiveness',            key: 'p4' },
-      { title: 'Principle 5 â Human Rights',                         key: 'p5' },
-      { title: 'Principle 6 â Environment',                          key: 'p6' },
-      { title: 'Principle 7 â Policy Advocacy',                      key: 'p7' },
-      { title: 'Principle 8 â Inclusive Growth',                     key: 'p8' },
-      { title: 'Principle 9 â Consumer Responsibility',              key: 'p9' },
+      { title: 'Section A — General Disclosures',            key: 'secA' },
+      { title: 'Section B — Management and Process Disclosures', key: 'secB' },
+      { title: 'Principle 1 — Ethics, Transparency & Accountability', key: 'p1' },
+      { title: 'Principle 2 — Sustainable Products & Services',       key: 'p2' },
+      { title: 'Principle 3 — Employee Well-being',                   key: 'p3' },
+      { title: 'Principle 4 — Stakeholder Responsiveness',            key: 'p4' },
+      { title: 'Principle 5 — Human Rights',                         key: 'p5' },
+      { title: 'Principle 6 — Environment',                          key: 'p6' },
+      { title: 'Principle 7 — Policy Advocacy',                      key: 'p7' },
+      { title: 'Principle 8 — Inclusive Growth',                     key: 'p8' },
+      { title: 'Principle 9 — Consumer Responsibility',              key: 'p9' },
     ];
     // We'll write the actual TOC entries with page numbers after rendering
 
