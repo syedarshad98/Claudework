@@ -1535,4 +1535,88 @@ unchanged (28 pages), confirming no structural change. Full suite: 41/41.
 
 Full regression suite after all of Steps 1-3: **41/41 passing.**
 
-**Phase 4 is fully closed. Phase 5 not started, per instructions.**
+**Phase 4 is fully closed.**
+
+---
+
+### Two loose ends from Phase 4 testing, formalized before Phase 5
+
+**Date:** 2026-07-27. Report-only — reproduced and documented, not fixed this pass.
+
+**Finding 9 — `PATCH /api/emissions/:id` does not enforce the future-date rejection
+`POST` now does; the create-path fix from Phase 4 remediation part 2's Step 1 is
+fully bypassable via edit.** Confirmed live: created a valid entry with
+`period: "2026-07"` (accepted normally), then `PATCH`ed the same entry's `period` to
+`"2028-09"` — accepted with a plain `200`, no rejection at all, confirmed both in the
+API response and directly in the database afterward. This is exactly the gap flagged
+as "noted, not fixed" in the prior remediation write-up, now confirmed live rather
+than inferred from reading the code: `routes/emissions.js`'s `PATCH /:id` never
+validates `period`'s format (not even the pre-existing `YYYY-MM` regex, let alone the
+new `isFuturePeriod` check `lib/period.js` added), so a valid current-dated entry can
+be silently moved to any future date, or any malformed string, through the edit path.
+The frontend doesn't expose an edit-period UI (confirmed in the prior pass), so this
+is only reachable via direct API access today — but it is a full, working bypass of a
+fix that was just verified as closed, for anyone who calls the API directly.
+
+**Severity: High.** A fix that was confirmed working on its intended path (create) is
+completely defeated by an adjacent, fully-functional endpoint touching the exact same
+column, with zero additional privilege required beyond what creating an entry already
+needs (`admin`/`editor`). Test data (`entry 649`) deleted after confirming.
+
+**Finding 10 — `GET /api/onboarding/status` returns `500` when
+`companies.industry_sector`/`annual_revenue_gbp_m` don't yet exist on a given
+database.** First observed as a side effect during Phase 2 remediation testing and
+correctly judged unrelated to that pass's scope at the time — but never actually
+logged as its own tracked finding, so it's being formalized here.
+
+**Root cause, confirmed live:** `routes/onboarding.js`'s `GET /status` unconditionally
+selects `industry_sector, annual_revenue_gbp_m` (`routes/onboarding.js:35`) from
+`companies`, but those columns are added only by `benchmark_migration.sql`, which
+`onboarding.js`'s own lazy migration never applies (it applies only
+`onboarding_migration.sql` and `team_migration.sql`) — only `routes/benchmarking.js`
+and `routes/company.js` apply that file, independently, per Phase 2's Conflict C2.
+**What triggers it:** any database where `benchmark_migration.sql` has never
+successfully completed — in practice, a fresh deployment where a user's first action
+(e.g., the onboarding wizard, right after registering) hits `/api/onboarding/status`
+before anything has ever touched `/api/benchmarking/*` or `/api/company/*` in that
+database's history. Confirmed by directly reproducing the missing-column state
+(temporarily dropped the two columns, matching `benchmark_migration.sql`'s own
+definitions exactly, on a live copy of this database) and hitting `GET
+/api/onboarding/status` as the first request of a fresh server process:
+`500 {"error":"Failed to fetch onboarding status"}`, logged server-side as
+`Onboarding status error: column "industry_sector" does not exist` — the exact error
+first seen during Phase 2. Restored both columns immediately afterward (confirmed
+back to the same `NULL`/`NULL` state already established as this database's baseline
+across every prior phase) and confirmed `/api/onboarding/status`,
+`/api/benchmarking/sectors`, and the full test suite (41/41) all work normally again.
+
+**Note on why this isn't reproducible in this specific database anymore, and why that
+doesn't mean it's fixed:** this exact 500 can no longer occur naturally in *this*
+long-lived dev database, because Phase 4 remediation part 1's Step 1 fix (removing
+`benchmark_migration.sql`'s broken backfill) let that migration complete
+successfully for the first time — and once `industry_sector`/`annual_revenue_gbp_m`
+exist via `ALTER TABLE ... ADD COLUMN`, they exist for every company row, forever,
+regardless of process restarts. That was an *incidental* side effect of an unrelated
+fix, not a fix for this bug — the underlying gap (`onboarding.js` depending on
+columns only a different route's lazy migration adds) is still exactly as present in
+the code as it was when first observed. A genuinely fresh deployment — a new
+database, first boot, first user — would still hit this 500 today, which is why it
+had to be reproduced here by recreating that missing-column condition directly rather
+than by simply hitting the endpoint on this already-migrated database.
+
+**Severity: Medium.** Self-limiting in a way Finding 9 is not — the first successful
+run of `benchmark_migration.sql` anywhere in a deployment's history durably fixes it
+for every company from then on, so it can't grow or recur once triggered — but it is
+a real, reproducible `500` on what is very plausibly the first authenticated screen a
+new user sees after registering, with no workaround visible to that user.
+
+**Connection to Phase 5:** flagging this explicitly, as instructed — `/api/onboarding/status`
+is a status/page-load endpoint, so a proper fix almost certainly belongs alongside
+whatever Phase 5 turns out to cover, rather than as an isolated one-line patch here.
+
+| # | Severity | Finding | Status |
+|---|---|---|---|
+| 9 | **High** | `PATCH /api/emissions/:id` doesn't enforce future-date rejection — fully bypasses the Step 1 fix via edit. | **Tracked, not fixed this pass.** Confirmed live. |
+| 10 | **Medium** | `GET /api/onboarding/status` 500s when `benchmark_migration.sql`'s columns don't yet exist on a fresh database. | **Tracked, not fixed this pass.** Reproduced live via a reversible column-drop test; root cause confirmed, connection to Phase 5 flagged. |
+
+**Phase 5 not started, per instructions.**
