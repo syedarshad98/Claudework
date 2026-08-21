@@ -20,12 +20,14 @@ async function ensureMigrated() {
   const vehicleFlightSql = fs.readFileSync(path.join(__dirname, '../db/vehicle_flight_migration.sql'), 'utf8');
   const flightRouteSql   = fs.readFileSync(path.join(__dirname, '../db/flight_2026_route_patch_migration.sql'), 'utf8');
   const deleteGuardSql   = fs.readFileSync(path.join(__dirname, '../db/emission_factors_delete_guard_migration.sql'), 'utf8');
+  const uaeProviderSql   = fs.readFileSync(path.join(__dirname, '../db/uae_provider_factors_migration.sql'), 'utf8');
   await db.query(sql);
   await db.query(regionSql);
   await db.query(patch2026);
   await db.query(vehicleFlightSql);
   await db.query(flightRouteSql);
   await db.query(deleteGuardSql);
+  await db.query(uaeProviderSql);
   migrated = true;
 }
 

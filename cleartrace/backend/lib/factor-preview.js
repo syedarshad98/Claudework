@@ -33,7 +33,11 @@ async function resolveAllFactors(db, region) {
     const canonical = canonicalizeCategory(displayCategory);
     const resolved  = await resolveRegionFactor(db, { category: canonical, region });
 
-    out[displayCategory] = resolved
+    // A truthy `resolved` can now carry `ambiguous: true, row: null` (a
+    // region+category with more than one provider on file and none
+    // specified here) — treat that the same as "no live row" below rather
+    // than dereferencing a null row.
+    out[displayCategory] = (resolved && !resolved.ambiguous)
       ? {
           factor:          Number(resolved.row.value),
           unit:            resolved.row.canonical_unit,

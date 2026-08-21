@@ -36,6 +36,13 @@ const CONVERSION_TABLES = {
   // Distinct bucket from plain distance 'km' above so a flight's activity
   // amount is never accidentally reconciled against a per-km vehicle factor.
   pkm: { pkm: 1, km: 1 },
+  // Refrigeration ton-hour — District Cooling's canonical unit. Deliberately
+  // does NOT accept 'rt' (refrigeration ton, a capacity/power unit) as a
+  // synonym: RT and RTh are different physical quantities (power vs. energy
+  // delivered over time), and no verified conversion between them has been
+  // established for this dataset. Do not add 'rt' here until that is
+  // resolved — see db/uae_provider_factors_migration.sql.
+  RTh: { rth: 1, 'rt-h': 1, 'ton-hour': 1, 'ton-hours': 1 },
 };
 
 /**

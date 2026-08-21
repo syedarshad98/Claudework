@@ -68,6 +68,10 @@ function isCustomCategory(rawCategory) {
  *   (region, lookupCategory) — a flight's '<band>:<cabin_class>'. Undefined
  *   for everything else.
  * @param {string} [opts.region]        entry- or company-level region code
+ * @param {string} [opts.provider]      tiebreaker when a region+category has more than
+ *   one current provider on file (e.g. Dubai district cooling). Omit only when the
+ *   category+region is known to have a single provider — an unsupplied provider against
+ *   a genuinely multi-provider row is reported as an error, never guessed.
  * @param {string} opts.unit            unit as entered
  * @param {*} opts.clientFactor         emission_factor as sent by the client
  * @param {*} [opts.clientSource]       factor_source as sent by the client
@@ -79,15 +83,22 @@ function isCustomCategory(rawCategory) {
  *     regionResolved: string|null, isFallback: boolean, fallbackReason: string|null }
  * >}
  */
-async function decideFactor({ db, category, lookupCategory, subtype, region, unit, clientFactor, clientSource, companyId, logPrefix = '[emissions]' }) {
+async function decideFactor({ db, category, lookupCategory, subtype, region, provider, unit, clientFactor, clientSource, companyId, logPrefix = '[emissions]' }) {
   const categoryForLookup = lookupCategory || category;
   const canonicalCategory = canonicalizeCategory(categoryForLookup);
   const custom = isCustomCategory(categoryForLookup);
 
   if (!custom) {
-    const resolved = await resolveRegionFactor(db, { category: canonicalCategory, region, subtype });
+    const resolved = await resolveRegionFactor(db, { category: canonicalCategory, region, subtype, provider });
 
     if (resolved) {
+      if (resolved.ambiguous) {
+        return {
+          error: `Multiple providers publish a factor for category "${categoryForLookup}" in region ` +
+                 `"${resolved.regionResolved}" (${resolved.availableProviders.join(', ')}). Supply "provider" to disambiguate.`,
+        };
+      }
+
       if (clientFactor != null || clientSource) {
         console.warn(
           `${logPrefix} rejected client-supplied factor fields — company_id=${companyId} ` +

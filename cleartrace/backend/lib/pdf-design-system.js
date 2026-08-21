@@ -477,9 +477,13 @@ function drawHighlightBlock(doc, opts) {
 //   'custom'   — amber  (non-standard / user-supplied factor)
 //   'reported' — neutral gray ("Reported value" — no calculation source,
 //                e.g. water/waste/social/governance entries)
+//   'utility'  — slate-blue, same hue as 'cea' (a verified utility-published
+//                grid/cooling factor, same semantic as "regional grid
+//                factor" — DEWA, ADDC/EWEC, Empower, Tabreed)
 const BADGE_VARIANTS = {
   defra:    { fill: COLORS.teal,        text: COLORS.white },
   cea:      { fill: COLORS.slateBlue,   text: COLORS.white },
+  utility:  { fill: COLORS.slateBlue,   text: COLORS.white },
   custom:   { fill: COLORS.amberBg,     text: COLORS.tealDark, border: COLORS.amber },
   reported: { fill: COLORS.neutralBg,   text: COLORS.neutralText },
 };
@@ -489,8 +493,12 @@ const BADGE_VARIANTS = {
 function classifyFactorSource(factorSource) {
   if (!factorSource) return { label: 'Reported value', variant: 'reported' };
   const s = String(factorSource);
-  if (/^DEFRA/i.test(s)) return { label: 'DEFRA', variant: 'defra' };
-  if (/^CEA/i.test(s))   return { label: 'CEA',   variant: 'cea' };
+  if (/^DEFRA/i.test(s))          return { label: 'DEFRA',    variant: 'defra' };
+  if (/^CEA/i.test(s))            return { label: 'CEA',      variant: 'cea' };
+  if (/^DEWA-/i.test(s))          return { label: 'DEWA',     variant: 'utility' };
+  if (/^(ADDC|EWEC)-/i.test(s))   return { label: s.split('-')[0].toUpperCase(), variant: 'utility' };
+  if (/^EMPOWER-/i.test(s))       return { label: 'Empower',  variant: 'utility' };
+  if (/^TABREED-/i.test(s))       return { label: 'Tabreed',  variant: 'utility' };
   return { label: s.length > 18 ? s.slice(0, 17) + '…' : s, variant: 'custom' };
 }
 

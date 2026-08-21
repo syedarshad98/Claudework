@@ -36,6 +36,18 @@
  *
  * A category with no row at any tier resolves to null — the caller decides
  * what that means (400, or the custom:true user-supplied path).
+ *
+ * Provider tiebreaker (db/uae_provider_factors_migration.sql): a region can
+ * carry more than one CURRENT row for the same category from different
+ * providers (e.g. AE-DU District Cooling: Empower vs Emicool). If the caller
+ * supplies `provider`, every tier below filters on it. If the caller does
+ * NOT supply `provider` and the tier that would otherwise answer has more
+ * than one provider on file, that tier returns `{ ambiguous: true,
+ * availableProviders }` instead of guessing — the caller must ask for a
+ * provider rather than have one picked silently. This never fires for a
+ * category with a single (or no) provider at that tier, so it is fully
+ * backward-compatible with every pre-existing row (all of which have
+ * provider IS NULL).
  */
 
 const AE_ELECTRICITY_FALLBACK_REGION = 'AE-DU';
@@ -45,18 +57,47 @@ const AE_ELECTRICITY_FALLBACK_REGION = 'AE-DU';
  * a flight's band:cabin_class. NULL for every category that doesn't need it
  * (which is most of them), matched NULL-safely so existing callers are
  * unaffected.
+ *
+ * provider distinguishes multiple rows sharing one (region, category,
+ * subtype) from different providers (e.g. Dubai district cooling). When
+ * supplied, it narrows the query directly (NULL-safely, same as subtype).
+ * When omitted, every CURRENT row for the key is fetched so the caller can
+ * detect a multi-provider ambiguity instead of silently taking the top one.
+ *
+ * @returns {Promise<{ row: object, ambiguous: false } |
+ *                    { row: null, ambiguous: true, availableProviders: string[] } |
+ *                    null>}
  */
-async function queryCurrent(db, region, category, subtype = null) {
+async function queryCurrent(db, region, category, subtype = null, provider = null) {
+  if (provider != null) {
+    const res = await db.query(
+      `SELECT * FROM emission_factors
+        WHERE region = $1 AND category = $2
+          AND COALESCE(subtype, '') = COALESCE($3, '')
+          AND COALESCE(provider, '') = $4
+          AND valid_to IS NULL
+        ORDER BY valid_from DESC
+        LIMIT 1`,
+      [region, category, subtype, provider]
+    );
+    return res.rows[0] ? { row: res.rows[0], ambiguous: false } : null;
+  }
+
   const res = await db.query(
     `SELECT * FROM emission_factors
       WHERE region = $1 AND category = $2
         AND COALESCE(subtype, '') = COALESCE($3, '')
         AND valid_to IS NULL
-      ORDER BY valid_from DESC
-      LIMIT 1`,
+      ORDER BY valid_from DESC`,
     [region, category, subtype]
   );
-  return res.rows[0] || null;
+  if (res.rows.length === 0) return null;
+
+  const distinctProviders = [...new Set(res.rows.map((r) => r.provider).filter(Boolean))];
+  if (distinctProviders.length > 1) {
+    return { row: null, ambiguous: true, availableProviders: distinctProviders };
+  }
+  return { row: res.rows[0], ambiguous: false };
 }
 
 /** 'AE-DU' -> 'AE'; 'GB' -> null (already bare, nothing to strip). */
@@ -65,21 +106,36 @@ function countryCodeOf(region) {
   return dash === -1 ? null : region.slice(0, dash);
 }
 
+/** Builds the resolveRegionFactor() return shape for a tier that found
+ * something (unambiguous row or a multi-provider ambiguity). */
+function toResult(found, regionResolved, isFallback, fallbackReason) {
+  if (found.ambiguous) {
+    return {
+      row: null, regionResolved, isFallback, fallbackReason,
+      ambiguous: true, availableProviders: found.availableProviders,
+    };
+  }
+  return {
+    row: found.row, regionResolved, isFallback, fallbackReason,
+    ambiguous: false, availableProviders: null,
+  };
+}
+
 /**
  * @param {object} db
- * @param {{ category: string, region: string, subtype?: string }} params
+ * @param {{ category: string, region: string, subtype?: string, provider?: string }} params
  * @returns {Promise<{
- *   row: object, regionResolved: string, isFallback: boolean,
- *   fallbackReason: string|null
+ *   row: object|null, regionResolved: string, isFallback: boolean,
+ *   fallbackReason: string|null, ambiguous: boolean, availableProviders: string[]|null
  * } | null>}
  */
-async function resolveRegionFactor(db, { category, region, subtype = null }) {
+async function resolveRegionFactor(db, { category, region, subtype = null, provider = null }) {
   const requestedRegion = region || 'GB';
 
   // Tier 1 — exact region.
-  const exact = await queryCurrent(db, requestedRegion, category, subtype);
+  const exact = await queryCurrent(db, requestedRegion, category, subtype, provider);
   if (exact) {
-    return { row: exact, regionResolved: requestedRegion, isFallback: false, fallbackReason: null };
+    return toResult(exact, requestedRegion, false, null);
   }
 
   // Tier 2 — country-level fallback. General: any subdivision region
@@ -89,39 +145,33 @@ async function resolveRegionFactor(db, { category, region, subtype = null }) {
   // country's data (Tier 5).
   const countryCode = countryCodeOf(requestedRegion);
   if (countryCode) {
-    const country = await queryCurrent(db, countryCode, category, subtype);
+    const country = await queryCurrent(db, countryCode, category, subtype, provider);
     if (country) {
-      return {
-        row: country,
-        regionResolved: countryCode,
-        isFallback: true,
-        fallbackReason:
-          `No factor exists specifically for region "${requestedRegion}" and category "${category}". ` +
-          `Applying the country-level "${countryCode}" figure instead.`,
-      };
+      return toResult(
+        country, countryCode, true,
+        `No factor exists specifically for region "${requestedRegion}" and category "${category}". ` +
+        `Applying the country-level "${countryCode}" figure instead.`
+      );
     }
   }
 
   // Tier 3 — declared subdivision fallback (UAE electricity only, for now).
   if (requestedRegion.startsWith('AE') && requestedRegion !== AE_ELECTRICITY_FALLBACK_REGION) {
-    const fallback = await queryCurrent(db, AE_ELECTRICITY_FALLBACK_REGION, category, subtype);
+    const fallback = await queryCurrent(db, AE_ELECTRICITY_FALLBACK_REGION, category, subtype, provider);
     if (fallback) {
-      return {
-        row: fallback,
-        regionResolved: AE_ELECTRICITY_FALLBACK_REGION,
-        isFallback: true,
-        fallbackReason:
-          `No verified factor exists for region "${requestedRegion}" and category "${category}". ` +
-          `Falling back to ${AE_ELECTRICITY_FALLBACK_REGION} (DEWA, Dubai) — the only emirate with a ` +
-          `verified published figure in this dataset. Confirm before relying on this for non-Dubai sites.`,
-      };
+      return toResult(
+        fallback, AE_ELECTRICITY_FALLBACK_REGION, true,
+        `No verified factor exists for region "${requestedRegion}" and category "${category}". ` +
+        `Falling back to ${AE_ELECTRICITY_FALLBACK_REGION} (DEWA, Dubai) — the only emirate with a ` +
+        `verified published figure in this dataset. Confirm before relying on this for non-Dubai sites.`
+      );
     }
   }
 
   // Tier 4 — global default (declared region-independent categories only).
-  const global = await queryCurrent(db, 'GLOBAL', category, subtype);
+  const global = await queryCurrent(db, 'GLOBAL', category, subtype, provider);
   if (global) {
-    return { row: global, regionResolved: 'GLOBAL', isFallback: false, fallbackReason: null };
+    return toResult(global, 'GLOBAL', false, null);
   }
 
   // Tier 5 — unreviewed cross-region substitute. Only reached for categories
@@ -129,17 +179,14 @@ async function resolveRegionFactor(db, { category, region, subtype = null }) {
   // step did not research (refrigerants, waste, business travel, commuting,
   // water treatment, district heating).
   if (requestedRegion !== 'GB') {
-    const gb = await queryCurrent(db, 'GB', category, subtype);
+    const gb = await queryCurrent(db, 'GB', category, subtype, provider);
     if (gb) {
-      return {
-        row: gb,
-        regionResolved: 'GB',
-        isFallback: true,
-        fallbackReason:
-          `No factor exists for region "${requestedRegion}" or a global default for category "${category}". ` +
-          `Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute — this category has ` +
-          `not been assessed for regional applicability.`,
-      };
+      return toResult(
+        gb, 'GB', true,
+        `No factor exists for region "${requestedRegion}" or a global default for category "${category}". ` +
+        `Applying the GB (DEFRA 2023) figure as an unreviewed cross-region substitute — this category has ` +
+        `not been assessed for regional applicability.`
+      );
     }
   }
 
