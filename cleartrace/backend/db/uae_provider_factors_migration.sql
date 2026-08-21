@@ -52,39 +52,31 @@ VALUES
    'dewa-2025')
 ON CONFLICT DO NOTHING;
 
--- ── AE-AZ Grid Electricity — HELD, not inserted this pass ───────────────────
--- Issuing authority (ADDC vs EWEC) for factor_source_id was not confirmed as
--- of 2026-08-21 — see conversation for the research summary (EWEC generates/
--- transmits and drives the emirate's decarbonisation; ADDC is the Abu Dhabi
--- City retail distributor). Do not guess which one issues the published grid
--- factor. Once confirmed, add:
---   INSERT INTO emission_factors
---     (region, category, canonical_unit, value, scope, dataset_year, valid_from, valid_to, source_workbook, factor_source_id)
---   VALUES
---     ('AE-AZ', 'Grid Electricity', 'kWh', 0.243, 2, 2024, '<valid_from>', NULL,
---      '<issuing authority full name>', '<addc|ewec>-2024')
---   ON CONFLICT DO NOTHING;
+-- ── AE-AZ Grid Electricity — EWEC (confirmed 2026-08-21) ────────────────────
+-- Issuing authority confirmed as EWEC (Emirates Water and Electricity
+-- Company) — Abu Dhabi's generation/bulk-supply company, not ADDC (the
+-- Abu Dhabi City retail distributor).
+INSERT INTO emission_factors
+  (region, category, canonical_unit, value, scope, dataset_year, valid_from, valid_to, source_workbook, factor_source_id)
+VALUES
+  ('AE-AZ', 'Grid Electricity', 'kWh', 0.243, 2, 2024, '2024-01-01', NULL,
+   'Emirates Water and Electricity Company (EWEC) Grid Emission Factor, 2024', 'ewec-2024')
+ON CONFLICT DO NOTHING;
 
 -- ── District Cooling — new category ─────────────────────────────────────────
 -- provider distinguishes multiple utilities publishing a factor for the same
 -- region+category (Dubai will carry a second AE-DU row, e.g. Emicool,
 -- whenever that figure is verified).
 --
--- AE-DU / Empower — HELD, not inserted this pass. The supplied source
--- describes the value as "kgCO2e/RT produced": RT (refrigeration ton) is a
--- capacity/power unit, RTh (refrigeration ton-hour) is the corresponding
--- energy-over-time unit — these are not the same physical quantity, and
--- which one "produced" refers to changes the number's meaning. Flagged for
--- confirmation rather than assumed; see conversation. Once resolved, add:
---   INSERT INTO emission_factors
---     (region, category, provider, canonical_unit, value, scope, dataset_year, valid_from, valid_to, source_workbook, factor_source_id)
---   VALUES
---     ('AE-DU', 'District Cooling', 'empower', 'RTh', 0.3219, 2, 2024, '2024-01-01', NULL,
---      'Empower — published emission factor, 2024', 'empower-2024')
---   ON CONFLICT DO NOTHING;
--- (or canonical_unit 'RT' — NOT YET a registered canonical unit, see
--- lib/units.js — if the source turns out to mean per-capacity rather than
--- per-energy-delivered.)
+-- AE-DU / Empower — confirmed 2026-08-21 as RTh (energy, ton-hour), not RT
+-- (capacity). "kgCO2e/RT produced" in the source reads as shorthand for
+-- energy delivered per refrigeration-ton-hour of cooling produced.
+INSERT INTO emission_factors
+  (region, category, provider, canonical_unit, value, scope, dataset_year, valid_from, valid_to, source_workbook, factor_source_id)
+VALUES
+  ('AE-DU', 'District Cooling', 'empower', 'RTh', 0.3219, 2, 2024, '2024-01-01', NULL,
+   'Empower — published emission factor, 2024', 'empower-2024')
+ON CONFLICT DO NOTHING;
 
 INSERT INTO emission_factors
   (region, category, provider, canonical_unit, value, scope, dataset_year, valid_from, valid_to, source_workbook, factor_source_id)
