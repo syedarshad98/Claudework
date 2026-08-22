@@ -286,8 +286,9 @@
                     <option value="Refrigerants (R-410A)">Refrigerants (R-410A)</option>
                   </optgroup>
                   <optgroup label="Scope 2 — Energy">
-                    <option value="Grid Electricity (UK)">Grid Electricity (UK)</option>
+                    <option value="Grid Electricity">Grid Electricity</option>
                     <option value="District Heating">District Heating</option>
+                    <option value="District Cooling">District Cooling</option>
                   </optgroup>
                   <optgroup label="Scope 3 — Value Chain">
                     <option value="Business Travel (Car)">Business Travel (Car)</option>
@@ -332,7 +333,7 @@
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label class="form-label">Amount</label>
+                <label class="form-label">Total</label>
                 <input type="number" class="form-input" id="f-amount" placeholder="e.g. 1 200" min="0" step="any" required>
               </div>
               <div class="form-group">
@@ -345,6 +346,7 @@
                   <option value="tonnes">tonnes</option>
                   <option value="km">km</option>
                   <option value="GJ">GJ</option>
+                  <option value="RTh">RTh (ton-hour)</option>
                 </select>
               </div>
             </div>
@@ -363,11 +365,12 @@
                   </span>
                 </label>
                 <div class="defra-ef-badge" id="defra-ef-badge"></div>
-                <select class="ef-source-selector" id="ef-source-selector" style="display:none">
-                  <option value="CEA">CEA V21.0 — FY 2024-25 (0.7117 tCO₂/MWh) — recommended for India</option>
-                  <option value="AE">DEWA Grid Emission Factor 2023 (0.4041 tCO₂e/MWh) — Dubai, UAE</option>
-                  <option value="DEFRA">DEFRA 2023 (0.20493 tCO₂/MWh) — UK grid</option>
-                </select>
+                <!-- Options populated at runtime from GET /api/emissions/factor-options
+                     (dashboard.js renderFactorSourceOptions()) — one per currently
+                     active (region, provider) combination for the selected category,
+                     e.g. "Grid Electricity — Dubai (DEWA, 2025)". Each option's value
+                     packs region and provider so no separate visible field is needed. -->
+                <select class="ef-source-selector" id="ef-source-selector" style="display:none"></select>
               </div>
               <!-- Manual EF input (shown only for custom categories) -->
               <div class="form-group" id="custom-ef-group">
