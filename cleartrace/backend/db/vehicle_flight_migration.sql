@@ -31,10 +31,18 @@ ALTER TABLE emissions_entries ADD COLUMN IF NOT EXISTS flight_band TEXT;
 -- CNG has no row here: no verified figure was available. A CNG fuel_type
 -- entry resolves via the same "no factor available" 400 as any other
 -- unresolvable category — never a silent 1.0.
--- DROP + ADD is idempotent in effect: safe to run every boot.
+-- DROP + ADD is idempotent in effect: safe to run every boot — PROVIDED this
+-- list stays a superset of every canonical_unit any later migration adds.
+-- This file runs before db/uae_provider_factors_migration.sql on every boot
+-- (see routes/emissions.js ensureMigrated()), so if this ALTER's list ever
+-- falls behind, it will DROP the wider constraint and immediately fail its
+-- own ADD against already-committed rows using a unit this list doesn't
+-- know about yet — not merely fail to widen, an outright migration-chain
+-- break on the very next boot. 'RTh' (District Cooling) added here for
+-- exactly that reason, confirmed 2026-08-21.
 ALTER TABLE emission_factors DROP CONSTRAINT IF EXISTS emission_factors_canonical_unit_check;
 ALTER TABLE emission_factors ADD CONSTRAINT emission_factors_canonical_unit_check
-  CHECK (canonical_unit IN ('kWh', 'L', 'kg', 'km', 'm3', 'pkm'));
+  CHECK (canonical_unit IN ('kWh', 'L', 'kg', 'km', 'm3', 'pkm', 'RTh'));
 
 -- ── Business Travel (Flight): banded, cabin-class-factored, region='GLOBAL' ──
 -- A flight's footprint depends on the flight itself, not the reporting
