@@ -29,9 +29,26 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_emission_factors_lookup
 -- was an unnamed inline constraint) rather than dropping it silently, so any
 -- future canonical_unit added without a matching units.js entry still fails
 -- loudly instead of silently passing the CHECK.
+--
+-- 'pkm' (passenger-km) is included here too: 24 existing Business Travel
+-- (Flight) rows already use it (db/vehicle_flight_migration.sql,
+-- db/flight_2026_route_patch_migration.sql), predating this migration. The
+-- original inline CHECK on this table never listed it, which this migration
+-- would otherwise have turned into a hard failure on every one of those
+-- rows the moment this ALTER ran — confirmed as legitimate existing data,
+-- not an oversight to correct.
+--
+-- NOTE — this constraint has TWO owners: db/vehicle_flight_migration.sql
+-- also DROP + ADDs it (to register 'pkm'), and runs BEFORE this file on
+-- every boot (routes/emissions.js ensureMigrated()). Its list was updated
+-- to include 'RTh' too, in the same pass as this file's addition —
+-- otherwise it would DROP this wider constraint and fail its own narrower
+-- ADD against the RTh rows this file inserts, on every subsequent boot.
+-- Any FUTURE canonical_unit must be added to BOTH files' CHECK lists in the
+-- same change, or update one of them to be the sole owner.
 ALTER TABLE emission_factors DROP CONSTRAINT IF EXISTS emission_factors_canonical_unit_check;
 ALTER TABLE emission_factors ADD CONSTRAINT emission_factors_canonical_unit_check
-  CHECK (canonical_unit IN ('kWh','L','kg','km','m3','RTh'));
+  CHECK (canonical_unit IN ('kWh','L','kg','km','m3','RTh','pkm'));
 
 -- ── AE-DU Grid Electricity — DEWA 2025 vintage refresh ──────────────────────
 -- Same close-out-then-insert pattern as region_factors_2026_patch_migration.sql.
