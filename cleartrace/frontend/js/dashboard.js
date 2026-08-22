@@ -504,26 +504,89 @@ async function loadLiveFactors() {
   regions.forEach((r, i) => { liveFactorsByRegion[r] = results[i]; });
 }
 
-const GRID_ELECTRICITY_CATEGORIES = new Set(['Grid Electricity (UK)', 'Grid Electricity']);
+// Categories with real region/provider variation — these get the dynamic
+// factor-source selector instead of a single auto-resolved badge. 'Grid
+// Electricity (UK)' kept as an alias for any stale bookmark/cached page still
+// posting the pre-rename value; the server's canonicalizeCategory() already
+// treats it the same as 'Grid Electricity' (lib/decide-factor.js).
+const NEEDS_SOURCE_SELECTOR = new Set(['Grid Electricity', 'Grid Electricity (UK)', 'District Cooling']);
 
 function setFormUnit(unit) {
   const sel = document.getElementById('f-unit');
   for (const opt of sel.options) { if (opt.value === unit) { sel.value = unit; break; } }
 }
 
-function updateGridElecBadge() {
+// ── Factor-source selector — dynamically populated ──────────────────────────
+// Fetched from GET /api/emissions/factor-options (routes/emissions.js) — every
+// CURRENTLY ACTIVE (category, region, provider, dataset_year) row in
+// emission_factors, the same table lib/factor-resolver.js resolves against.
+// This is a *different* endpoint from GET /api/emission-factors above: that one
+// resolves ONE current value per category for a single company region (drives
+// the auto-badge for every other category); this one lists every row across
+// every region/provider so a category with genuine variation (Grid
+// Electricity, District Cooling) can be chosen explicitly rather than
+// auto-resolved. The two coexist deliberately — same underlying table, two
+// different jobs.
+const REGION_LABELS = {
+  GB: 'United Kingdom', IN: 'India', GLOBAL: 'Global',
+  AE: 'UAE (all emirates)', 'AE-DU': 'Dubai', 'AE-AZ': 'Abu Dhabi',
+};
+function regionLabel(region) { return REGION_LABELS[region] || region; }
+
+// Provider display name: the `provider` column when set (District Cooling),
+// else the factor_source_id's prefix (Grid Electricity rows carry the
+// utility there instead — 'dewa-2025' -> 'DEWA'), same convention
+// lib/pdf-design-system.js's classifyFactorSource uses for PDF badges.
+function providerLabel(row) {
+  if (row.provider) return row.provider.charAt(0).toUpperCase() + row.provider.slice(1);
+  const prefix = String(row.factor_source_id || '').split('-')[0];
+  return prefix ? prefix.toUpperCase() : 'Unverified';
+}
+
+// category -> array of { region, provider, dataset_year, factor_source_id, canonical_unit, value }
+let factorOptionsByCategory = {};
+
+async function loadFactorOptions() {
+  const res = await api('/api/emissions/factor-options');
+  if (!res || !res.ok) return;
+  const { options } = await res.json();
+  factorOptionsByCategory = {};
+  for (const row of options) {
+    (factorOptionsByCategory[row.category] || (factorOptionsByCategory[row.category] = [])).push(row);
+  }
+}
+
+function renderFactorSourceOptions(category) {
+  const selector = document.getElementById('ef-source-selector');
+  const rows      = factorOptionsByCategory[category] || [];
+
+  // Each option's value packs "region|provider" — the only two selection
+  // keys the server needs (routes/emissions.js reads them straight into
+  // decideFactor(), never a factor number) — so no separate visible field
+  // is needed for provider.
+  selector.innerHTML = rows.map((row) => {
+    const value = `${row.region}|${row.provider || ''}`;
+    const label = `${row.category} — ${regionLabel(row.region)} (${providerLabel(row)}, ${row.dataset_year})`;
+    return `<option value="${value}" data-unit="${row.canonical_unit}" data-value="${row.value}" data-source="${row.factor_source_id}">${label}</option>`;
+  }).join('');
+
+  // Default to the company's own region if it's on offer, else leave the
+  // browser's first-option default.
+  const preferredRegion = regionForJurisdiction(companyJurisdiction);
+  const match = rows.find((r) => r.region === preferredRegion);
+  if (match) selector.value = `${match.region}|${match.provider || ''}`;
+}
+
+function updateSourceSelectorBadge() {
   const badge    = document.getElementById('defra-ef-badge');
   const selector = document.getElementById('ef-source-selector');
-  const defaultSource = companyJurisdiction === 'IN' ? 'CEA' : (companyJurisdiction === 'AE' ? 'AE' : 'DEFRA');
-  const source   = selector ? selector.value : defaultSource;
-  const region   = source === 'CEA' ? 'IN' : source === 'AE' ? 'AE' : 'GB';
+  const opt      = selector.selectedOptions[0];
+  if (!opt) { badge.innerHTML = ''; return; }
 
-  const f = (liveFactorsByRegion[region] || {})['Grid Electricity (UK)'];
-  if (!f) { badge.innerHTML = ''; return; }
-
+  setFormUnit(opt.dataset.unit);
   badge.innerHTML =
-    `<span>&#x2705; <strong>${f.factor}</strong> kg CO₂e / ${f.unit}</span>` +
-    `<span class="defra-source">${f.factorSource || ''}</span>`;
+    `<span>&#x2705; <strong>${opt.dataset.value}</strong> kg CO₂e / ${opt.dataset.unit}</span>` +
+    `<span class="defra-source">${opt.dataset.source || ''}</span>`;
 }
 
 function applyEmissionFactor(category) {
@@ -532,16 +595,15 @@ function applyEmissionFactor(category) {
   const selector    = document.getElementById('ef-source-selector');
   const ceaTooltip  = document.getElementById('ef-cea-tooltip');
 
-  const isGridElec = GRID_ELECTRICITY_CATEGORIES.has(category);
+  const needsSelector = NEEDS_SOURCE_SELECTOR.has(category);
 
-  if (selector)   selector.style.display  = isGridElec ? '' : 'none';
-  if (ceaTooltip) ceaTooltip.style.display = (isGridElec && (companyJurisdiction === 'IN' || companyJurisdiction === 'AE')) ? '' : 'none';
+  if (selector)   selector.style.display  = needsSelector ? '' : 'none';
+  if (ceaTooltip) ceaTooltip.style.display = (needsSelector && (companyJurisdiction === 'IN' || companyJurisdiction === 'AE')) ? '' : 'none';
 
-  if (isGridElec) {
-    if (selector) selector.value = (companyJurisdiction === 'IN') ? 'CEA' : (companyJurisdiction === 'AE') ? 'AE' : 'DEFRA';
+  if (needsSelector) {
+    renderFactorSourceOptions(category);
     document.getElementById('f-scope').value = '2';
-    setFormUnit('kWh');
-    updateGridElecBadge();
+    updateSourceSelectorBadge();
     defraGroup.style.display  = '';
     customGroup.style.display = 'none';
     return;
@@ -577,9 +639,10 @@ document.getElementById('f-category').addEventListener('change', (e) => {
   applyEmissionFactor(e.target.value);
 });
 
-// Factor source selector — live badge update when user switches CEA ↔ DEFRA
+// Factor source selector — live badge update when the user switches
+// region/provider (e.g. Dubai ↔ Abu Dhabi, Empower ↔ Tabreed).
 document.getElementById('ef-source-selector').addEventListener('change', () => {
-  updateGridElecBadge();
+  updateSourceSelectorBadge();
 });
 
 document.getElementById('entry-form').addEventListener('submit', async (e) => {
@@ -592,24 +655,25 @@ document.getElementById('entry-form').addEventListener('submit', async (e) => {
   btn.disabled    = true;
 
   try {
-    const category    = document.getElementById('f-category').value;
-    const region       = regionForJurisdiction(companyJurisdiction);
-    const entry        = (liveFactorsByRegion[region] || {})[category];
-    const isGridElec   = GRID_ELECTRICITY_CATEGORIES.has(category);
-    const selector     = document.getElementById('ef-source-selector');
+    const category       = document.getElementById('f-category').value;
+    const region          = regionForJurisdiction(companyJurisdiction);
+    const entry           = (liveFactorsByRegion[region] || {})[category];
+    const needsSelector   = NEEDS_SOURCE_SELECTOR.has(category);
+    const selector        = document.getElementById('ef-source-selector');
 
     let efExtras = {};
-    if (isGridElec && selector && selector.style.display !== 'none') {
-      // Tell the server WHICH REGION to resolve against — never a factor
-      // number. decideFactor() resolves the current, correct value itself
-      // from that region; sending an emission_factor here would just be
-      // discarded and logged as a rejected client-supplied factor on every
-      // legitimate submission (docs/TEST-REPORT.md Phase 2 finding #3).
-      efExtras = { region: selector.value === 'CEA' ? 'IN' : selector.value === 'AE' ? 'AE' : 'GB' };
+    if (needsSelector && selector && selector.style.display !== 'none' && selector.value) {
+      // Tell the server WHICH region + provider to resolve against — never a
+      // factor number. decideFactor() resolves the current, correct value
+      // itself from that selection; sending an emission_factor here would
+      // just be discarded and logged as a rejected client-supplied factor on
+      // every legitimate submission (docs/TEST-REPORT.md Phase 2 finding #3).
+      const [selRegion, selProvider] = selector.value.split('|');
+      efExtras = { region: selRegion, ...(selProvider ? { provider: selProvider } : {}) };
     } else if (!entry || entry.custom) {
       efExtras = { emission_factor: parseFloat(document.getElementById('f-ef').value) || 1.0 };
     }
-    // For non-Grid non-custom categories, omit emission_factor — backend applies its own.
+    // For non-selector, non-custom categories, omit emission_factor — backend applies its own.
 
     const payload = {
       category,
@@ -912,3 +976,4 @@ async function refreshAll() {
 
 refreshAll();
 loadLiveFactors();
+loadFactorOptions();

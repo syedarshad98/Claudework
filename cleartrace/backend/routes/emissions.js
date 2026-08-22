@@ -144,12 +144,40 @@ router.get('/export', async (req, res) => {
   }
 });
 
+// ── GET /api/emissions/factor-options ─────────────────────────────────────────
+// Every CURRENTLY ACTIVE (region, category, provider, dataset_year) row in
+// emission_factors — the raw material for the entry form's factor-source
+// selector (frontend/index.html #ef-source-selector, wired in dashboard.js).
+// Returned unfiltered by category: the frontend decides which categories need
+// a selector at all (only ones with real region/provider variation — Grid
+// Electricity, District Cooling) and builds its own display labels from
+// these fields, same as lib/pdf-design-system.js's classifyFactorSource does
+// for PDF badges. Historical (valid_to IS NOT NULL) rows are excluded — an
+// entry should never be created against a superseded vintage.
+router.get('/factor-options', async (req, res) => {
+  try {
+    await ensureMigrated();
+    const result = await db.query(
+      `SELECT category, region, provider, dataset_year, factor_source_id, canonical_unit, value
+         FROM emission_factors
+        WHERE valid_to IS NULL
+        ORDER BY category, region, provider NULLS FIRST`
+    );
+    res.json({ options: result.rows });
+  } catch (err) {
+    console.error('Emissions factor-options GET error:', err.message);
+    if (isConnectionError(err)) return res.status(503).json({ error: 'Service temporarily unavailable' });
+    res.status(500).json({ error: 'Failed to fetch factor options' });
+  }
+});
+
 // ── POST /api/emissions ───────────────────────────────────────────────────────
 router.post('/', requireRole('admin', 'editor'), async (req, res) => {
   try {
     await ensureMigrated();
     const {
-      category, scope, amount, unit, period, emission_factor, notes, region: reqRegion,
+      category, scope, amount, unit, period, emission_factor, notes,
+      region: reqRegion, provider,
       method, fuel_type, distance_km, cabin_class, touches_uk, both_endpoints_uk,
       // factor_jurisdiction is accepted off the wire but never trusted — the
       // server derives it from the resolved factor. See decideFactor().
@@ -188,7 +216,7 @@ router.post('/', requireRole('admin', 'editor'), async (req, res) => {
     }
 
     const decided = await decideFactor({
-      db, category, lookupCategory, subtype, region, unit,
+      db, category, lookupCategory, subtype, region, provider, unit,
       clientFactor: emission_factor,
       clientSource: reqFactorSource,
       companyId:    req.companyId,
@@ -268,7 +296,7 @@ router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
     }
 
     const {
-      category, scope, amount, unit, period, emission_factor, notes,
+      category, scope, amount, unit, period, emission_factor, notes, provider,
       method, fuel_type, distance_km, cabin_class, touches_uk, both_endpoints_uk,
     } = req.body;
     const newPeriod = period || oldEntry.period;
@@ -305,8 +333,13 @@ router.patch('/:id', requireRole('admin', 'editor'), async (req, res) => {
       console.warn(`[emissions] cabin_class substitution — company_id=${req.companyId} category="${effectiveCategory}": ${substitutionReason}`);
     }
 
+    // emissions_entries has no provider column (a snapshot's factor_source_id
+    // already encodes which provider answered), so unlike region there is no
+    // stored value to fall back to here: a PATCH that changes a District
+    // Cooling-style entry without resending provider re-resolves ambiguous,
+    // same as a fresh POST would.
     const decided = await decideFactor({
-      db, category: effectiveCategory, lookupCategory, subtype, region, unit: effectiveUnit,
+      db, category: effectiveCategory, lookupCategory, subtype, region, provider, unit: effectiveUnit,
       // For a custom category the user's number is the mechanism; when this PATCH
       // does not carry one, keep whatever the entry already had.
       clientFactor: emission_factor != null ? emission_factor : oldEntry.emission_factor,
